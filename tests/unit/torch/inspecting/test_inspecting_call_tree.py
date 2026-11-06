@@ -12,6 +12,7 @@ import aitune.torch.inspecting.inspecting as inspecting_module
 from aitune.torch.call_tree.recorder import CallRecorder
 from aitune.torch.distributed import coordinator
 from aitune.torch.inspecting import inspect
+from aitune.torch.inspecting.module_inspector import ModuleInspector
 from tests.toy_models.call_tree_models import PlainPipeline, SequentialSubclassToy, VlaToy, vla_inputs
 
 ITERATIONS = 3
@@ -118,6 +119,18 @@ def test_wrappers_and_apply_are_restored_when_inference_fails(dataset):
 
     assert "dit_forward" not in vars(model)
     assert nn.Module._apply is original_apply
+
+
+def test_wrappers_are_restored_when_the_object_walk_fails(mocker, dataset):
+    pipe = PlainPipeline()
+    # raised in the member loop of the plain root, after its methods are wrapped
+    mocker.patch.object(ModuleInspector, "_should_skip_member", side_effect=RuntimeError("walk failed"))
+
+    with pytest.raises(RuntimeError, match="walk failed"):
+        inspect(pipe, dataset, inference_function=lambda x: pipe(x), number_of_iterations=2, call_tree=True)
+
+    # the wrapper is set on the instance, shadowing the class method; reset() deletes it
+    assert "decode" not in vars(pipe)
 
 
 def test_plain_object_methods_and_to_calls_are_recorded(dataset):
