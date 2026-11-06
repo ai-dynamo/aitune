@@ -9,6 +9,7 @@ title: "Changelog"
 
 - feat: record a model's call tree with `ait.inspect(..., call_tree=True)`: module `forward` calls and model-defined methods, keyed by their chain of callers, with call counts, times and the code that moves modules with `.to()`
 - feat: report the weights a module holds that are read, have their device looked up, or are moved outside it with `aitune.torch.call_tree.shared_weights_of(call_tree, ...)`; reads and device lookups are recorded per op during the call-tree pass (compiled code runs eagerly there)
+- feat: keep weights that are read, have their device looked up, or are moved outside a tuned module on the device when tuning offloads it, with `ait.wrap(..., call_tree=info.call_tree)`; reads and device lookups are recorded per op during the call-tree pass (compiled code runs eagerly there), and `aitune.torch.call_tree.shared_weights_of(call_tree, ...)` reports them
 
 ## 0.7.0 (unreleased)
 

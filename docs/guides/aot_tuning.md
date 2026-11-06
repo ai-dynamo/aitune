@@ -305,7 +305,8 @@ config.min_num_samples = 5
 # Set maximum stored samples per graph
 config.max_num_samples_stored = 100
 
-# Device to move model after tuning
+# Device to move model after tuning; weights kept by wrap(..., call_tree=...) stay where they are
+# (see "Shared weights and wrap" in the AOT inspect guide)
 config.device_after_tuning = "cuda"
 
 # Enable/disable strict mode for input validation
