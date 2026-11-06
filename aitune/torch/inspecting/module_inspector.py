@@ -116,6 +116,7 @@ class ModuleInspector:
         self._module_info: dict[Any, ModuleInfo] = {}
         self._original_forward: dict[Any, Any] = {}
         self._original_compiled_call: dict[Any, Any] = {}
+        self._timing_compiled_call: set[int] = set()  # ids of modules timed by their compiled-call wrapper
         self._inspected_objects: set = set()  # Track objects that have been inspected
         self._min_recursion_depth = min_depth
         self._max_recursion_depth = max_depth
@@ -147,22 +148,24 @@ class ModuleInspector:
         self._original_compiled_call.clear()
 
     def warn_about_compiled_modules(self) -> None:
-        """Warn about executed compiled modules whose submodules were not inspected, with the workaround."""
-        hidden_by: dict[int, ModuleInfo] = {}
+        """Warn about executed compiled modules none of whose submodules ran: Dynamo traced them instead."""
+        compiled_with_submodules: dict[int, ModuleInfo] = {}
+        ran_below: set[int] = set()
         for module_info in self._module_info.values():
-            if module_info.execution_count:
-                continue
             parent = module_info.parent
             while parent is not None:
-                if parent.execution_count and self._is_compiled(parent.module):
-                    hidden_by[id(parent)] = parent
-                    break
+                if module_info.execution_count:
+                    ran_below.add(id(parent))
+                elif parent.execution_count and self._is_compiled(parent.module):
+                    compiled_with_submodules[id(parent)] = parent
                 parent = parent.parent
-        for module_info in hidden_by.values():
+        for key, module_info in compiled_with_submodules.items():
+            if key in ran_below:
+                continue  # submodules ran, so compiled code ran eagerly (``force_eager``); unused ones stay uncounted
             logger.warning(
                 "%s is compiled with torch.compile; the modules inside it were not inspected. To inspect them, run "
                 'ait.inspect under torch.compiler.set_stance("force_eager").',
-                module_info.object_path or module_info.name,
+                module_info.object_path or "The model",
             )
 
     def _is_compiled(self, module: Any) -> bool:
@@ -372,7 +375,8 @@ class ModuleInspector:
         @wraps(original_forward)
         def wrapped_forward(*args, **kwargs):
             # Inside a region that torch.compile traces, call through: Dynamo cannot trace the timing below.
-            if torch.compiler.is_compiling():
+            # Also call through while the compiled-call wrapper times this module (compiled code run eagerly).
+            if torch.compiler.is_compiling() or id(module) in self._timing_compiled_call:
                 return original_forward(*args, **kwargs)
             return timed_call(original_forward, args, kwargs)
 
@@ -444,7 +448,11 @@ class ModuleInspector:
         def wrapped_compiled_call(*args, **kwargs):
             if torch.compiler.is_compiling():
                 return original_compiled_call(*args, **kwargs)
-            return timed_call(original_compiled_call, args, kwargs)
+            self._timing_compiled_call.add(id(module))
+            try:
+                return timed_call(original_compiled_call, args, kwargs)
+            finally:
+                self._timing_compiled_call.discard(id(module))
 
         module._compiled_call_impl = wrapped_compiled_call
 

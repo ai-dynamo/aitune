@@ -234,6 +234,9 @@ with torch.compiler.set_stance("force_eager"):
     modules_info = ait.inspect(model, input_data, min_depth=2)
 ```
 
+A child compiled with `torch.compile(module)` is an `OptimizedModule` that holds the original module as `_orig_mod`, so
+its submodules are one level deeper: `.encoder._orig_mod.proj` instead of `.encoder.proj`.
+
 ## Summary
 
 Ahead-of-time inspection can be a first step in exploring your model's structure and performance. It can also be used to select modules for tuning. For details on the tuning workflow, head to the [AOT Tuning Guide](aot_tuning.md).
