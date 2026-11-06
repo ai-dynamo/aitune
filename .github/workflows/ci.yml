@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
-      platforms:
+      extra_platforms:
         description: >
           Extra image platforms, comma-separated. linux/amd64 is always built.
           Every platform is published under the same tag. Example: linux/arm64
@@ -257,7 +257,7 @@ jobs:
       - name: Image platforms
         id: platforms
         env:
-          EXTRA_PLATFORMS: ${{ inputs.platforms }}
+          EXTRA_PLATFORMS: ${{ inputs.extra_platforms }}
         run: |
           platforms=linux/amd64
           if [[ -n "$EXTRA_PLATFORMS" ]]; then

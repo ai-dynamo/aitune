@@ -22,7 +22,7 @@ jobs:
     name: CI
     uses: ./.github/workflows/ci.yml
     with:
-      platforms: linux/arm64
+      extra_platforms: linux/arm64
     secrets:
       FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
