@@ -30,7 +30,7 @@ env:
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: "3.12"
-  ONNXRUNTIME_VERSION: 1.24.4
+  ONNXRUNTIME_VERSION: 1.26.0
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
   # plugin. RTX runners have no EFA provider, so OFI initialization fails and
@@ -70,11 +70,13 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # split EXTRA_PACKAGES into separate requirements
           pip install ".[triton]" --group test $EXTRA_PACKAGES
-          pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} --no-deps --force-reinstall --upgrade --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+          pip install onnxruntime-gpu==${{ env.ONNXRUNTIME_VERSION }} \
+            --no-deps --force-reinstall --upgrade \
+            --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/
           pip list
           nvidia-smi
           python .github/scripts/sanity/check_gpu_stack.py
-          pytest
+          pytest -n 4
 
   pytorch-gpu-cuda-python-matrix:
     name: ${{ matrix.cuda.uv_torch_backend }} py${{ matrix.python_version }} ${{ matrix.torch }}
@@ -139,4 +141,4 @@ jobs:
           uv pip list
           .venv/bin/python .github/scripts/sanity/check_gpu_stack.py
           .venv/bin/python .github/scripts/sanity/check_onnxruntime_cuda.py --cuda-major-version=${{ matrix.cuda.cuda_major }}
-          .venv/bin/python -m pytest -q -rf
+          .venv/bin/python -m pytest -q -rf -n 4
