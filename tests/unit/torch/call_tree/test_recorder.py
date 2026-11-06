@@ -198,9 +198,10 @@ def test_apply_probe_respects_recurse_false():
 def test_apply_probe_is_restored_after_an_exception():
     original = nn.Module._apply
     recorder = CallRecorder()
-    with pytest.raises(RuntimeError), recorder.recording():
-        assert nn.Module._apply is not original
-        raise RuntimeError("boom")
+    with pytest.raises(RuntimeError):
+        with recorder.recording():
+            assert nn.Module._apply is not original
+            raise RuntimeError("boom")
     assert nn.Module._apply is original
     assert not recorder.active
 

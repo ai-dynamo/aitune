@@ -238,7 +238,7 @@ What is recorded:
 
 - `forward` of every module the object walk reaches, and the model's own methods (`dit_forward`, `_forward_flow`),
   on modules and on plain pipeline objects outside any module. Methods of library classes (`torch`,
-  `transformers`, ...) are not recorded;
+  `transformers`, `diffusers`, ...) are not recorded, but methods of your own subclasses of them are;
 - calls of `.to()`, `.cuda()` and similar that reach a module from code outside it, with the code that made them;
 - times from CUDA events without synchronizing after every call, or from `time.perf_counter` without CUDA.
 

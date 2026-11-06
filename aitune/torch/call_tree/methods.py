@@ -10,7 +10,16 @@ from torch import nn
 
 # Classes from these packages are library code: their methods are not recorded as nodes (``forward`` is, through the
 # adapters' forward wrappers).
-LIBRARY_PREFIXES = ("torch.", "transformers.", "accelerate.", "sentence_transformers.", "huggingface_hub.")
+LIBRARY_PREFIXES = (
+    "torch.",
+    "transformers.",
+    "diffusers.",
+    "accelerate.",
+    "peft.",
+    "timm.",
+    "sentence_transformers.",
+    "huggingface_hub.",
+)
 
 SKIP_METHODS = frozenset({
     "extra_repr",
