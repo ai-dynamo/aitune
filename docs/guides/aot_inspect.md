@@ -225,8 +225,14 @@ modules_info = ait.inspect(model, input_data, min_depth=1)
 ### Models with parts compiled by `torch.compile`
 
 A part compiled with `torch.compile` or `nn.Module.compile()` counts as one call: `inspect` times the compiled module
-but not the modules it calls, so `get_modules()` cannot return them. To inspect inside a compiled part, run `inspect`
-before compiling it.
+but not the modules it calls, so `get_modules()` cannot return them, and `inspect` logs a warning for each such part.
+To inspect inside compiled parts, run `inspect` with compilation turned off; compiled parts then run eagerly, and their
+times are eager times:
+
+```python
+with torch.compiler.set_stance("force_eager"):
+    modules_info = ait.inspect(model, input_data, min_depth=2)
+```
 
 ## Summary
 

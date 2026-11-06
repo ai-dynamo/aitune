@@ -146,6 +146,38 @@ class ModuleInspector:
         self._original_forward.clear()
         self._original_compiled_call.clear()
 
+    def warn_about_compiled_modules(self) -> None:
+        """Warn about executed compiled modules whose submodules were not inspected, with the workaround."""
+        hidden_by: dict[int, ModuleInfo] = {}
+        for module_info in self._module_info.values():
+            if module_info.execution_count:
+                continue
+            parent = module_info.parent
+            while parent is not None:
+                if parent.execution_count and self._is_compiled(parent.module):
+                    hidden_by[id(parent)] = parent
+                    break
+                parent = parent.parent
+        for module_info in hidden_by.values():
+            logger.warning(
+                "%s is compiled with torch.compile; the modules inside it were not inspected. To inspect them, run "
+                'ait.inspect under torch.compiler.set_stance("force_eager").',
+                module_info.object_path or module_info.name,
+            )
+
+    def _is_compiled(self, module: Any) -> bool:
+        """Whether ``module`` is compiled with ``torch.compile`` or ``nn.Module.compile()``."""
+        if not isinstance(module, torch.nn.Module):
+            return False
+        from torch._dynamo.eval_frame import OptimizedModule
+
+        forward = self._original_forward.get(module, module.forward)
+        return (
+            isinstance(module, OptimizedModule)
+            or getattr(module, "_compiled_call_impl", None) is not None
+            or hasattr(forward, "_torchdynamo_orig_callable")
+        )
+
     def get_modules(self) -> list[ModuleInfo]:
         """Get list of top-level executed modules or their first executed children.
 

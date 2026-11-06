@@ -12,7 +12,7 @@ from onnx import TensorProto, helper
 
 from aitune.torch.dataloader import DataLoaderFactory, InputConfig, MinMaxRandomDataset
 from aitune.torch.distributed import DistributedOutcome
-from aitune.torch.inspecting import inspect
+from aitune.torch.inspecting import inspect, module_inspector
 from aitune.torch.inspecting.inspecting import _run_inference, _synchronize_inspection_result
 from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo, OnnxModuleInfo
 from aitune.torch.module import OnnxModule
@@ -645,3 +645,35 @@ def test_inspect_model_compiled_whole_around_a_compiled_part():
     model.compile(fullgraph=True, backend="eager")
 
     assert _inspected_counts(model, min_depth=0) == {"": 2}
+
+
+def _compiled_module_warnings(warning) -> list[str]:
+    messages = [call.args[0] % call.args[1:] for call in warning.call_args_list]
+    return [message for message in messages if "compiled with torch.compile" in message]
+
+
+def test_inspect_warns_about_compiled_modules_whose_submodules_were_not_inspected(mocker):
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    model.encoder.compile(backend="eager")
+    warning = mocker.patch.object(module_inspector.logger, "warning")
+
+    _inspected_counts(model)
+
+    assert _compiled_module_warnings(warning) == [
+        ".encoder is compiled with torch.compile; the modules inside it were not inspected. To inspect them, run "
+        'ait.inspect under torch.compiler.set_stance("force_eager").'
+    ]
+
+
+def test_inspect_under_force_eager_inspects_inside_compiled_parts(mocker):
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    model.encoder.compile(fullgraph=True, backend="eager")
+    warning = mocker.patch.object(module_inspector.logger, "warning")
+
+    with torch.compiler.set_stance("force_eager"):
+        counts = _inspected_counts(model, min_depth=2)
+
+    assert counts == {".encoder.proj": 2, ".encoder.out": 2}
+    assert _compiled_module_warnings(warning) == []

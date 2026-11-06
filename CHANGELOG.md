@@ -8,6 +8,7 @@ title: "Changelog"
 ## 0.8.0 (unreleased)
 
 - fix: `inspect()` works on models with parts compiled by `torch.compile` or `nn.Module.compile()`; it counts a compiled part as one call and no longer wraps the calls inside it, where Dynamo cannot trace its timing
+- breaking change: `inspect()` no longer counts the modules inside a compiled part; it logs a warning for each compiled part, and running `inspect()` under `torch.compiler.set_stance("force_eager")` counts them
 
 ## 0.7.0 (unreleased)
 
