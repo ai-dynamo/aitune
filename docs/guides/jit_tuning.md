@@ -202,9 +202,9 @@ CUDA-graph modes and ONNX source targets are rejected before installation. Use t
 `FirstWinsStrategy`, `MinLatencyStrategy`, `MaxThroughputStrategy` or `LatencyBudgetStrategy` class with a nonempty set of
 explicit supported candidates. Custom strategy subclasses are rejected. The ordinary default strategy includes
 unsupported external candidates, so configure the candidate set explicitly. The optional
-[FlexTensor adapter](flextensor.md) offers additive preparation with `prepare_flextensor_units`, discovers final live
-public offload units, and performs explicitly requested replanning on top of this provider-independent placement
-policy. Its manual wrapping/offload setup remains available; preparation does not trigger registration or tuning.
+[FlexTensor adapter](flextensor.md) registers original public offload units after native provider startup and performs
+explicitly requested replanning on top of this provider-independent placement policy. Model preparation and profile
+loading use public FlexTensor APIs directly; the adapter adds no module layer or selector translation.
 
 Protection follows each source node's lifetime, including a child that outlives its original root. Independent copies
 have new identities and remain movable. Keep the prepared module tree fixed and do not share its parameters, buffers

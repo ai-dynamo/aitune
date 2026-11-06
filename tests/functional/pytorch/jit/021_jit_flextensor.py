@@ -3,18 +3,15 @@
 """Keep ordinary AITune tuning inside real FlexTensor-managed residency boundaries."""
 
 # /// script
-# dependencies = ["flextensor==0.5.0"]
+# dependencies = ["flextensor>=0.5.0"]
 # scope = "always"
+# skip = true  # Manual until a public FT release includes native compilation/replay fixes.
 # allow_failure = false
 # arguments = [
 #   {mode = "eager"},
 #   {mode = "deferred"},
 #   {mode = "deferred", performance = "enabled"},
 #   {mode = "deferred", finalization = "profile"},
-#   {mode = "eager", setup = "helper"},
-#   {mode = "deferred", setup = "helper"},
-#   {mode = "deferred", performance = "enabled", setup = "helper"},
-#   {mode = "deferred", finalization = "profile", setup = "helper"},
 # ]
 # ///
 
@@ -22,13 +19,13 @@ import argparse
 import json
 import logging
 import tempfile
-from collections import Counter
 from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
 import flextensor as ft
 import torch
+from _flextensor_runtime import require_native_compile_support
 from _tuning_data_artifacts import collect_tuning_data
 from torch._dynamo.utils import counters
 
@@ -36,9 +33,7 @@ from aitune.torch import jit_config, snapshot_tuning_data
 from aitune.torch.backend import TorchEagerBackend, TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.flextensor import (
-    FlexTensorUnit,
     _tuned_forward_signature,
-    prepare_flextensor_units,
     register_flextensor_units,
     replan_flextensor,
 )
@@ -73,17 +68,6 @@ class Model(torch.nn.Module):
 
 
 def configure_jit(mode, performance, cache_dir):
-    # These same-frame units and their two shapes share a finite, caller-owned Dynamo budget.
-    import torch._dynamo.config as dynamo_config
-
-    for name in (
-        "recompile_limit",
-        "accumulated_recompile_limit",
-        "cache_size_limit",
-        "accumulated_cache_size_limit",
-    ):
-        if hasattr(dynamo_config, name):
-            setattr(dynamo_config, name, max(getattr(dynamo_config, name), 256))
     jit_config.mode = JITMode.TUNE_EAGER if mode == "eager" else JITMode.TUNE_DEFERRED
     jit_config.device = "cuda"
     jit_config.cache_dir = cache_dir
@@ -171,12 +155,15 @@ def tune_targets(registration, run_forward, values, expected, mode):
 
 
 @collect_tuning_data(__file__)
-def run(mode, performance, finalization, setup, cache_dir):
+def run(mode, performance, finalization, cache_dir):
+    require_native_compile_support()
     torch.manual_seed(29)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     configure_jit(mode, performance, cache_dir)
     model = Model().to("cuda").eval()
+    original_units = tuple(model.layers)
+    parameter_paths = tuple(model.state_dict())
     values = tuple(torch.randn(batch, WIDTH, device="cuda") for batch in (1, 2))
     held_out = tuple(torch.randn(batch, WIDTH, device="cuda") for batch in (1, 2))
     with torch.no_grad():
@@ -191,7 +178,8 @@ def run(mode, performance, finalization, setup, cache_dir):
     strategy_budget_bytes = managed_limit_bytes - resident_head_bytes
     budget_fraction = strategy_budget_bytes / torch.cuda.get_device_properties(0).total_memory
     config = ft.OffloadConfig(
-        include_patterns=["layers.*"],
+        include_patterns=[f"layers.{index}" for index in range(10)],
+        profile_mode="view",
         external_compile=finalization == "replan",
         transfer_mode="allocation_block_transfer",
         num_blocks=2,
@@ -201,19 +189,12 @@ def run(mode, performance, finalization, setup, cache_dir):
         profiling_iters=3,
     )
     model = model.to("cpu")
-    if setup == "helper":
-        prepared = prepare_flextensor_units(model, ft_config=config)
-        model, manager = prepared.model, prepared.manager
-        assert prepared.unit_paths == tuple(f"layers.{index}" for index in range(10))
-    else:
-        # Keep the original manual option under the identical acceptance assertions.
-        model.layers = torch.nn.ModuleList(FlexTensorUnit(block) for block in model.layers)
-        model = ft.offload(
-            model,
-            config,
-            compile_fn=(lambda module: module) if finalization == "profile" else None,
-        )
-        manager = ft.get_offload_manager()
+    model = ft.offload(
+        model,
+        config,
+        compile_fn=(lambda module: module) if finalization == "profile" else None,
+    )
+    manager = ft.get_offload_manager()
     with torch.no_grad():
         for _ in range(manager.iters_before_inference):
             model(values[0])
@@ -224,32 +205,19 @@ def run(mode, performance, finalization, setup, cache_dir):
         offload_units, resident_units = manager.offload_units(), manager.resident_units()
         assert len(offload_units) == 10, offload_units
         assert tuple(name for name, _ in resident_units) == ("head",), resident_units
-        shells = tuple(module for _, module in offload_units)
-        assert all(type(shell) is FlexTensorUnit for shell in shells)
-        units = tuple(shell.compute for shell in shells)
-        # Inner targets must have no provider instrumentation to replay during ordinary tuning.
-        assert all("forward" not in unit.__dict__ for unit in units)
+        units = tuple(module for _, module in offload_units)
+        assert units == original_units, "FT replaced the original offload-unit objects"
+        assert tuple(manager.model.state_dict()) == parameter_paths, "Native FT changed parameter paths"
         live_model = manager.model
         root_forward = live_model.forward
-        shell_forwards = tuple(shell.forward for shell in shells)
         resident_forwards = tuple(module.forward for _, module in resident_units)
         usage = assert_offloading(manager, weight_bytes, managed_limit_bytes, resident_head_bytes)
-        calls = Counter()
-
-        def completed_unit(module, args, output):
-            calls[id(module)] += 1
-
-        for shell in shells:
-            shell.register_forward_hook(completed_unit)
         completed_roots = 0
 
         def run_forward(value):
             nonlocal completed_roots
             result = model(value)
             completed_roots += 1
-            assert all(calls[id(shell)] == completed_roots for shell in shells), (
-                "AITune replayed an outer FlexTensor boundary while tuning an inner compute target"
-            )
             return result
 
         assert_outputs(run_forward, values, expected)
@@ -279,9 +247,8 @@ def run(mode, performance, finalization, setup, cache_dir):
             else:
                 assert manager.compiled_profile_active and status.state == "idle", status
             assert manager.model is live_model and live_model.forward == root_forward
-            assert tuple(module for _, module in manager.offload_units()) == shells
-            assert tuple(shell.compute for shell in shells) == units
-            assert all(shell.forward == forward for shell, forward in zip(shells, shell_forwards, strict=True))
+            assert tuple(module for _, module in manager.offload_units()) == units
+            assert tuple(manager.model.state_dict()) == parameter_paths
             assert all(
                 actual is original
                 for wrapper, signature in zip(registration._patched_modules, forward_signatures, strict=True)
@@ -306,7 +273,7 @@ def run(mode, performance, finalization, setup, cache_dir):
             "mode": mode,
             "performance": performance,
             "finalization": finalization,
-            "setup": setup,
+            "native_units": True,
             "units": len(units),
             "graphs": graph_count,
             "profiling_measurements": measurements,
@@ -332,7 +299,6 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=("eager", "deferred"), default="deferred")
     parser.add_argument("--performance", choices=("diagnostic", "enabled"), default="diagnostic")
     parser.add_argument("--finalization", choices=("replan", "profile"), default="replan")
-    parser.add_argument("--setup", choices=("manual", "helper"), default="manual")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="aitune-flextensor-") as directory:
-        run(args.mode, args.performance, args.finalization, args.setup, Path(directory))
+        run(args.mode, args.performance, args.finalization, Path(directory))

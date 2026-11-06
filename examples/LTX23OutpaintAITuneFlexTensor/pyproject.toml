@@ -13,7 +13,7 @@ dependencies = [
     "accelerate>=1.12,<2",
     "av>=16,<20",
     "diffusers @ git+https://github.com/huggingface/diffusers.git@9159a587b1f148a2cc911deb72b6d755508ef38b",
-    "flextensor==0.5.0",
+    "flextensor>=0.5.0", # Native compiled-unit support is also checked at startup; see README.
     "huggingface-hub>=0.36,<1",
     "numpy",
     "peft==0.18.1",
@@ -30,7 +30,7 @@ aitune = { path = "../../", editable = true }
 
 [tool.aitune]
 # Manual staged benchmark, not the export/deployment project workflow. The native
-# integration contract is exercised by the always-on JIT021/JIT022 GPU scripts.
+# integration contract is exercised by JIT021/JIT022 with a verified native FT build.
 skip = true
 
 [build-system]

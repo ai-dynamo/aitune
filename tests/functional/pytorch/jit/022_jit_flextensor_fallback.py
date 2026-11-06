@@ -3,29 +3,28 @@
 """Keep ordinary eager fallback resident after a genuine fullgraph compilation failure."""
 
 # /// script
-# dependencies = ["flextensor==0.5.0"]
+# dependencies = ["flextensor>=0.5.0"]
 # scope = "always"
+# skip = true  # Manual until a public FT release includes native compilation/replay fixes.
 # allow_failure = false
-# arguments = [{setup = "manual"}, {setup = "helper"}]
+# arguments = [{}]
 # ///
 
 import argparse
 import json
 import logging
 import tempfile
-from collections import Counter
 from pathlib import Path
 
 import flextensor as ft
 import torch
+from _flextensor_runtime import require_native_compile_support
 from _tuning_data_artifacts import collect_tuning_data
 
 from aitune.torch import jit_config, snapshot_tuning_data
 from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.flextensor import (
-    FlexTensorUnit,
-    prepare_flextensor_units,
     register_flextensor_units,
     replan_flextensor,
 )
@@ -109,7 +108,8 @@ def assert_failed_compile(registration, cache_dir):
 
 
 @collect_tuning_data(__file__)
-def run(cache_dir, setup):
+def run(cache_dir):
+    require_native_compile_support()
     torch.manual_seed(31)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
@@ -128,7 +128,8 @@ def run(cache_dir, setup):
     model = Model().to("cuda").eval()
     compute = model.layers[1]
     hook = compute.register_forward_hook(adjust_output)
-    original_forward = compute.forward
+    original_units = tuple(model.layers)
+    parameter_paths = tuple(model.state_dict())
     values = tuple(torch.randn(batch, WIDTH, device="cuda") for batch in (1, 2))
     held_out = tuple(torch.randn(batch, WIDTH, device="cuda") for batch in (1, 2))
     with torch.no_grad():
@@ -141,7 +142,8 @@ def run(cache_dir, setup):
     strategy_budget_bytes = managed_limit_bytes - resident_head_bytes
     budget_fraction = strategy_budget_bytes / torch.cuda.get_device_properties(0).total_memory
     config = ft.OffloadConfig(
-        include_patterns=["layers.*"],
+        include_patterns=[f"layers.{index}" for index in range(10)],
+        profile_mode="view",
         external_compile=True,
         transfer_mode="allocation_block_transfer",
         num_blocks=2,
@@ -151,55 +153,42 @@ def run(cache_dir, setup):
         profiling_iters=3,
     )
     model = model.to("cpu")
-    if setup == "helper":
-        prepared = prepare_flextensor_units(model, ft_config=config)
-        model, manager = prepared.model, prepared.manager
-    else:
-        model.layers = torch.nn.ModuleList(FlexTensorUnit(block) for block in model.layers)
-        model = ft.offload(model, config)
-        manager = ft.get_offload_manager()
+    model = ft.offload(model, config)
+    manager = ft.get_offload_manager()
     with torch.no_grad():
         for _ in range(manager.iters_before_inference):
             model(values[0])
         assert manager.phase.value == "inference"
         assert manager.compiled_offload_active and manager.compiled_replan_active
         assert not manager.compiled_profile_active
-        shells = tuple(module for _, module in manager.offload_units())
-        assert len(shells) == 10 and all(type(shell) is FlexTensorUnit for shell in shells)
+        units = tuple(module for _, module in manager.offload_units())
+        assert units == original_units and len(units) == 10
         assert tuple(name for name, _ in manager.resident_units()) == ("head",)
-        assert shells[1].compute is compute and compute.forward == original_forward
-        shell_forwards = tuple(shell.forward for shell in shells)
+        assert units[1] is compute
+        assert tuple(manager.model.state_dict()) == parameter_paths
+        prepared_forwards = tuple(unit.forward for unit in units)
+        prepared_forward = compute.forward
         root_forward = manager.model.forward
         assert_offloading(manager, weight_bytes, managed_limit_bytes, resident_head_bytes)
-        calls = Counter()
-
-        def completed_shell(module, args, output):
-            calls[id(module)] += 1
-
-        for shell in shells:
-            shell.register_forward_hook(completed_shell)
         completed_roots = 0
 
         def check_forward(value, baseline):
             nonlocal completed_roots
             torch.testing.assert_close(model(value), baseline)
             completed_roots += 1
-            assert all(calls[id(shell)] == completed_roots for shell in shells), (
-                "Tuning or fallback replayed an outer FlexTensor residency boundary"
-            )
 
-        registration = register_flextensor_units([manager], modules=[shells[1]])
+        registration = register_flextensor_units([manager], modules=[units[1]])
         assert registration.modules == (compute,)
         for value, baseline in zip(values, expected, strict=True):
             check_forward(value, baseline)
         assert registration.state_counts == {"recording": 1}
         measurements_before = ModelExecutionTimeMeasuringStrategy.counter
         deferred()
-        # A normal whole-model call enters the selected shell, attempts real compilation,
-        # and returns through ordinary AITune's native eager fallback while still resident.
+        # The normal managed forward attempts compilation, then ordinary AITune fallback
+        # restores that same FT-prepared forward and keeps the original hook.
         check_forward(values[0], expected[0])
         assert registration.state_counts == {"eager": 1} and not registration.all_tuned
-        assert compute.forward == original_forward, "Native fallback did not restore the original compute forward"
+        assert compute.forward == prepared_forward, "Native fallback did not restore the FT-prepared forward"
         assert compute._forward_hooks[hook.id] is adjust_output, "Native fallback lost an original compute hook"
         assert ModelExecutionTimeMeasuringStrategy.counter > measurements_before, "No real baseline profiling ran"
         failure = assert_failed_compile(registration, cache_dir)
@@ -219,19 +208,20 @@ def run(cache_dir, setup):
         status = manager.strategy_replan_status
         assert status.state == "idle" and status.can_request
         assert manager.model.forward == root_forward
-        assert tuple(module for _, module in manager.offload_units()) == shells
-        assert all(shell.forward == forward for shell, forward in zip(shells, shell_forwards, strict=True))
+        assert tuple(module for _, module in manager.offload_units()) == units
+        assert all(unit.forward == forward for unit, forward in zip(units, prepared_forwards, strict=True))
+        assert tuple(manager.model.state_dict()) == parameter_paths
         for _ in range(3):
             for value, baseline in zip((*values, *held_out), (*expected, *held_out_expected), strict=True):
                 check_forward(value, baseline)
         assert registration.state_counts == {"eager": 1} and not registration.all_tuned
-        assert compute.forward == original_forward
+        assert compute.forward == prepared_forward
         usage = assert_offloading(manager, weight_bytes, managed_limit_bytes, resident_head_bytes)
     print(
         json.dumps({
             "result": "PASS",
             "mode": "deferred",
-            "setup": setup,
+            "native_units": True,
             "selected_unit": 1,
             "state_counts": registration.state_counts,
             "compile_failure": failure,
@@ -251,7 +241,6 @@ def run(cache_dir, setup):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--setup", choices=("manual", "helper"), default="manual")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="aitune-flextensor-fallback-") as directory:
-        run(Path(directory), args.setup)
+        run(Path(directory))

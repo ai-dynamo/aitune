@@ -446,8 +446,6 @@ def generate(
 def configure_flextensor(pipe: Any, args: argparse.Namespace) -> Any:
     import flextensor
 
-    from aitune.torch.jit.flextensor import prepare_flextensor_units
-
     transformer = pipe.transformer
     if len(transformer.transformer_blocks) != BLOCKS:
         raise RuntimeError(f"the pinned pretrained model must contain all {BLOCKS} blocks")
@@ -463,20 +461,20 @@ def configure_flextensor(pipe: Any, args: argparse.Namespace) -> Any:
         num_blocks=2,
         max_gpu_mem_fraction=args.gpu_memory_fraction,
         pinned_memory_mode=args.pinned_memory_mode,
-        include_patterns=["transformer_blocks.*"],
+        include_patterns=[f"transformer_blocks.{index}" for index in range(BLOCKS)],
         profile_mode="view",
         external_compile=args.finalization == "replan",
         profile_storage_dir=str(profile_dir),
         enable_diagnostics=True,
     )
-    prepared = prepare_flextensor_units(
-        pipe,
-        target="transformer",
-        ft_config=config,
-        name=MANAGER_NAME,
-        load_profile_from=profile_dir if args.reuse_profile else None,
-    )
-    return prepared.manager
+    compile_fn = (lambda module: module) if args.finalization == "retain-profile" else None
+    if args.reuse_profile:
+        pipe.transformer = flextensor.offload_from_profile(
+            transformer, str(profile_dir), config=config, name=MANAGER_NAME, compile_fn=compile_fn
+        )
+    else:
+        pipe.transformer = flextensor.offload(transformer, config=config, name=MANAGER_NAME, compile_fn=compile_fn)
+    return flextensor.get_offload_manager(MANAGER_NAME)
 
 
 class MemoryProbe:
@@ -568,14 +566,14 @@ def setup_aitune(
 
     registration = register_flextensor_units([manager])
     if len(registration.modules) != BLOCKS:
-        raise RuntimeError(f"AITune must register all {BLOCKS} live compute children")
+        raise RuntimeError(f"AITune must register all {BLOCKS} original offload blocks")
     started = time.perf_counter()
     generate(pipe, upsample_pipe, hooks, reference, conditioning, args)
     recording_seconds = time.perf_counter() - started
     deferred()
     tuning_started = time.perf_counter()
     # AITune runs ordinary backend builds, correctness validation and eager/candidate
-    # microbenchmark profiling while each enclosing FT shell holds its weights resident.
+    # microbenchmark profiling through FT's native per-unit replay and residency path.
     for _ in range(3):
         generate(pipe, upsample_pipe, hooks, reference, conditioning, args)
         if registration.all_tuned:
@@ -607,7 +605,7 @@ def setup_aitune(
                 pipe.transformer(*inputs, **kwargs)
 
         replan_flextensor(manager, registration, one_transformer_forward)
-    evidence = backend_evidence(registration)
+    evidence = backend_evidence(registration, args.performance_validation)
     return {
         "recording_generation_seconds": recording_seconds,
         "post_deferred_tuning_generation_seconds": tuning_seconds,
@@ -623,13 +621,23 @@ def setup_aitune(
     }
 
 
-def route_evidence(graph: dict[str, Any], block_index: int) -> dict[str, Any]:
+def route_evidence(graph: dict[str, Any], block_index: int, performance: str) -> dict[str, Any]:
     selected = graph.get("selected_backend") or ""
-    if "TorchInductorJitBackend" not in selected or graph.get("exception"):
-        raise RuntimeError(f"block {block_index} did not select the requested real Inductor backend: {selected}")
+    allowed = (
+        ("TorchInductorJitBackend", "TorchEagerBackend") if performance == "enabled" else ("TorchInductorJitBackend",)
+    )
+    if not any(backend in selected for backend in allowed) or graph.get("exception"):
+        raise RuntimeError(f"block {block_index} did not select a qualified backend for {performance}: {selected}")
     builds = graph.get("backend_builds", [])
-    measured = [build.get("throughput") for build in builds if "TorchInductorJitBackend" in build["backend"]]
-    if not graph.get("baseline_throughput") or not any(measured):
+    measured = [
+        build
+        for build in builds
+        if "TorchInductorJitBackend" in build["backend"]
+        and build.get("success") is True
+        and build.get("exception") is None
+        and (build.get("throughput") or 0) > 0
+    ]
+    if (graph.get("baseline_throughput") or 0) <= 0 or not measured:
         raise RuntimeError(f"block {block_index} lacks real eager/candidate profiling measurements")
     return {
         "graph_name": graph["graph_name"],
@@ -641,7 +649,7 @@ def route_evidence(graph: dict[str, Any], block_index: int) -> dict[str, Any]:
     }
 
 
-def backend_evidence(registration: Any) -> dict[str, Any]:
+def backend_evidence(registration: Any, performance: str) -> dict[str, Any]:
     """Require actual graph backend selections for every one of the 48 real blocks."""
     from aitune.torch import snapshot_tuning_data
 
@@ -656,9 +664,9 @@ def backend_evidence(registration: Any) -> dict[str, Any]:
         graphs = module.get("graphs", [])
         if not graphs or module.get("exception"):
             raise RuntimeError(f"block {index} lacks successful graph telemetry")
-        routes = [route_evidence(graph, index) for graph in graphs]
+        routes = [route_evidence(graph, index, performance) for graph in graphs]
         targets.append({
-            "name": f"transformer_blocks.{index}.compute",
+            "name": f"transformer_blocks.{index}",
             "module_id": report.module_id,
             "state": report.state,
             "num_parameters": report.num_parameters,
@@ -690,6 +698,22 @@ def runtime_versions() -> dict[str, Any]:
     return versions
 
 
+def require_native_flextensor() -> None:
+    import flextensor
+    import torch
+    from flextensor import custom_ops
+
+    required = ("offload", "offload_from_profile", "get_offload_manager", "save_profile")
+    missing = [name for name in required if not callable(getattr(flextensor, name, None))]
+    pre_compute = getattr(torch.ops.flextensor, "pre_compute", None)
+    if missing or not callable(getattr(custom_ops, "unit_index_tensor", None)) or not hasattr(pre_compute, "unit"):
+        raise RuntimeError(
+            "Native FlexTensor tuning requires a development/source build containing the per-unit compilation "
+            "and replay fixes, together with the public offload/profile lifecycle APIs. "
+            "The stock FlexTensor 0.5.0 release does not contain these fixes; see this example's README."
+        )
+
+
 def finish_flextensor_startup(
     pipe: Any,
     upsample_pipe: Any,
@@ -710,32 +734,18 @@ def finish_flextensor_startup(
         raise RuntimeError("FlexTensor did not finish discovery and profiling")
     names = [name for name, _ in manager.offload_units()]
     if names != [f"transformer_blocks.{index}" for index in range(BLOCKS)]:
-        raise RuntimeError(f"expected exactly {BLOCKS} FlexTensor shell units, got {names}")
+        raise RuntimeError(f"expected exactly {BLOCKS} original transformer blocks, got {names}")
     if not args.reuse_profile:
         flextensor.save_profile(str(args.work_dir / "flextensor-profile"), name=MANAGER_NAME)
     return names
 
 
-def configure_compiler(args: argparse.Namespace) -> dict[str, Any]:
-    """Bound instance-specialized compilation for all 48 real blocks in this fresh worker."""
+def compiler_limits() -> dict[str, int]:
+    """Observe process-wide compiler limits without changing them."""
     import torch
 
     names = ("recompile_limit", "accumulated_recompile_limit")
-    prior = {name: int(getattr(torch.compiler.config, name)) for name in names}
-    requested = {
-        "recompile_limit": args.inductor_recompile_limit,
-        "accumulated_recompile_limit": args.inductor_accumulated_recompile_limit,
-    }
-    if min(requested.values()) < 1:
-        raise ValueError("compiler limits must be positive finite integers")
-    for name, value in requested.items():
-        setattr(torch.compiler.config, name, value)
-    return {
-        "prior": prior,
-        "requested": requested,
-        "effective": {name: int(getattr(torch.compiler.config, name)) for name in names},
-        "environment": {"TORCHINDUCTOR_COMPILE_THREADS": os.environ.get("TORCHINDUCTOR_COMPILE_THREADS")},
-    }
+    return {name: int(getattr(torch.compiler.config, name)) for name in names}
 
 
 def prepare_transformer(
@@ -751,8 +761,14 @@ def prepare_transformer(
             raise ValueError("resident eager mode does not use a FlexTensor profile")
         pipe.transformer.to("cuda:0")
         return None, []
+    original_blocks = tuple(pipe.transformer.transformer_blocks)
+    original_parameter_paths = tuple(pipe.transformer.state_dict())
     manager = configure_flextensor(pipe, args)
     names = finish_flextensor_startup(pipe, upsample_pipe, hooks, reference, conditioning, manager, args)
+    if tuple(module for _, module in manager.offload_units()) != original_blocks:
+        raise RuntimeError("FlexTensor must retain the original transformer block instances")
+    if tuple(pipe.transformer.state_dict()) != original_parameter_paths:
+        raise RuntimeError("Native FlexTensor setup must preserve original parameter paths")
     return manager, names
 
 
@@ -834,10 +850,14 @@ def run(args: argparse.Namespace) -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("the real pretrained example requires a CUDA GPU")
     versions = runtime_versions()
-    if versions["flextensor"] != "0.5.0":
-        raise RuntimeError("this example requires the unchanged FlexTensor 0.5.0 public API")
+    if args.mode != "eager":
+        require_native_flextensor()
     validate_host_pinning(args)
-    compiler_limits = configure_compiler(args)
+    compiler_configuration = {
+        "before_setup": compiler_limits(),
+        "changed_by_example": False,
+        "environment": {"TORCHINDUCTOR_COMPILE_THREADS": os.environ.get("TORCHINDUCTOR_COMPILE_THREADS")},
+    }
     run_dir = args.work_dir / args.mode
     run_dir.mkdir(parents=True, exist_ok=True)
     os.environ["AITUNE_CACHE_DIR"] = str((run_dir / "aitune-cache").resolve())
@@ -901,7 +921,7 @@ def run(args: argparse.Namespace) -> None:
     result = {
         "mode": args.mode,
         "versions": versions,
-        "compiler_limits": compiler_limits,
+        "compiler_limits": {**compiler_configuration, "after_measurement": compiler_limits()},
         "arguments": vars(args),
         "model": {
             "base": BASE_MODEL,
@@ -972,8 +992,8 @@ def require_matching_provenance(left: dict[str, Any], right: dict[str, Any]) -> 
     for key in ("model", "workload", "versions"):
         if left[key] != right[key]:
             raise ValueError(f"{left['mode']} and {right['mode']} {key} provenance must match exactly")
-    if left["compiler_limits"]["effective"] != right["compiler_limits"]["effective"]:
-        raise ValueError("effective compiler limits must match across compared workers")
+    if left["compiler_limits"]["before_setup"] != right["compiler_limits"]["before_setup"]:
+        raise ValueError("initial compiler limits must match across compared workers")
     if left["compiler_limits"]["environment"] != right["compiler_limits"]["environment"]:
         raise ValueError("compiler concurrency environment must match across compared workers")
     for key in ("warmups", "runs"):
@@ -1080,8 +1100,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--profile-steps", type=int, default=3)
     parser.add_argument("--ft-profile-steps", type=int, default=10)
-    parser.add_argument("--inductor-recompile-limit", type=int, default=128)
-    parser.add_argument("--inductor-accumulated-recompile-limit", type=int, default=512)
     parser.add_argument("--gpu-memory-fraction", type=float, default=0.65)
     parser.add_argument("--pinned-memory-mode", choices=["torch", "host_register"], default="host_register")
     parser.add_argument("--finalization", choices=["retain-profile", "replan"], default="retain-profile")

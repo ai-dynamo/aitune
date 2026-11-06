@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Public-manager adapter tests without a FlexTensor installation or GPU."""
+"""Native public-manager integration without a FlexTensor installation or GPU."""
 
 from types import SimpleNamespace
 
@@ -11,13 +11,9 @@ import wrapt
 from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
-from aitune.torch.jit.flextensor import (
-    FlexTensorUnit,
-    _tuned_forward_signature,
-    register_flextensor_units,
-    replan_flextensor,
-)
+from aitune.torch.jit.flextensor import _tuned_forward_signature, register_flextensor_units, replan_flextensor
 from aitune.torch.jit.patched_module import PatchedModule
+from aitune.torch.jit.registration import register_for_jit_tuning
 from aitune.torch.jit.tune import deferred as jit_deferred
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
@@ -26,16 +22,14 @@ from tests.toy_backends import SleepBackend
 
 
 class _Manager:
-    """Expose only the public provider contract consumed by the adapter."""
+    """Expose original units and only the public provider contract consumed by AITune."""
 
-    def __init__(self, modules=None, manager_id=1):
+    def __init__(self, modules=None, manager_id=1, *, root=False):
         modules = [torch.nn.Linear(2, 2).eval()] if modules is None else modules
-        modules = [module if isinstance(module, FlexTensorUnit) else FlexTensorUnit(module) for module in modules]
-        self.model = torch.nn.Sequential(*modules).eval()
-        self.units = tuple((str(index), module) for index, module in enumerate(modules))
+        self.model = modules[0] if root else torch.nn.Sequential(*modules).eval()
+        self.units = (("root", self.model),) if root else tuple((str(i), module) for i, module in enumerate(modules))
         self.compiled_offload_manager_id = manager_id
         self.phase = SimpleNamespace(value="inference")
-        self.external_compile_active = True
         self.compiled_offload_active = True
         self.compiled_replan_active = True
         self.compiled_profile_active = False
@@ -92,121 +86,71 @@ def _settle(manager, registration):
     assert registration.all_tuned
 
 
-def test_unit_preserves_original_kwargs_structured_outputs_hooks_and_training():
+def test_registration_preserves_native_identity_state_paths_hooks_kwargs_and_structured_outputs():
     events = []
 
     class Compute(torch.nn.Module):
         def __init__(self):
             super().__init__()
             self.layer = torch.nn.Linear(2, 2).eval()
+            self.register_buffer("offset", torch.ones(2))
 
         def forward(self, value, *, scale, marker):
-            events.append("compute")
-            return {"value": self.layer(value) * scale, "marker": marker}
+            events.append("body")
+            return {"value": (self.layer(value) + self.offset) * scale, "marker": marker}
 
-    compute = Compute()
-    parameter = compute.layer.weight
-    compute.register_forward_pre_hook(lambda *args: events.append("compute_pre"))
-    compute.register_forward_hook(lambda *args: events.append("compute_post"))
-    shell = FlexTensorUnit(compute)
-    shell.register_forward_pre_hook(lambda *args: events.append("shell_pre"))
-    shell.register_forward_hook(lambda *args: events.append("shell_post"))
-    marker = object()
+    module = Compute()
+    manager = _Manager([module], root=True)
+    parameter, buffer = module.layer.weight, module.offset
+    state_keys = tuple(module.state_dict())
+    module_class = type(module)
+    module.register_forward_pre_hook(lambda *args: events.append("pre"))
+    module.register_forward_hook(lambda *args: events.append("post"))
+    marker = "native"
+    value = torch.ones(1, 2)
+    with torch.inference_mode():
+        expected = module(value, scale=2, marker=marker)
+    registration = register_flextensor_units([manager])
 
-    result = shell(torch.ones(1, 2), scale=2, marker=marker)
+    assert registration.modules == (module,)
+    assert manager.model is module
+    assert type(module) is module_class
+    assert module.layer.weight is parameter
+    assert module.offset is buffer
+    assert tuple(module.state_dict()) == state_keys == ("offset", "layer.weight", "layer.bias")
+    assert module.training is True and module.layer.training is False
+    with torch.inference_mode():
+        module(value, scale=2, marker=marker)
+        jit_deferred()
+        module(value, scale=2, marker=marker)
+        events.clear()
+        actual = module(value, scale=2, marker=marker)
 
-    assert result["marker"] is marker
-    assert events == ["shell_pre", "compute_pre", "compute", "compute_post", "shell_post"]
-    assert shell.compute is compute
-    assert shell.compute.layer.weight is parameter
-    assert shell.training is compute.training is True
-    assert compute.layer.training is False
-    assert list(shell.state_dict()) == ["compute.layer.weight", "compute.layer.bias"]
-    assert FlexTensorUnit(torch.nn.Linear(2, 2).eval()).training is False
-
-
-@pytest.mark.parametrize("invalid", [None, object(), torch.ones(1)])
-def test_unit_requires_a_module(invalid):
-    with pytest.raises(TypeError, match="compute must be a torch.nn.Module"):
-        FlexTensorUnit(invalid)
-
-
-@pytest.mark.parametrize("nested", [False, True])
-def test_unit_rejects_nested_or_double_wrapping(nested):
-    shell = FlexTensorUnit(torch.nn.Linear(2, 2))
-    compute = _ParentModule(shell) if nested else shell
-
-    with pytest.raises(ValueError, match="nested or wrapped twice"):
-        FlexTensorUnit(compute)
+    torch.testing.assert_close(actual["value"], expected["value"])
+    assert actual["marker"] == marker
+    assert events == ["pre", "body", "post"]
+    assert registration.all_tuned
+    assert module.layer.weight is parameter and module.offset is buffer
+    assert tuple(manager.model.state_dict()) == state_keys
 
 
-def test_registration_uses_final_live_public_shells_not_discovery_predecessors():
+def test_registration_uses_final_live_public_units_not_discovery_predecessors():
     manager = _Manager()
     predecessor = manager.units[0][1]
-    final = FlexTensorUnit(torch.nn.Linear(2, 2))
+    final = torch.nn.Linear(2, 2)
     manager.model[0] = final
     manager.units = (("final", final),)
 
     registration = register_flextensor_units([manager])
 
-    assert registration.modules == (final.compute,)
-    assert "forward" not in final.__dict__
-    assert "forward" not in predecessor.compute.__dict__
-
-
-def test_unprepared_provider_unit_is_rejected_without_patching_it():
-    manager = _Manager()
-    plain = torch.nn.Linear(2, 2)
-    manager.model = torch.nn.Sequential(plain)
-    manager.units = (("plain", plain),)
-
-    with pytest.raises(RuntimeError, match="insert FlexTensorUnit.*before flextensor.offload"):
-        register_flextensor_units([manager])
-
-    assert "forward" not in plain.__dict__
-    assert not is_externally_managed_module(plain)
-
-
-def test_compute_must_be_the_live_registered_child_in_the_manager_model():
-    manager = _Manager()
-    shell = manager.units[0][1]
-    orphan = torch.nn.Linear(2, 2)
-    object.__setattr__(shell, "compute", orphan)
-
-    with pytest.raises(RuntimeError, match="compute must belong to the manager's current model"):
-        register_flextensor_units([manager])
-
-    assert "forward" not in orphan.__dict__
-
-
-@pytest.mark.parametrize("different_managers", [False, True])
-def test_distinct_shells_cannot_share_the_same_compute(different_managers):
-    compute = torch.nn.Linear(2, 2)
-    shells = [FlexTensorUnit(compute), FlexTensorUnit(compute)]
-    managers = (
-        [_Manager([shell], manager_id=index) for index, shell in enumerate(shells)]
-        if different_managers
-        else [_Manager(shells)]
-    )
-
-    with pytest.raises(ValueError, match="share a compute"):
-        register_flextensor_units(managers)
-
-    assert "forward" not in compute.__dict__
-
-
-def test_compute_children_are_not_public_subset_selectors():
-    manager = _Manager()
-
-    with pytest.raises(ValueError, match="offload_units"):
-        register_flextensor_units([manager], modules=[manager.units[0][1].compute])
-
-    assert "forward" not in manager.units[0][1].compute.__dict__
+    assert registration.modules == (final,)
+    assert "forward" in final.__dict__
+    assert "forward" not in predecessor.__dict__
+    assert not is_externally_managed_module(predecessor)
 
 
 def test_retained_profile_registers_without_replan_capability_and_never_arms_a_tail():
     manager = _Manager()
-    manager.external_compile_active = False
     manager.compiled_replan_active = False
     manager.compiled_profile_active = True
     manager.request_strategy_replan = None
@@ -222,39 +166,55 @@ def test_retained_profile_registers_without_replan_capability_and_never_arms_a_t
 
 
 @pytest.mark.parametrize("mode", [JITMode.TUNE_EAGER, JITMode.TUNE_DEFERRED])
-def test_ordinary_aitune_replays_compute_inside_one_prepared_residency_call(mode):
+def test_native_aitune_replays_the_ft_prepared_forward_for_every_isolated_call(mode):
     manager = _Manager()
-    shell = manager.units[0][1]
-    shell_forward, compute_forward = shell.forward, shell.compute.forward
-    calls = {"enter": 0, "exit": 0, "compute": 0, "resident": False}
-
-    def compute(value):
-        assert calls["resident"]
-        calls["compute"] += 1
-        return compute_forward(value)
+    module = manager.units[0][1]
+    original = module.forward
+    calls = {"enter": 0, "exit": 0, "body": 0, "resident": False}
 
     def prepared(value):
         assert not calls["resident"]
         calls["enter"] += 1
         calls["resident"] = True
         try:
-            return shell_forward(value)
+            assert calls["resident"]
+            calls["body"] += 1
+            return original(value)
         finally:
             calls["resident"] = False
             calls["exit"] += 1
 
-    shell.compute.forward = compute
-    shell.forward = prepared
+    module.forward = prepared
     jit_config.mode = mode
     registration = register_flextensor_units([manager])
-
     _settle(manager, registration)
 
-    assert calls["enter"] == calls["exit"] == 2
-    assert calls["compute"] > calls["enter"]
+    assert calls["enter"] == calls["exit"] == calls["body"]
+    assert calls["body"] > 2
     assert not calls["resident"]
-    assert shell.forward is prepared
-    assert registration.modules == (shell.compute,)
+    assert registration.modules == (module,)
+    assert registration._patched_modules[0]._original_forward is prepared
+
+
+@pytest.mark.parametrize("mode", [JITMode.TUNE_EAGER, JITMode.TUNE_DEFERRED])
+def test_model_itself_can_be_the_native_offload_unit_and_keep_its_dispatch_during_replan(mode):
+    manager = _Manager(root=True)
+    module = manager.model
+    keys = tuple(module.state_dict())
+    jit_config.mode = mode
+    registration = register_flextensor_units([manager])
+    _settle(manager, registration)
+    patched = registration._patched_modules[0]
+    signature = _tuned_forward_signature(patched)
+
+    replan_flextensor(manager, registration, manager.forward)
+
+    assert registration.modules == (manager.model,) == (module,)
+    assert tuple(module.state_dict()) == keys == ("weight", "bias")
+    assert manager.requests == 1 and manager.forward_calls == manager.requested_count
+    assert all(
+        actual is expected for actual, expected in zip(_tuned_forward_signature(patched), signature, strict=True)
+    )
 
 
 def test_registration_discovers_units_once_and_deduplicates_managers():
@@ -263,21 +223,19 @@ def test_registration_discovers_units_once_and_deduplicates_managers():
 
     registration = register_flextensor_units(iter([first, first, second]))
 
-    assert registration.modules == tuple(module.compute for _, module in (*first.units, *second.units))
+    assert registration.modules == tuple(module for _, module in (*first.units, *second.units))
     assert first.discovery_calls == second.discovery_calls == 1
     assert first.requests == second.requests == first.forward_calls == second.forward_calls == 0
     assert all(is_externally_managed_module(module) for module in registration.modules)
     assert all("forward" in module.__dict__ for module in registration.modules)
     assert "forward" not in first.model.__dict__
-    assert all("forward" not in shell.__dict__ for _, shell in (*first.units, *second.units))
 
 
 def test_registration_subset_retains_requested_order_and_identity():
     modules = [torch.nn.Linear(2, 2) for _ in range(3)]
     manager = _Manager(modules)
-    shells = [shell for _, shell in manager.units]
 
-    registration = register_flextensor_units([manager], modules=iter([shells[2], shells[0], shells[2]]))
+    registration = register_flextensor_units([manager], modules=iter([modules[2], modules[0], modules[2]]))
 
     assert registration.modules == (modules[2], modules[0])
     assert not is_externally_managed_module(modules[1])
@@ -308,13 +266,13 @@ def test_registration_subset_retains_requested_order_and_identity():
 )
 def test_manager_preflight_rejects_incompatible_provider_before_installation(attribute, value, message):
     first, second = _Manager(), _Manager(manager_id=2)
-    second_units = [module.compute for _, module in second.units]
+    second_units = [module for _, module in second.units]
     setattr(second, attribute, value)
 
     with pytest.raises(RuntimeError, match=message):
         register_flextensor_units([first, second])
 
-    modules = [module.compute for _, module in first.units] + second_units
+    modules = [module for _, module in first.units] + second_units
     assert all("forward" not in module.__dict__ for module in modules)
     assert not any(is_externally_managed_module(module) for module in modules)
 
@@ -337,8 +295,7 @@ def test_registration_rejects_ambiguous_ownership_before_installation(ambiguity)
         register_flextensor_units([first, second])
 
     assert "forward" not in module.__dict__
-    assert "forward" not in module.compute.__dict__
-    assert not is_externally_managed_module(module.compute)
+    assert not is_externally_managed_module(module)
 
 
 @pytest.mark.parametrize("targets", ["outside", "empty", "invalid_type"])
@@ -349,8 +306,8 @@ def test_subset_validation_precedes_installation(targets):
     with pytest.raises((TypeError, ValueError)):
         register_flextensor_units([manager], modules=selected)
 
-    assert "forward" not in manager.units[0][1].compute.__dict__
-    assert not is_externally_managed_module(manager.units[0][1].compute)
+    assert "forward" not in manager.units[0][1].__dict__
+    assert not is_externally_managed_module(manager.units[0][1])
 
 
 @pytest.mark.parametrize("stale_unit", [True, False])
@@ -374,6 +331,19 @@ def test_empty_manager_batch_is_rejected(managers):
         register_flextensor_units(managers)
 
 
+@pytest.mark.parametrize("units", [(), (("one",),), (("one", None, "extra"),), (None,)])
+def test_missing_or_malformed_units_fail_before_installation(units):
+    manager = _Manager()
+    original = manager.units[0][1]
+    manager.units = units
+
+    with pytest.raises((RuntimeError, ValueError), match="pairs|at least one"):
+        register_flextensor_units([manager])
+
+    assert "forward" not in original.__dict__
+    assert not is_externally_managed_module(original)
+
+
 def test_existing_core_target_preflight_rejects_overlapping_units():
     child = torch.nn.Linear(2, 2)
     parent = _ParentModule(child)
@@ -394,8 +364,8 @@ def test_existing_core_candidate_preflight_rejects_unqualified_backend():
     with pytest.raises(ValueError, match="External device management"):
         register_flextensor_units([manager])
 
-    assert "forward" not in manager.units[0][1].compute.__dict__
-    assert not is_externally_managed_module(manager.units[0][1].compute)
+    assert "forward" not in manager.units[0][1].__dict__
+    assert not is_externally_managed_module(manager.units[0][1])
 
 
 @pytest.mark.parametrize("recorded", [False, True])
@@ -414,11 +384,11 @@ def test_replan_rejects_pending_targets_without_requesting_or_running_forwards(r
 @pytest.mark.parametrize("prepared_forward", ["bound_method", "instance_function"])
 def test_real_tuned_eager_candidate_replans_exact_requested_count_and_preserves_forward(prepared_forward):
     manager = _Manager()
-    shell = manager.units[0][1]
+    module = manager.units[0][1]
     if prepared_forward == "instance_function":
-        original = shell.forward
-        shell.forward = lambda value: original(value)
-    prepared = shell.forward
+        original = module.forward
+        module.forward = lambda value: original(value)
+    prepared = module.forward
     registration = register_flextensor_units([manager])
     _settle(manager, registration)
     patched = registration._patched_modules[0]
@@ -436,7 +406,7 @@ def test_real_tuned_eager_candidate_replans_exact_requested_count_and_preserves_
         actual is expected for actual, expected in zip(_tuned_forward_signature(patched), signature, strict=True)
     )
     assert manager.strategy_replan_status.applied is True
-    assert shell.forward == prepared
+    assert patched._original_forward == prepared
 
 
 @pytest.mark.parametrize("outcome", ["skipped", "dry_run", "fallback"])
@@ -519,26 +489,24 @@ def test_replan_rechecks_provider_availability_before_request():
 
 
 def _replace_boundary(manager, replacement):
-    shell = manager.units[0][1]
+    module = manager.units[0][1]
     if replacement == "manager_id":
         manager.compiled_offload_manager_id += 1
     elif replacement == "model":
-        manager.model = torch.nn.Sequential(shell)
+        manager.model = torch.nn.Sequential(module)
     elif replacement == "model_forward":
         original = manager.model.forward
         manager.model.forward = lambda value: original(value)
-    elif replacement == "shell":
-        replacement_shell = FlexTensorUnit(shell.compute)
-        manager.model[0] = replacement_shell
-        manager.units = (("replacement", replacement_shell),)
-    elif replacement == "compute":
-        shell.compute = torch.nn.Linear(2, 2)
+    elif replacement == "unit":
+        new_unit = torch.nn.Linear(2, 2)
+        manager.model[0] = new_unit
+        manager.units = (("replacement", new_unit),)
     else:
-        original = shell.forward
-        shell.forward = lambda value: original(value)
+        original = module.forward
+        module.forward = lambda value: original(value)
 
 
-@pytest.mark.parametrize("replacement", ["manager_id", "model", "model_forward", "shell", "compute", "shell_forward"])
+@pytest.mark.parametrize("replacement", ["manager_id", "model", "model_forward", "unit", "unit_forward"])
 @pytest.mark.parametrize("timing", ["before", "during"])
 def test_replan_rejects_replacement_of_public_residency_boundaries(replacement, timing):
     manager = _Manager()
@@ -561,12 +529,26 @@ def test_replan_rejects_replacement_of_public_residency_boundaries(replacement, 
     assert manager.requests == (timing == "during")
 
 
-def test_replaced_compute_cannot_look_like_a_manager_with_no_selected_units():
+def test_replaced_unit_cannot_look_like_a_manager_with_no_selected_units():
     manager = _Manager()
     registration = register_flextensor_units([manager])
-    manager.units[0][1].compute = torch.nn.Linear(2, 2)
+    _replace_boundary(manager, "unit")
 
-    with pytest.raises(RuntimeError, match="replaced a residency shell"):
+    with pytest.raises(RuntimeError, match="replaced an offload unit"):
+        replan_flextensor(manager, registration, manager.forward)
+
+    assert manager.requests == manager.forward_calls == 0
+
+
+def test_replan_detects_replacement_of_an_unselected_prepared_forward():
+    first, second = torch.nn.Linear(2, 2), torch.nn.Linear(2, 2)
+    manager = _Manager([first, second])
+    registration = register_flextensor_units([manager], modules=[first])
+    _settle(manager, registration)
+    original = second.forward
+    second.forward = lambda value: original(value)
+
+    with pytest.raises(RuntimeError, match="replaced a prepared forward"):
         replan_flextensor(manager, registration, manager.forward)
 
     assert manager.requests == manager.forward_calls == 0
@@ -582,13 +564,23 @@ def test_replan_rejects_an_unregistered_manager():
     assert other.requests == other.forward_calls == 0
 
 
+def test_replan_rejects_a_plain_jit_registration_without_manager_ownership():
+    manager = _Manager()
+    registration = register_for_jit_tuning([manager.units[0][1]], device_management="external")
+
+    with pytest.raises(TypeError, match="must come from register_flextensor_units"):
+        replan_flextensor(manager, registration, manager.forward)
+
+    assert manager.requests == manager.forward_calls == 0
+
+
 def test_replan_requires_a_callable_whole_model_forward():
     manager = _Manager()
     registration = register_flextensor_units([manager])
     _settle(manager, registration)
 
     with pytest.raises(TypeError, match="one complete manager model forward"):
-        replan_flextensor(manager, registration, None)
+        replan_flextensor(manager, registration, None)  # pytype: disable=wrong-arg-types
 
     assert manager.requests == manager.forward_calls == 0
 
@@ -694,7 +686,7 @@ def test_replan_detects_replacement_of_installed_aitune_dispatch(replacement):
         return value
 
     try:
-        with pytest.raises(RuntimeError, match="replaced an installed AITune forward"):
+        with pytest.raises(RuntimeError, match="replaced"):
             replan_flextensor(manager, registration, run_forward)
     finally:
         patched._original_forward, patched._wrapper = original, dispatcher

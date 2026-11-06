@@ -1,188 +1,38 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Optional preparation, registration and synchronous replanning for FlexTensor."""
+"""Register native FlexTensor offload units and synchronously replan their manager."""
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
-from inspect import getattr_static
-from os import PathLike, fspath
 from types import MethodType
 from typing import Any, NamedTuple
 
 import torch
 import wrapt
 
-from aitune.torch.jit._flextensor_preparation import _prepare_policy
 from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.registration import JITRegistration, _collect_modules, register_for_jit_tuning
 from aitune.torch.module.tuned_module import TunedModule
 
 
-class FlexTensorUnit(torch.nn.Module):
-    """Keep FlexTensor's residency boundary outside the original compute module.
-
-    Insert these shells into the model **before** calling ``flextensor.offload`` and
-    select the shells with its include patterns, so FlexTensor skips their descendants.
-    FlexTensor owns the shell's prepared forward; AITune registers only ``compute``.
-    Thus ordinary AITune warmup, correctness checks and profiling can repeat compute
-    while the enclosing FlexTensor call keeps its weights resident.
-
-    The original module, parameters, hooks and outputs are retained. The extra child
-    adds ``compute.`` to parameter and checkpoint paths; checkpoint keys are not remapped.
-    """
-
-    def __init__(self, compute: torch.nn.Module) -> None:
-        """Wrap an existing compute module without copying or moving it."""
-        super().__init__()
-        if not isinstance(compute, torch.nn.Module):
-            raise TypeError("compute must be a torch.nn.Module")
-        if any(isinstance(module, FlexTensorUnit) for module in compute.modules()):
-            raise ValueError("FlexTensorUnit shells cannot be nested or wrapped twice")
-        self.compute = compute
-        self.training = compute.training
-
-    def forward(self, *args: Any, **kwargs: Any) -> Any:
-        """Delegate arguments and return values unchanged to the original module."""
-        return self.compute(*args, **kwargs)
-
-
-@dataclass(frozen=True)
-class PreparedFlexTensor:
-    """Public setup result; the model is FlexTensor's exact phase-following proxy.
-
-    ``effective_config`` is a validated shallow copy with selectors adapted to the
-    inserted shells. ``unit_paths`` are the planned boundaries in the original model.
-    Use the manager's public live-unit discovery after startup, not cached unit objects.
-    """
-
-    model: torch.nn.Module
-    manager: Any
-    effective_config: Any
-    unit_paths: tuple[str, ...]
-
-
-def _preparation_target(owner: Any, target: str | None) -> tuple[torch.nn.Module, Any, str | None]:
-    """Resolve an explicit owner attribute without guessing a module's parent."""
-    parent, leaf = None, None
-    if target is not None:
-        if not isinstance(target, str) or not target or any(not part for part in target.split(".")):
-            raise ValueError("target must be a nonempty dotted attribute path")
-        parts = target.split(".")
-        parent = owner
-        for part in parts[:-1]:
-            parent = getattr(parent, part)
-        leaf = parts[-1]
-        owner = getattr(parent, leaf)
-        descriptor = getattr_static(parent, leaf, None)
-        if isinstance(descriptor, property) and descriptor.fset is None:
-            raise ValueError("target must be writable so FlexTensor's returned model can be installed")
-    if not isinstance(owner, torch.nn.Module):
-        raise TypeError("the model or target must be a torch.nn.Module")
-    return owner, parent, leaf
-
-
-def _retain_profile(module: torch.nn.Module) -> torch.nn.Module:
-    """Activate public compiled view profiling without compiling the residency shell."""
-    return module
-
-
-def prepare_flextensor_units(
-    model_or_owner: Any,
-    *,
-    ft_config: Any,
-    target: str | None = None,
-    name: str = "default",
-    load_profile_from: str | PathLike[str] | None = None,
-) -> PreparedFlexTensor:
-    """Prepare residency shells and public FlexTensor offloading without running the model.
-
-    Pass an unprepared model, or its owner and ``target="transformer"`` (dotted paths
-    are supported). In the latter form the exact returned FT proxy is installed on
-    the owner using ordinary attribute assignment. Otherwise use the returned ``model``.
-    The existing manual :class:`FlexTensorUnit` and public FT setup remain available.
-
-    ``ft_config`` is a public ``flextensor.OffloadConfig`` whose selectors refer to the
-    original model, before ``compute.`` is inserted. A validated shallow copy preserves
-    unit boundaries and parameter residency policy; unrelated settings are retained. Wrapping
-    does not copy or move weights; FT still owns placement and any provider snapshots.
-    Non-executable containers, cross-boundary aliases and unrepresentable
-    selector translations are rejected rather than changing their meaning.
-
-    External compilation uses no compile callback. Otherwise ``profile_mode="view"``
-    uses an identity callback to retain FT's profile without compiling the shells.
-    A supplied profile path calls public ``offload_from_profile``; it is never inferred.
-
-    Use a fresh worker, unprepared model and unused named manager. The helper does not
-    execute startup, register JIT targets, tune, warm routes or replan. Do those explicitly
-    using the existing APIs. Provider and custom-setter errors propagate; there is no
-    rollback or recovery after setup starts. FlexTensor is imported only on this call.
-    """
-    model, parent, leaf = _preparation_target(model_or_owner, target)
-    if not isinstance(name, str) or not name.strip() or name != name.strip():
-        raise ValueError("name must be a nonempty manager name without surrounding whitespace")
-    profile_path = None if load_profile_from is None else fspath(load_profile_from)
-    if profile_path is not None and (not isinstance(profile_path, str) or not profile_path):
-        raise ValueError("load_profile_from must be a nonempty string or path")
-
-    import flextensor as ft
-
-    if not isinstance(ft_config, ft.OffloadConfig):
-        raise TypeError("ft_config must be a flextensor.OffloadConfig")
-    if not ft_config.external_compile and ft_config.profile_mode != "view":
-        raise ValueError("Use external_compile=True or retained profile_mode='view' for AITune preparation")
-    compile_fn = None if ft_config.external_compile else _retain_profile
-    manager = ft.get_offload_manager(name)
-    if manager.model is not None or getattr(manager.phase, "value", None) != "not_initialized":
-        raise RuntimeError("FlexTensor preparation requires an unused named manager in a fresh worker")
-    effective_config, unit_paths = _prepare_policy(model, ft_config, FlexTensorUnit)
-    for path in unit_paths:
-        model.set_submodule(path, FlexTensorUnit(model.get_submodule(path)))
-    kwargs = {"config": effective_config, "name": name, "compile_fn": compile_fn}
-    if profile_path is None:
-        proxy = ft.offload(model, **kwargs)
-    else:
-        proxy = ft.offload_from_profile(model, profile_path, **kwargs)
-    if leaf is not None:
-        setattr(parent, leaf, proxy)
-    return PreparedFlexTensor(proxy, manager, effective_config, unit_paths)
-
-
 class _ManagerBoundary(NamedTuple):
-    """Original public ownership and forwards associated with one registration."""
+    """Original public ownership and prepared forwards for one manager."""
 
     manager: Any
     manager_id: int
     model: torch.nn.Module
     forward: tuple[object, object]
-    units: tuple[tuple[FlexTensorUnit, torch.nn.Module, tuple[object, object]], ...]
+    units: tuple[tuple[torch.nn.Module, tuple[object, object]], ...]
 
 
 class _FlexTensorRegistration(JITRegistration):
-    """Keep immutable public boundary associations alongside the ordinary JIT view."""
+    """Retain manager ownership alongside the ordinary live registration view."""
 
     __slots__ = ("_boundaries",)
 
     def __init__(self, registration: JITRegistration, boundaries: tuple[_ManagerBoundary, ...]) -> None:
-        """Retain the unchanged core registration's targets and their public owners."""
+        """Retain the unchanged core registration's native targets and owners."""
         super().__init__(registration._patched_modules)
         self._boundaries = boundaries
-
-
-def _replan_mode(manager: Any) -> bool:
-    """Validate the active public compiled-offload mode without arming a tail."""
-    if getattr(manager, "compiled_offload_active", None) is not True:
-        raise RuntimeError("FlexTensor must have compiled_offload_active=True")
-    replan = getattr(manager, "compiled_replan_active", None)
-    profile = getattr(manager, "compiled_profile_active", None)
-    if not isinstance(replan, bool) or not isinstance(profile, bool) or replan == profile:
-        raise RuntimeError(
-            "FlexTensor must expose exactly one active compiled_replan_active or compiled_profile_active mode"
-        )
-    if replan:
-        if not callable(getattr(manager, "request_strategy_replan", None)):
-            raise RuntimeError("FlexTensor must expose public request_strategy_replan()")
-        _status(manager)
-    return replan
 
 
 def _status(manager: Any) -> Any:
@@ -198,22 +48,33 @@ def _status(manager: Any) -> Any:
     return status
 
 
-def _residency_shell(module: torch.nn.Module, owned: set[int]) -> FlexTensorUnit:
-    """Require an integration-prepared shell with its original live compute child."""
-    if not isinstance(module, FlexTensorUnit):
+def _replan_mode(manager: Any) -> bool:
+    """Validate the active public compiled-offload mode without requesting a replan."""
+    if getattr(manager, "compiled_offload_active", None) is not True:
+        raise RuntimeError("FlexTensor must have compiled_offload_active=True")
+    replan = getattr(manager, "compiled_replan_active", None)
+    profile = getattr(manager, "compiled_profile_active", None)
+    if not isinstance(replan, bool) or not isinstance(profile, bool) or replan == profile:
         raise RuntimeError(
-            "Unsafe FlexTensor unit replay: insert FlexTensorUnit(original) before flextensor.offload(), "
-            "and select its shell rather than its compute descendants with include_patterns"
+            "FlexTensor must expose exactly one active compiled_replan_active or compiled_profile_active mode"
         )
-    if not isinstance(module.compute, torch.nn.Module) or id(module.compute) not in owned:
-        raise RuntimeError("FlexTensorUnit compute must belong to the manager's current model")
-    if any(isinstance(child, FlexTensorUnit) for child in module.compute.modules()):
-        raise RuntimeError("FlexTensorUnit must contain one original compute module, not nested shells")
-    return module
+    if replan:
+        if not callable(getattr(manager, "request_strategy_replan", None)):
+            raise RuntimeError("FlexTensor must expose public request_strategy_replan()")
+        _status(manager)
+    return replan
 
 
-def _manager_units(manager: Any) -> tuple[FlexTensorUnit, ...]:
-    """Resolve stable, uniquely named units using only public manager APIs."""
+def _manager_id(manager: Any) -> int:
+    """Read the public identity used to reject ambiguous ownership."""
+    manager_id = getattr(manager, "compiled_offload_manager_id", None)
+    if not isinstance(manager_id, int) or isinstance(manager_id, bool):
+        raise RuntimeError("FlexTensor must expose an integer compiled_offload_manager_id")
+    return manager_id
+
+
+def _manager_units(manager: Any) -> tuple[torch.nn.Module, ...]:
+    """Resolve live original modules after public discovery and profiling finish."""
     if getattr(getattr(manager, "phase", None), "value", None) != "inference":
         raise RuntimeError("FlexTensor must finish discovery and profiling and reach inference before registration")
     _replan_mode(manager)
@@ -223,7 +84,7 @@ def _manager_units(manager: Any) -> tuple[FlexTensorUnit, ...]:
     if not isinstance(model, torch.nn.Module):
         raise RuntimeError("FlexTensor must expose its current model as a torch.nn.Module")
     owned = {id(module) for module in model.modules()}
-    modules: list[FlexTensorUnit] = []
+    modules: list[torch.nn.Module] = []
     names: set[str] = set()
     identities: set[int] = set()
     for unit in manager.offload_units():
@@ -237,20 +98,24 @@ def _manager_units(manager: Any) -> tuple[FlexTensorUnit, ...]:
             raise RuntimeError("FlexTensor offload units must belong to the manager's current model")
         names.add(name)
         identities.add(id(module))
-        modules.append(_residency_shell(module, owned))
+        modules.append(module)
     return tuple(modules)
 
 
-def _manager_id(manager: Any) -> int:
-    """Read the public manager identity used to reject ambiguous ownership."""
-    manager_id = getattr(manager, "compiled_offload_manager_id", None)
-    if not isinstance(manager_id, int) or isinstance(manager_id, bool):
-        raise RuntimeError("FlexTensor must expose an integer compiled_offload_manager_id")
-    return manager_id
+def _forward_signature(forward: Callable[..., Any]) -> tuple[object, object]:
+    """Identify a forward without relying on transient bound-method objects."""
+    if type(forward) is MethodType:
+        return forward.__self__, forward.__func__
+    return None, forward
 
 
-def _tuned_forward_signature(patched: PatchedModule) -> tuple[object, object, object]:
-    """Identify owned dispatch across proxies recreated by ordinary tuned inference."""
+def _same_forward(forward: Callable[..., Any], expected: tuple[object, object]) -> bool:
+    """Compare the owner and implementation of a prepared forward by identity."""
+    return all(actual is original for actual, original in zip(_forward_signature(forward), expected, strict=True))
+
+
+def _dispatch_signature(patched: PatchedModule) -> tuple[object, object]:
+    """Require AITune's own proxy around the captured FlexTensor forward."""
     forward = patched.__wrapped__.forward
     router = getattr(forward, "_self_wrapper", None)
     if (
@@ -258,38 +123,43 @@ def _tuned_forward_signature(patched: PatchedModule) -> tuple[object, object, ob
         or getattr(router, "__self__", None) is not patched
         or getattr(router, "__func__", None) is not patched._forward_router.__func__
         or forward.__wrapped__ is not patched._original_forward
-        or not isinstance(patched._wrapper, TunedModule)
     ):
         raise RuntimeError("FlexTensor strategy replanning replaced an installed AITune forward; use a fresh worker")
-    return forward.__wrapped__, router.__func__, patched._wrapper
+    return forward.__wrapped__, router.__func__
+
+
+def _tuned_forward_signature(patched: PatchedModule) -> tuple[object, object, object]:
+    """Identify tuned dispatch across proxies recreated by ordinary inference."""
+    original, router = _dispatch_signature(patched)
+    if not isinstance(patched._wrapper, TunedModule):
+        raise RuntimeError("FlexTensor strategy replanning replaced an installed AITune forward; use a fresh worker")
+    return original, router, patched._wrapper
 
 
 def register_flextensor_units(
     managers: Iterable[Any], *, modules: Iterable[torch.nn.Module] | None = None
 ) -> JITRegistration:
-    """Register all public offload units, or an explicitly selected subset, once per worker.
+    """Register original public offload units, or an explicit subset, once per worker.
 
-    Insert :class:`FlexTensorUnit` shells before offloading and select only those shells
-    in FlexTensor. Finish discovery/profiling before registration: the final live public
-    ``offload_units()`` shells supply the inner ``compute`` targets. ``modules`` optionally
-    selects public shells, not compute children. The returned registration exposes computes.
-    Identity-deduplicated managers and their units retain discovery order. Source placement
-    belongs to FlexTensor; AITune's existing external-placement validation applies unchanged.
+    Prepare the model with public FlexTensor APIs and finish discovery/profiling before
+    registration. The final live ``manager.offload_units()`` modules are registered directly
+    using ``device_management="external"``. No module, parameter or checkpoint path is added.
+    ``modules`` optionally selects those same original objects in the requested order.
 
-    Compiled replan mode (including ``external_compile=True``) must have an available
-    public replan request. ``compile_fn`` with retained view profiling is also supported;
-    that mode keeps its measured strategy and must not call :func:`replan_flextensor`.
+    Identity-deduplicated managers and units retain discovery order. AITune's existing
+    external-placement and backend validation apply unchanged. Native repeated-unit tuning
+    requires a FlexTensor version containing its per-unit compilation and replay fixes.
 
-    The caller records representative whole-model forwards, arms deferred tuning when
-    needed, and warms every selected route before calling :func:`replan_flextensor`.
-    FlexTensor is optional; registration does not import it.
+    External compilation/replan mode must expose an available public replan request. The
+    retained view-profile mode also works; it keeps FT's pre-AITune strategy and must not
+    call :func:`replan_flextensor`. The caller records representative model forwards, tunes
+    and warms every serving route before replanning. FlexTensor is optional and not imported.
     """
     unique_managers = tuple({id(manager): manager for manager in managers}.values())
     if not unique_managers:
         raise ValueError("managers must contain at least one FlexTensor manager")
+    discovered: dict[int, torch.nn.Module] = {}
     manager_ids: set[int] = set()
-    discovered: dict[int, FlexTensorUnit] = {}
-    computes: set[int] = set()
     boundaries: list[_ManagerBoundary] = []
     for manager in unique_managers:
         manager_id = _manager_id(manager)
@@ -302,59 +172,59 @@ def register_flextensor_units(
         for module in units:
             if id(module) in discovered:
                 raise ValueError("Distinct FlexTensor managers cannot share an offload unit")
-            if id(module.compute) in computes:
-                raise ValueError("FlexTensor offload shells cannot share a compute module")
             discovered[id(module)] = module
-            computes.add(id(module.compute))
         boundaries.append(
             _ManagerBoundary(
                 manager,
                 manager_id,
                 manager.model,
-                _forward_signature(manager.model),
-                tuple((module, module.compute, _forward_signature(module)) for module in units),
+                _forward_signature(manager.model.forward),
+                tuple((module, _forward_signature(module.forward)) for module in units),
             )
         )
     targets = list(discovered.values()) if modules is None else _collect_modules(modules)
     if any(id(module) not in discovered for module in targets):
         raise ValueError("Every selected module must be returned by a supplied manager's offload_units()")
-    registration = register_for_jit_tuning(
-        [discovered[id(module)].compute for module in targets], device_management="external"
-    )
+    registration = register_for_jit_tuning(targets, device_management="external")
     return _FlexTensorRegistration(registration, tuple(boundaries))
 
 
-def _forward_signature(module: torch.nn.Module) -> tuple[object, object]:
-    """Identify a prepared forward without relying on transient bound-method objects."""
-    forward = module.forward
-    if type(forward) is MethodType:
-        return forward.__self__, forward.__func__
-    return None, forward
+def _check_unit_forward(
+    module: torch.nn.Module, original: tuple[object, object], patched: PatchedModule | None
+) -> None:
+    """Require the original prepared forward beneath any active AITune dispatcher."""
+    if patched is None or patched._state.value in ("eager", "skipped"):
+        if not _same_forward(module.forward, original):
+            raise RuntimeError("FlexTensor strategy replanning replaced a prepared forward; use a fresh worker")
+    if patched is not None:
+        if not _same_forward(patched._original_forward, original):
+            raise RuntimeError("FlexTensor strategy replanning replaced a prepared forward; use a fresh worker")
+        if patched._state.value not in ("eager", "skipped"):
+            _dispatch_signature(patched)
 
 
-def _check_residency_boundary(boundary: _ManagerBoundary, units: tuple[FlexTensorUnit, ...]) -> None:
-    """Require the same live public model, shells, computes and prepared shell forwards."""
+def _check_residency_boundary(
+    boundary: _ManagerBoundary, units: tuple[torch.nn.Module, ...], registration: JITRegistration
+) -> None:
+    """Require the same provider tree and prepared forwards behind native JIT dispatch."""
     manager = boundary.manager
     if _manager_id(manager) != boundary.manager_id or manager.model is not boundary.model:
         raise RuntimeError("FlexTensor strategy replanning replaced the manager or model identity; use a fresh worker")
-    if any(
-        actual is not expected
-        for actual, expected in zip(_forward_signature(manager.model), boundary.forward, strict=True)
+    if len(units) != len(boundary.units) or any(
+        actual is not original for actual, (original, _) in zip(units, boundary.units, strict=True)
+    ):
+        raise RuntimeError("FlexTensor strategy replanning replaced an offload unit; use a fresh worker")
+    patched_by_id = {id(patched.__wrapped__): patched for patched in registration._patched_modules}
+    for module, original in boundary.units:
+        _check_unit_forward(module, original, patched_by_id.get(id(module)))
+    if id(manager.model) not in {id(module) for module in units} and not _same_forward(
+        manager.model.forward, boundary.forward
     ):
         raise RuntimeError("FlexTensor strategy replanning replaced the model's prepared forward; use a fresh worker")
-    if len(units) != len(boundary.units) or any(
-        shell is not original
-        or shell.compute is not compute
-        or any(actual is not expected for actual, expected in zip(_forward_signature(shell), forward, strict=True))
-        for shell, (original, compute, forward) in zip(units, boundary.units, strict=True)
-    ):
-        raise RuntimeError(
-            "FlexTensor strategy replanning replaced a residency shell or prepared forward; use a fresh worker"
-        )
 
 
 def _registration_boundary(manager: Any, registration: JITRegistration) -> _ManagerBoundary:
-    """Find the original public owner without silently accepting replaced compute."""
+    """Find the original public owner without silently accepting replaced units."""
     if not isinstance(registration, _FlexTensorRegistration):
         raise TypeError("registration must come from register_flextensor_units()")
     boundary = next((item for item in registration._boundaries if item.manager is manager), None)
@@ -364,21 +234,16 @@ def _registration_boundary(manager: Any, registration: JITRegistration) -> _Mana
 
 
 def replan_flextensor(manager: Any, registration: JITRegistration, run_forward: Callable[[], Any]) -> None:
-    """Measure and apply one manager's strategy after the selected AITune targets settle.
+    """Measure and apply an offload strategy after selected AITune targets settle.
 
-    Each ``run_forward()`` invocation must execute exactly one complete forward of this
-    manager's model with representative inputs. The callback is invoked exactly as many
-    times as FlexTensor requests; there is no hidden tuning or readiness loop. The caller
-    must warm every route first, including lazy compilation, so measurements use stable
-    tuned forwards. A selected eager backend is a real tuned selection; dry-run simulations,
-    skipped targets and native eager fallbacks do not request replanning on their own.
+    Each callback invocation must execute exactly one complete manager-model forward with
+    representative inputs. The caller must first warm every route, including lazy compilation.
+    A selected eager backend is a real tuned result. Dry-run simulations, skipped targets and
+    native eager fallbacks do not request replanning on their own.
 
-    Pass the registration returned by :func:`register_flextensor_units`. Successful
-    completion requires FlexTensor to report ``state='done', applied=True`` and preserve
-    its original public ownership, prepared forwards and AITune's installed dispatch.
-    Provider and callback exceptions propagate.
-    A failed or incomplete replan requires a fresh worker; this helper provides no rollback,
-    recovery or reset API.
+    Completion requires public ``state='done', applied=True``, unchanged original ownership
+    and prepared forwards, and the same installed tuned dispatch. Provider and callback errors
+    propagate. Failure requires a fresh worker; no rollback, recovery or reset is provided.
     """
     _manager_id(manager)
     units = _manager_units(manager)
@@ -388,8 +253,8 @@ def replan_flextensor(manager: Any, registration: JITRegistration, run_forward: 
             "keep the existing strategy and do not call replan_flextensor()"
         )
     boundary = _registration_boundary(manager, registration)
-    _check_residency_boundary(boundary, units)
-    unit_ids = {id(module.compute) for module in units}
+    _check_residency_boundary(boundary, units, registration)
+    unit_ids = {id(module) for module in units}
     selected = [patched for patched in registration._patched_modules if id(patched.__wrapped__) in unit_ids]
     if any(patched._state.value not in ("tuned", "eager", "skipped") for patched in selected):
         raise RuntimeError("Selected FlexTensor units must finish JIT tuning before strategy replanning")
@@ -411,7 +276,7 @@ def replan_flextensor(manager: Any, registration: JITRegistration, run_forward: 
     status = _status(manager)
     if status.state != "done" or status.applied is not True:
         raise RuntimeError("FlexTensor did not complete and apply strategy replanning; use a fresh worker")
-    _check_residency_boundary(boundary, _manager_units(manager))
+    _check_residency_boundary(boundary, _manager_units(manager), registration)
     if any(
         any(
             actual is not expected

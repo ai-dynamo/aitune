@@ -177,9 +177,10 @@ provides live inspection reports, state counts, and an `all_tuned` snapshot. See
 [Registering Existing Modules](../guides/jit_tuning.md#registering-existing-modules) for the complete contract.
 
 This example uses the provider-independent instance registration API. For FlexTensor-managed offload units, the
-optional [FlexTensor Integration](../guides/flextensor.md) adapter adds a preparation helper (including parent-attribute
-replacement), retains manual setup, and uses public FlexTensor 0.5.0 discovery and explicit replanning APIs while
-preserving provider-owned source placement. Preparation does not trigger startup forwards, registration or tuning.
+optional [FlexTensor Integration](../guides/flextensor.md) adapter registers the original public offload units after
+native FlexTensor discovery and profiling, preserving provider-owned source placement. Preparation and profile loading
+use public FlexTensor APIs directly, followed by explicit registration and optional strategy replanning. This workflow
+requires the native compiled-unit fixes, which are not included in the stock FlexTensor 0.5.0 release.
 
 ### Configuring just-in-time tuning
 

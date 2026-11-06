@@ -4,51 +4,36 @@
 title: FlexTensor Integration
 ---
 
-FlexTensor owns weight placement while AITune tunes the original computation inside each offload boundary. Install
-[FlexTensor 0.5.0](https://pypi.org/project/flextensor/0.5.0/) separately; it remains optional for other AITune paths.
-The adapter changes neither FlexTensor nor ordinary AITune compilation, validation, profiling or configuration.
+FlexTensor owns weight placement while AITune tunes the original offload-unit modules. Configure and prepare the model
+through public FlexTensor APIs, finish provider startup, then register its public units for AITune JIT tuning.
+Ordinary AITune correctness checks, performance profiling and backend selection remain enabled.
 
-## Residency boundaries
+FlexTensor is optional for other AITune paths. Native tuning requires a source/development build containing the per-unit
+compilation and replay fixes. The stock PyPI 0.5.0 release predates those fixes; a dependency on `flextensor>=0.5.0` alone
+does not establish support. The maintained functional workflows and LTX example check for the native unit-index helper
+and `flextensor.pre_compute.unit` operator at startup. Install the verified development wheel in the test environment
+and preserve it when running workflows, for example with `uv run --no-sync`.
 
-Use `prepare_flextensor_units`, or manually insert `FlexTensorUnit` shells, **before** FlexTensor prepares the model.
-FlexTensor selects these outer shells, not their `compute` descendants. The original module remains `shell.compute`,
-with its parameters, hooks and outputs. Wrapping itself does not copy or move weights; FlexTensor still owns placement
-and any provider-side snapshots.
+## Native offload units
 
-FlexTensor's outer forward enters residency, calls the compute child, and exits only after that child returns. AITune
-registers the child, so its normal warmups, correctness checks and performance measurements can repeat computation
-without replaying provider transfer operations. Those transfers remain outside the inner Inductor graph.
+Select the original model's executable blocks using an explicit `flextensor.OffloadConfig`. FlexTensor's
+`offload_units()` identifies the original public units after discovery and profiling. The adapter registers those same
+instances with `register_for_jit_tuning(..., device_management="external")`; it adds no module layer or parameter-path
+translation. Keep original model selectors, attributes, hooks and state-dict names.
 
-An already prepared, unwrapped FlexTensor unit is unsafe for isolated tuning: its transfer operations can resubmit a
-rolling slot before a future consumer releases it. Registration rejects units that are not `FlexTensorUnit` shells,
-but structural checks cannot detect every incorrect manual preparation order. Adding shells after FT preparation
-remains unsafe even if those checks pass. The preparation helper performs these operations in the correct order for
-an unprepared model. It does not clear provider state, join transfers mid-forward, or disable AITune checks.
+FlexTensor's native per-unit compilation and replay support manages transfers when AITune repeats a unit during warmup,
+correctness checking and profiling. A repeated unit call is legitimate in this path; one unit invocation per whole-model
+traversal is not a valid invariant. Application inference still runs through the exact root proxy returned by FlexTensor.
+Do not call an isolated offloaded unit as a substitute for a complete model traversal.
 
-## Preparation helper
-
-`prepare_flextensor_units(model_or_owner, *, ft_config, target=None, name="default", load_profile_from=None)` is an
-optional setup convenience; the [manual path](#manual-setup) remains available. Supply a fresh, uncompiled model and
-an explicit public `flextensor.OffloadConfig`. Selectors refer to the **original model**, before shells add `.compute`:
-module names, class patterns, parameter includes and exclusions retain their meaning.
-
-The helper plans the unit boundaries and parameter residency policy before changing the model. It inserts shells and
-passes a validated shallow config copy to public FT setup. The caller's config is not mutated; unrelated settings,
-including memory policy and custom strategy objects, are retained. No private FT selector or lifecycle API is used,
-and the helper adds no private AITune core calls.
-
-The returned `PreparedFlexTensor` exposes `model` (the exact FT-returned proxy), `manager`, `effective_config`, and
-`unit_paths` (the planned boundaries in the original model). After startup, discover live units through the manager;
-do not cache pre-startup module references. For a bare root, use `model = prepared.model`. FT's proxy follows its model
-phase transitions; substituting the original model or a snapshot of `manager.model` is not equivalent.
-
-Preparation runs no model forwards and does not register targets, trigger tuning, warm routes, or replan. It does not
-move application-owned tensors or change JIT options, backends or compiler limits. The caller keeps these steps explicit.
+The former `FlexTensorUnit`, `PreparedFlexTensor` and `prepare_flextensor_units` APIs have been removed. Prepare the original
+model directly through public FT APIs. Profiles and checkpoints from the old wrapper layout are not automatically remapped.
 
 ## External compilation and explicit replan
 
-This Torch 2.10 example assumes an uncompiled CPU `model` with `layers` and representative CUDA input `x`. Adapt the
-selection, representative shapes and memory policy to the model. Leave headroom for inputs, activations and compilation.
+This example assumes an uncompiled CPU `model` with executable `layers` and a representative CUDA input `x`.
+Adapt the exact unit names, input shapes and memory policy to the workload. Leave room for inputs, activations and
+compilation in addition to the provider's managed weight budget.
 
 ```python
 import torch
@@ -57,7 +42,7 @@ import flextensor as ft
 from aitune.torch import jit_config
 from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.jit.config import JITMode
-from aitune.torch.jit.flextensor import prepare_flextensor_units, register_flextensor_units, replan_flextensor
+from aitune.torch.jit.flextensor import register_flextensor_units, replan_flextensor
 from aitune.torch.jit.tune import deferred
 from aitune.torch.tune_strategy import OneBackendStrategy
 
@@ -69,22 +54,15 @@ jit_config.strategy = OneBackendStrategy(
     TorchInductorJitBackend(TorchInductorJitBackendConfig(fullgraph=True, mode="default"))
 )
 
-# Finite process-wide compiler settings belong to the application, not the adapter.
-torch.compiler.config.recompile_limit = max(torch.compiler.config.recompile_limit, 128)
-torch.compiler.config.accumulated_recompile_limit = max(torch.compiler.config.accumulated_recompile_limit, 512)
-
 cfg = ft.OffloadConfig(
-    include_patterns=["layers.*"],
+    include_patterns=[f"layers.{index}" for index in range(len(model.layers))],
     transfer_mode="allocation_block_transfer",
+    profile_mode="view",
     profiling_iters=2,
     external_compile=True,
 )
-prepared = prepare_flextensor_units(
-    model.eval(),
-    ft_config=cfg,
-    name="aitune-example",
-)
-model, manager = prepared.model, prepared.manager
+model = ft.offload(model.eval(), config=cfg, name="aitune-example")
+manager = ft.get_offload_manager("aitune-example")
 
 def run_forward():
     return model(x)  # Exactly one complete model traversal.
@@ -92,6 +70,8 @@ def run_forward():
 with torch.no_grad():
     for _ in range(manager.iters_before_inference):
         run_forward()
+    if manager.phase.value != "inference":
+        raise RuntimeError("FlexTensor startup did not complete")
     registration = register_flextensor_units([manager])
     run_forward()  # Record every representative shape/stage before deferred tuning.
     deferred()
@@ -102,171 +82,128 @@ with torch.no_grad():
     else:
         raise RuntimeError(f"Tuning did not complete: {registration.state_counts}")
 
-    run_forward()  # Warm all selected serving routes before measuring their plan.
+    run_forward()  # Warm every selected serving route before measuring its plan.
     replan_flextensor(manager, registration, run_forward)
     result = run_forward()
 ```
 
-A video pipeline can traverse its transformer many times per generation. Record both stages before enabling deferred
-tuning. The replan callback must execute **one** complete manager-model forward, not a generation or denoising loop.
-The replan helper runs exactly the positive number of forwards returned by the public provider API and requires status
-`state == "done"`, `applied is True`, and preserved live identities and dispatch.
+A video pipeline can traverse its transformer many times per generation. Finish FT discovery and profiling before
+registration, then record both stages before enabling deferred tuning. Warm all selected serving routes, including any
+lazy compilation, before requesting a replan. The callback must execute **one** complete manager-model forward, not a
+whole generation or denoising loop. The helper executes exactly the number of forwards requested by the public provider
+API and requires a completed, applied replan with the same live unit identities and installed dispatch.
 
-### Preparing a pipeline attribute
-
-For an existing pipeline whose transformer contains `transformer_blocks`, use this setup form instead of the bare-root
-preparation above. The owner need not be an `nn.Module`:
+For a pipeline attribute, explicitly install the exact FT-returned proxy:
 
 ```python
-cfg = ft.OffloadConfig(
-    include_patterns=["transformer_blocks.*"],
-    external_compile=True,
-)
-prepared = prepare_flextensor_units(
-    ltx_model,
-    target="transformer",
-    ft_config=cfg,
-    name="ltx",
-)
-manager = prepared.manager
-# ltx_model.transformer already contains prepared.model; no assignment is needed.
+pipe.transformer = ft.offload(pipe.transformer, config=cfg, name="ltx")
+manager = ft.get_offload_manager("ltx")
 ```
 
-`target` is an explicit attribute path; dotted paths are supported. The helper uses ordinary attribute assignment and
-does not guess parents, bypass setters, or replace other aliases. Run startup and inference through the installed proxy
-or the normal pipeline, not an old transformer reference or isolated compute children. Application-specific placement
-of direct parameters outside selected boundaries remains the caller's responsibility; see the LTX example.
-
-## Manual setup
-
-The existing manual setup remains supported. In a fresh worker, replace the helper's setup lines with the following
-external-compilation setup, then follow the same startup, registration, tuning, warmup and replan sequence. Choose one
-setup form; do not run the helper and manual setup on the same model.
-
-```python
-from aitune.torch.jit.flextensor import FlexTensorUnit
-
-for index, layer in enumerate(model.layers):
-    model.layers[index] = FlexTensorUnit(layer)
-cfg = ft.OffloadConfig(include_patterns=["layers.*"], external_compile=True)
-model = ft.offload(model.eval(), config=cfg, name="aitune-example")
-manager = ft.get_offload_manager("aitune-example")
-```
-
-In this form, FT selectors describe the **wrapped tree**: select shell boundaries and adapt class/parameter/exclusion
-patterns to that layout, including `.compute` where needed. The helper instead handles that translation from original
-names. Neither form remaps checkpoint keys or makes wrappers attribute/type-transparent. Advanced public FT setup can
-remain manual; that does not qualify arbitrary compiler callbacks or unsafe late wrapping for isolated AITune tuning.
+Run startup and inference through that proxy or the normal pipeline, not an old transformer reference or a snapshot of
+`manager.model`. Application-specific placement of parameters outside selected boundaries remains the caller's
+responsibility; see the LTX example. The adapter does not change compiler limits. Observe effective process-wide values
+when comparing runs because the provider or application may configure them.
 
 ## Retained view-profile strategy
 
-For the separate retained-profile workflow, set `profile_mode="view"`, `external_compile=False` in `ft_config`.
-The preparation helper selects an identity compile callback. With manual `ft.offload` or `ft.offload_from_profile`,
-pass `compile_fn=lambda module: module` yourself. Finish provider startup, register the final shells, record, tune and
-warm normally, but **do not call `replan_flextensor`**. Requesting a replan in this mode raises an actionable error.
+The separate retained-profile workflow sets `profile_mode="view"`, `external_compile=False` and passes an identity
+callback to activate FT's native compiled-unit path during preparation:
 
-The identity callback activates the public compiled-profile path without compiling the shell. AITune later compiles
-only its compute child. This retains the pre-AITune measured strategy, not compiled timings. It does not establish
-compatibility with arbitrary `compile_fn` transformations. Validate outputs, actual residency and serving performance;
-retention and completed replanning are distinct finalization modes.
+```python
+cfg = ft.OffloadConfig(
+    include_patterns=[f"layers.{index}" for index in range(len(model.layers))],
+    profile_mode="view",
+    external_compile=False,
+)
+model = ft.offload(model, config=cfg, name="aitune-example", compile_fn=lambda module: module)
+manager = ft.get_offload_manager("aitune-example")
+```
+
+Finish startup, register the original units, record, tune and warm normally. Do not call `replan_flextensor` in this mode;
+the helper rejects that request. The strategy retains its pre-AITune identity-compile profile rather than compiled
+AITune timings. Retention and completed replanning are distinct finalization experiments. Arbitrary `compile_fn`
+transformations are not qualified by this workflow.
 
 ### Loading a saved profile
 
-Pass `load_profile_from` explicitly to use public `ft.offload_from_profile` after shell insertion:
+Use public `ft.offload_from_profile` instead of `ft.offload` in a fresh worker:
 
 ```python
-prepared = prepare_flextensor_units(
+model = ft.offload_from_profile(
     model,
-    ft_config=cfg,
+    "profiles/my-model",
+    config=cfg,
     name="aitune-example",
-    load_profile_from="profiles/my-model",
+    compile_fn=lambda module: module,  # Retained-profile mode only.
 )
-model, manager = prepared.model, prepared.manager
+manager = ft.get_offload_manager("aitune-example")
 ```
 
-This is an alternative setup in a fresh worker, not a second preparation of the model above. Merely setting
-`profile_storage_dir` does not request profile loading. Profiles must match the wrapped model layout and workload;
-profiles from unwrapped models are not automatically remapped. Compatible manual-shell profiles can be reused.
-FT still controls any remaining startup; wait for inference before registration rather than assuming setup finished it.
+For the external-compilation/replan mode, use its matching configuration and omit `compile_fn`. Merely setting
+`profile_storage_dir` does not request profile loading. Profiles must match the native model layout, workload and
+provider policy. Wait for the manager to reach inference before registration, including after profile loading.
 
 ## Registration and lifetime
 
-`register_flextensor_units(managers, *, modules=None)` resolves each manager's final live public `offload_units()` after
-it reaches inference. Omit `modules` for all shells or pass a subset of those public shells. The returned
-`JITRegistration` view exposes the selected original **compute children**, reports and state counts. Register the complete
-desired batch across managers once in a fresh worker.
+`register_flextensor_units(managers, *, modules=None)` resolves each manager's public `offload_units()` in inference
+phase. Omit `modules` to select all those units, or pass a subset of the exact public module objects. The returned
+`JITRegistration.modules` contains those same original objects and exposes reports and state counts. Prepare multiple
+models under distinct manager names, finish startup for each, then register the complete desired batch once per worker.
 
-The preparation helper requires an unprepared model and unused named manager. Prepare multiple models under distinct
-names, finish startup for each, then register the complete desired batch once. Public state can reject a visibly active
-manager but cannot prove that it was never initialized; do not pre-initialize or reuse a manager for another model.
-Detected invalid policies, existing shells, non-executable container boundaries and cross-boundary aliases fail before
-wrapping. If exact selector translation cannot preserve the policy, the helper raises rather than silently narrowing it.
-Literal wildcard/normalization-sensitive names may require manual setup. Executable container subclasses are not
-rejected merely because they are containers.
+Keep manager/model identities, units, ownership and prepared forwarding fixed afterward. AITune installs its normal
+router or tuned dispatcher on each original unit; replanning checks that dispatch and the underlying prepared forward
+remain installed. Do not add constructor interception to an instance-registration worker. There is no reset, rollback,
+re-registration or placement recovery API. Provider or callback failures propagate; stop that worker.
 
-Provider setup and owner-setter failures can leave prepared state. They propagate without rollback; use a fresh worker.
-Wrapping adds no weight copy; provider-owned placement and snapshots retain their normal costs.
+Ordinary AITune synchronous warmups, graph-break detection, autocast configuration, correctness checking, profiling,
+dry-run, skip and eager fallback retain their existing behavior. An enabled performance gate may select its measured
+eager baseline; that selection is different from a compilation failure. Eager fallback, skips and dry-run simulations
+do not themselves request a replan.
 
-Keep manager/model identities, shells, children and prepared forwards fixed afterward. Replanning validates these
-associations and the installed AITune router/tuned dispatcher. The adapter installs no background coordinator hooks and
-offers no reset, rollback, re-registration or recovery flow. Provider/callback exceptions propagate; stop that worker.
-
-Ordinary AITune correctness checks, synchronous warmups, graph-break detection, autocast configuration, profiling,
-dry-run, skip and native fallback stay on their existing paths. The enabled performance gate may select its measured
-eager baseline, a real tuned selection rather than a compile failure. Native eager fallback, skips and dry-run
-simulations do not themselves request a replan.
-
-`all_tuned` does not prove acceleration. Verify selected backends, per-graph telemetry, outputs and measured performance.
-`PerformanceValidationMode.DIAGNOSTIC` performs normal eager/candidate profiling without rejecting a slower candidate;
-it is useful for coverage tests, but must not be described as disabled profiling or proof of a speedup.
+`all_tuned` does not prove acceleration. Inspect selected backends, per-graph telemetry, outputs and measured performance.
+`PerformanceValidationMode.DIAGNOSTIC` performs real eager/candidate profiling without rejecting a slower candidate;
+it is useful for coverage tests, but does not establish a speedup.
 
 ## Compatibility and memory
 
-The initial qualified backends/strategies are the existing
+The qualified backends and strategies are the existing
 [external-placement candidates](jit_tuning.md#externally-owned-placement): exact eager/Inductor JIT classes and supported
-Inductor modes/options. This adapter does not qualify other backends or CUDA-graph serving. Provider transfer operations
-remain outside the pure-compute compiled graph.
+Inductor modes/options. Other backends and CUDA-graph serving are not qualified by this integration. Native FT transfer
+boundary operators are part of its compilation contract; there is no AITune-owned outer residency wrapper.
 
-The shell adds `.compute` to parameter/state-dict paths. It is not attribute/type-transparent and does not remap old
-checkpoint keys. Adapt models that inspect block attributes before wrapping. Cross-tree parameter/storage aliases remain
-outside the placement contract. Compute children must only run while their owner provides residency; standalone
-offloaded-child inference and checkpoint deployment are not guaranteed.
-
-Separate the strategy fraction, reported managed weight residency and whole-process GPU memory. Reserve known
-preexisting residents when choosing the strategy budget. `get_gpu_memory_usage()` counts transfer blocks and all
-unmapped tensors, not just `resident_units()`. Inputs, activations, workspace, allocator reserves and transient peaks need
-separate measurement. A smaller fraction alone does not prove a strict total limit was met.
+Separate the configured strategy fraction, reported managed weight residency and whole-process GPU memory. Reserve
+known existing residents when choosing the strategy budget. `get_gpu_memory_usage()` counts transfer blocks and unmapped
+tensors, not just `resident_units()`. Inputs, activations, workspace, allocator reserves and transient peaks require
+separate measurement. A smaller fraction alone does not establish a strict process-wide limit. Cross-tree
+parameter/storage aliases remain outside the placement contract.
 
 ## Verification
 
-Run each variant in a fresh interpreter:
+Use the development FT wheel described above and a fresh interpreter for each variant:
 
 ```bash
-for setup in manual helper; do
-    python tests/functional/pytorch/jit/021_jit_flextensor.py --setup="$setup" --mode=eager
-    python tests/functional/pytorch/jit/021_jit_flextensor.py --setup="$setup" --mode=deferred
-    python tests/functional/pytorch/jit/021_jit_flextensor.py --setup="$setup" --mode=deferred --performance=enabled
-    python tests/functional/pytorch/jit/021_jit_flextensor.py --setup="$setup" --mode=deferred --finalization=profile
-    python tests/functional/pytorch/jit/022_jit_flextensor_fallback.py --setup="$setup"
-done
-python tests/functional/pytorch/jit/023_jit_flextensor_preparation.py
+python tests/functional/pytorch/jit/021_jit_flextensor.py --mode=eager
+python tests/functional/pytorch/jit/021_jit_flextensor.py --mode=deferred
+python tests/functional/pytorch/jit/021_jit_flextensor.py --mode=deferred --performance=enabled
+python tests/functional/pytorch/jit/021_jit_flextensor.py --mode=deferred --finalization=profile
+python tests/functional/pytorch/jit/022_jit_flextensor_fallback.py
 
 for placement in aitune external; do
     python tests/functional/pytorch/jit/020_jit_existing_prepared_units.py --mode=eager --device-management="$placement"
     python tests/functional/pytorch/jit/020_jit_existing_prepared_units.py --mode=deferred --device-management="$placement"
 done
-python -m pytest tests/unit/torch/jit/test_flextensor_preparation.py tests/unit/torch/jit/test_flextensor.py
+python -m pytest tests/unit/torch/jit/test_flextensor.py
 ```
 
-Positive tests require all ten Inductor targets in diagnostic mode, normal correctness, actual per-graph profiling,
-known/held-out numerical parity, real rolling storage under a strict reported weight-residency cap, one outer boundary
-per traversal, and preserved live dispatch. The negative test requires a genuine compiler failure to preserve ordinary
-eager fallback and provider residency without requesting a replan.
+These FT-specific scripts are temporarily excluded from automatic CI selection (`skip = true`) until a public
+FT release includes the required fixes. Run them directly in an environment with the verified development wheel.
 
-JIT023 compares public FT behavior with helper setup across name, class, parameter and exclusion policies, including
-root/outside-unit parameters and fresh-process profile reloads. It compares storage-sharing partitions, not cross-process
-addresses, and reported residency snapshots, not peak process memory. Dedicated helper unit tests also run without FT or
-a GPU; they cover config/tensor identity, owner assignment, failure preflight and no hidden execution.
+The positive native tests require all ten Inductor targets in diagnostic mode, normal correctness checks, actual
+per-graph profiling, known/held-out numerical parity, rolling storage under a strict reported weight-residency cap,
+unchanged original unit identities and parameter paths, and preserved dispatch. The negative test requires a genuine
+compiler failure to preserve ordinary eager fallback, original hooks and provider residency without requesting a replan.
+The adapter's unit tests run without FT or a GPU. The obsolete wrapper-selector preparation test has been removed.
 
-For the real pretrained all-48-block workload and manual video review, see the
+For the real pretrained all-48-block workload, profile reload and manual video review, see the
 [LTX 2.3 mini example](../../examples/LTX23OutpaintAITuneFlexTensor/README.md).

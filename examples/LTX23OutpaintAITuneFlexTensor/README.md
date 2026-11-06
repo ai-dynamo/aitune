@@ -35,10 +35,24 @@ The tested development base is the repository's pinned NGC Torch 2.10 / 26.01 im
 ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3@sha256:bd4b0ca692cec0d04dcfab89cb8cd1fc22a593e070c851308361d46a05fa67fb
 ```
 
-Use its CUDA forward-compatibility shell initialization on this machine. Point `PYTHONPATH` at the current AITune
-checkout. The example's `pyproject.toml` lists dependencies; the pinned provider is FlexTensor 0.5.0 and Diffusers comes
-from commit `9159a587b1f148a2cc911deb72b6d755508ef38b`. Actual package/device versions are recorded in each result.
-PyAV supplies decoding and H.264 encoding; no system FFmpeg executable is required.
+Use its CUDA forward-compatibility shell initialization where required by the host driver. The example's
+`pyproject.toml` lists dependencies; Diffusers comes from commit `9159a587b1f148a2cc911deb72b6d755508ef38b`.
+Actual package/device versions are recorded in each result. PyAV supplies decoding and H.264 encoding; no system
+FFmpeg executable is required.
+
+**Native FlexTensor prerequisite:** the stock PyPI 0.5.0 release predates the per-unit compilation and replay fixes.
+Install a source/development wheel containing those fixes into the prepared example environment. The dependency floor
+`flextensor>=0.5.0` alone does not supply them. Startup checks the native unit-index operator and public lifecycle APIs
+and fails clearly when they are absent. For a project environment prepared with `uv`, install the verified wheel after
+resolving dependencies:
+
+```bash
+uv pip install --python examples/LTX23OutpaintAITuneFlexTensor/.venv/bin/python \
+  --no-deps --reinstall /absolute/path/to/flextensor-native.whl
+```
+
+Use `uv run --no-sync` for the commands below so dependency synchronization cannot replace that installed wheel with
+the older public release. Keep the same CUDA-compatible PyTorch build in all benchmark arms.
 
 Small activations do not make the weights small. The text encoder download alone is about 48.75 GB; inference
 components occupy about 45.13 GiB. On a 31 GiB host, encode the prompt in its own worker: the stored FP32 Gemma weights
@@ -65,26 +79,26 @@ From the AITune repository root, in the prepared runtime:
 ```bash
 # Bound compiler worker memory on this 31 GiB host; use the same environment in every arm.
 export TORCHINDUCTOR_COMPILE_THREADS=1
-python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py prepare-source
-python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py encode-prompt
+uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py prepare-source
+uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py encode-prompt
 
-# Resident eager reference: no FlexTensor shell, manager or AITune registration.
-python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode eager --warmups 3 --runs 10
+# Resident eager reference: the whole transformer stays on GPU.
+uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode eager --warmups 3 --runs 10
 
 # Eager compute under real FlexTensor offloading; save its exact workload profile.
-python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode baseline --warmups 3 --runs 10
+uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode baseline --warmups 3 --runs 10
 
 # Same profile and offloading policy, all 48 original blocks tuned with Inductor.
-python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode combined --reuse-profile --warmups 3 --runs 10
+uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode combined --reuse-profile --warmups 3 --runs 10
 
-python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py compare
+uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py compare
 ```
 
 Defaults put caches, JSON, logs and media under `tuning/ltx23_outpaint/`, which is ignored by Git. Override `--work-dir`
 and `--model-cache` together when using another location. Do not run the modes concurrently on the same GPU or reuse
 one process's JIT/provider state for another mode. The manual staged benchmark is excluded from the shared export/
-deployment-project runner. The always-on JIT021/JIT022 functional scripts test manual and helper setup through the
-same native tuning/fallback assertions; JIT023 checks selector policies and saved-profile compatibility through public APIs.
+deployment-project runner. The JIT021 functional variants cover native eager/deferred tuning, the enabled performance
+gate and retained-profile finalization. JIT022 checks native eager fallback after a genuine fullgraph compiler failure.
 
 For a matched profile-loading control, preserve the profile-building baseline's results and rerun baseline with
 `--reuse-profile` in another fresh process, using the same warmups/runs. This gives both FT arms the same startup path.
@@ -93,45 +107,43 @@ Inspect raw latency drift and setup order; a single sequential batch is not a st
 The initial backend is exact `TorchInductorJitBackend(fullgraph=True, mode="default")`, not direct application-side
 `torch.compile`. Ordinary correctness checks remain enabled. Diagnostic performance validation runs actual baseline
 and candidate measurements without rejecting a slower candidate; end-to-end measurements decide whether the result
-helps. `--performance-validation enabled` instead retains the ordinary performance gate; a measured eager winner is
-legitimate, but this all-Inductor coverage recipe reports that it did not meet its requested selection.
+helps. Diagnostic mode requires all targets to select Inductor. `--performance-validation enabled` retains the ordinary
+performance gate and accepts a measured eager winner. Both modes require successful Inductor builds and actual
+eager/candidate profiling for every route; results retain the selected backend for each block.
 
-Finite caller-owned limits default to recompile 128 and accumulated recompile 512. Prior, requested and effective
-values are recorded. The adapter itself does not reserve/restore compiler capacity or change core defaults.
+The example records compiler limits before setup and after measurement without changing them. FlexTensor may adjust
+its own process-wide limits during native setup; inspect the recorded values when comparing runtimes.
 
 ## Offload boundaries and finalization
 
-Every transformer block is wrapped once in `FlexTensorUnit` before provider preparation. FlexTensor selects the outer
-shells; the adapter registers their final live `compute` children, which are the complete original transformer blocks.
-Warmup, correctness and profiling run within an outer residency call without replaying its transfers.
+FlexTensor selects the 48 original transformer blocks directly. AITune registers those same public offload-unit
+instances after discovery and profiling finish. FlexTensor's native compiled-unit and replay support manages transfers
+for AITune's repeated warmup, correctness and profiling calls. Original module attributes and parameter paths remain intact.
 
-The example uses the optional preparation helper. With `ltx_model` already constructed and `cfg` holding the example's
-FT configuration (`include_patterns=["transformer_blocks.*"]`), setup is:
+With `pipe` constructed and `cfg` holding the example's FT configuration, fresh retained-profile setup is:
 
 ```python
-from aitune.torch.jit.flextensor import prepare_flextensor_units
+import flextensor as ft
+from aitune.torch.jit.flextensor import register_flextensor_units
 
-prepared = prepare_flextensor_units(
-    ltx_model,
-    target="transformer",
-    ft_config=cfg,
+pipe.transformer = ft.offload(
+    pipe.transformer,
+    config=cfg,
     name="ltx23-outpaint-mini",
-    load_profile_from=profile_dir if reuse_profile else None,
+    compile_fn=lambda module: module,
 )
-manager = prepared.manager
+manager = ft.get_offload_manager("ltx23-outpaint-mini")
+# Run the normal pipeline until manager.phase.value == "inference".
+registration = register_flextensor_units([manager])
 ```
 
-Here `profile_dir` is the workload's profile directory and `reuse_profile` selects explicit profile loading. The helper
-installs FT's exact returned proxy on `ltx_model.transformer`; no subsequent parent assignment is needed. Selectors refer
-to the original, unwrapped transformer. A validated configuration copy preserves unit boundaries and parameter
-residency policy without changing the caller's configuration. Wrapping does not copy or move weights; FT still owns
-placement and any provider snapshots. The example's direct-root parameter/buffer placement remains an explicit
-application step before this call.
+Assign the exact returned proxy to `pipe.transformer`. Explicit profile loading uses public `ft.offload_from_profile`
+instead of `ft.offload`, with the same native configuration and identity callback. Selectors address the original
+transformer tree; no selector translation or additional module layer is required. Direct-root parameter/buffer
+placement remains an application step before FT setup. See the [native integration guide](../../docs/guides/flextensor.md).
 
-Preparation does not execute the pipeline or trigger tuning. The example then finishes FT startup, registers the final
-live compute children in one batch, records both stages, enables deferred tuning, and warms all serving routes before
-retaining or replanning the strategy. The original [manual wrapping and FT setup](../../docs/guides/flextensor.md#manual-setup)
-remain available; use one setup path in a fresh worker, not both on the same model.
+The example finishes FT startup, registers the original blocks in one batch, records both stages, enables deferred
+tuning, and warms all serving routes before retaining or replanning the strategy.
 
 The default `--finalization retain-profile` uses the provider's identity `compile_fn` plus view-profile mode in both
 FlexTensor arms. It preserves the pre-AITune profile/strategy and does not claim compiled-timing replanning.
@@ -165,10 +177,11 @@ The main review artifacts are:
 - `combined/heldout_outpaint.mp4`: independent-seed visual check.
 - `comparison.json` and each mode's `results.json`: actual measurements and diagnostics.
 
-Do not infer completion or gains from these expected filenames. Consult the current implementation `report.md` for
-which artifacts and measurements actually exist. The shell changes state-dict/module paths by adding `.compute` and
-does not provide standalone checkpoint export, reset or rollback machinery.
+Do not infer completion or gains from these expected filenames. Inspect the results from the current run. Historical
+profiles and checkpoints from the former wrapper layout are not automatically remapped to the native model tree.
+There is no standalone checkpoint export, reset or rollback machinery for this integration.
 
-The validation machine's exact local container settings, native/CPU commands and benchmark arguments are recorded in
+Historical validation machine settings, native/CPU commands and benchmark arguments are recorded in
 [`validation_commands.md`](../../work_logs/flextensor/validation_commands.md). Reconstructed commands and missing
 fresh-base bootstrap history are explicitly distinguished from commands/outcomes retained from actual execution.
+Those records predate this migration and do not establish native verification results.
