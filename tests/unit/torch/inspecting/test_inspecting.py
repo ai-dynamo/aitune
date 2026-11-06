@@ -12,7 +12,7 @@ from onnx import TensorProto, helper
 
 from aitune.torch.dataloader import DataLoaderFactory, InputConfig, MinMaxRandomDataset
 from aitune.torch.distributed import DistributedOutcome
-from aitune.torch.inspecting import inspect
+from aitune.torch.inspecting import inspect, module_inspector
 from aitune.torch.inspecting.inspecting import _run_inference, _synchronize_inspection_result
 from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo, OnnxModuleInfo
 from aitune.torch.module import OnnxModule
@@ -573,3 +573,218 @@ def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset, 
 
     assert executed_modules[1].name in ["linear2", "relu"]
     assert executed_modules[1].execution_count == TEST_NUMBER_OF_ITERATIONS
+
+
+class _Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.proj = nn.Linear(10, 10)
+        self.out = nn.Linear(10, 10)
+
+    def forward(self, x):
+        return self.out(torch.relu(self.proj(x)))
+
+
+class _ModelWithEncoder(nn.Module):
+    def __init__(self, encoder: nn.Module):
+        super().__init__()
+        self.encoder = encoder
+        self.head = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.head(self.encoder(x))
+
+
+def _inspected_counts(model: nn.Module, min_depth: int = 1) -> dict[str | None, int]:
+    with torch.no_grad():
+        modules_info = inspect(
+            model, torch.randn(4, 10), number_of_iterations=2, warmup_iterations=1, min_depth=min_depth
+        )
+    return {info.object_path: info.execution_count for info in modules_info.get_modules()}
+
+
+def test_inspect_model_with_a_part_compiled_with_fullgraph():
+    """A ``torch.compile(fullgraph=True)`` part is timed as one call; the calls Dynamo traces inside it are not."""
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    # The eager backend still traces with Dynamo, which is what failed, without compiling kernels.
+    compiled_forward = torch.compile(model.encoder.forward, fullgraph=True, backend="eager")
+    model.encoder.forward = compiled_forward
+
+    assert _inspected_counts(model) == {".encoder": 2, ".head": 2}
+    assert model.encoder.forward is compiled_forward
+
+
+@pytest.mark.parametrize("fullgraph", [False, True])
+def test_inspect_model_with_a_part_compiled_with_module_compile(fullgraph):
+    """``nn.Module.compile()`` compiles the whole call, so the compiled module is timed from outside it as one call."""
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    model.encoder.compile(fullgraph=fullgraph, backend="eager")
+    compiled_call = model.encoder._compiled_call_impl
+
+    assert _inspected_counts(model) == {".encoder": 2, ".head": 2}
+    assert model.encoder._compiled_call_impl is compiled_call
+
+
+def test_inspect_model_with_a_child_compiled_with_torch_compile():
+    """``torch.compile(module)`` gives an ``OptimizedModule`` child, timed as one call."""
+    torch._dynamo.reset()
+    encoder = torch.compile(_Encoder(), backend="eager")
+    assert isinstance(encoder, nn.Module)
+    model = _ModelWithEncoder(encoder)
+
+    assert _inspected_counts(model) == {".encoder": 2, ".head": 2}
+
+
+def test_inspect_model_compiled_whole_around_a_compiled_part():
+    """A ``nn.Module.compile()`` part inside a ``fullgraph=True`` compiled model is traced, not timed."""
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    model.encoder.compile(backend="eager")
+    model.compile(fullgraph=True, backend="eager")
+
+    assert _inspected_counts(model, min_depth=0) == {"": 2}
+
+
+def _compiled_module_warnings(warning) -> list[str]:
+    messages = [call.args[0] % call.args[1:] for call in warning.call_args_list]
+    return [message for message in messages if "compiled with torch.compile" in message]
+
+
+def _compile_encoder(model: _ModelWithEncoder, how: str, fullgraph: bool) -> None:
+    if how == "forward":
+        model.encoder.forward = torch.compile(model.encoder.forward, fullgraph=fullgraph, backend="eager")
+    elif how == "module.compile":
+        model.encoder.compile(fullgraph=fullgraph, backend="eager")
+    else:
+        encoder = torch.compile(model.encoder, fullgraph=fullgraph, backend="eager")
+        assert isinstance(encoder, nn.Module)
+        model.encoder = encoder
+
+
+@pytest.mark.parametrize("fullgraph", [False, True])
+@pytest.mark.parametrize("how", ["forward", "module.compile", "torch.compile"])
+def test_inspect_warns_about_compiled_modules_whose_submodules_were_not_inspected(mocker, how, fullgraph):
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    _compile_encoder(model, how, fullgraph)
+    warning = mocker.patch.object(module_inspector.logger, "warning")
+
+    _inspected_counts(model)
+
+    assert _compiled_module_warnings(warning) == [
+        ".encoder is compiled with torch.compile; the modules inside it were not inspected. To inspect them, run "
+        'ait.inspect under torch.compiler.set_stance("force_eager").'
+    ]
+
+
+@pytest.mark.parametrize("how", ["model.compile", "torch.compile"])
+def test_inspect_warning_names_a_compiled_root_the_model(mocker, how):
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    if how == "model.compile":
+        model.compile(backend="eager")
+    else:
+        compiled = torch.compile(model, backend="eager")
+        assert isinstance(compiled, nn.Module)
+        model = compiled
+    warning = mocker.patch.object(module_inspector.logger, "warning")
+
+    _inspected_counts(model, min_depth=0)
+
+    (message,) = _compiled_module_warnings(warning)
+    assert message.startswith("The model is compiled with torch.compile;")
+
+
+def test_inspect_does_not_warn_about_unused_submodules_under_force_eager(mocker):
+    """Under ``force_eager`` the compiled part's used submodules ran; an unused one stays uncounted without a warning."""
+
+    class EncoderWithUnusedChild(_Encoder):
+        def __init__(self):
+            super().__init__()
+            self.unused = nn.Linear(10, 10)
+
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(EncoderWithUnusedChild())
+    model.encoder.compile(backend="eager")
+    warning = mocker.patch.object(module_inspector.logger, "warning")
+
+    with torch.compiler.set_stance("force_eager"):
+        assert _inspected_counts(model, min_depth=2) == {".encoder.proj": 2, ".encoder.out": 2}
+
+    assert _compiled_module_warnings(warning) == []
+
+
+class _EagerBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lin = nn.Linear(10, 10)
+
+    @torch.compiler.disable
+    def forward(self, x):
+        return self.lin(x)
+
+
+class _EncoderWithEagerBlock(_Encoder):
+    def __init__(self):
+        super().__init__()
+        self.eager_block = _EagerBlock()
+
+    def forward(self, x):
+        return self.out(self.eager_block(self.proj(x)))
+
+
+class _EncoderWithBlocks(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.blocks = nn.ModuleList([nn.Linear(10, 10), nn.Linear(10, 10)])
+
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        return x
+
+
+@pytest.mark.parametrize("force_eager", [False, True])
+@pytest.mark.parametrize("how", ["forward", "module.compile", "torch.compile"])
+@pytest.mark.parametrize("encoder_class", [_EncoderWithEagerBlock, _EncoderWithBlocks])
+def test_inspect_warns_only_when_the_compiled_part_was_traced(mocker, encoder_class, how, force_eager):
+    """Modules below a ``torch.compiler.disable`` call are counted, but their traced siblings still need the warning.
+
+    The submodules of a container such as ``nn.ModuleList`` count as called by the compiled part directly.
+    """
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(encoder_class())
+    _compile_encoder(model, how, fullgraph=False)
+    warning = mocker.patch.object(module_inspector.logger, "warning")
+
+    with torch.compiler.set_stance("force_eager" if force_eager else "default"):
+        _inspected_counts(model, min_depth=2)
+
+    expected = [] if force_eager else [".encoder is compiled with torch.compile;"]
+    assert [message.split(" the modules")[0] for message in _compiled_module_warnings(warning)] == expected
+
+
+def test_inspect_under_force_eager_inspects_inside_compiled_parts(mocker):
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    model.encoder.compile(fullgraph=True, backend="eager")
+    warning = mocker.patch.object(module_inspector.logger, "warning")
+
+    with torch.compiler.set_stance("force_eager"):
+        counts = _inspected_counts(model, min_depth=2)
+
+    assert counts == {".encoder.proj": 2, ".encoder.out": 2}
+    assert _compiled_module_warnings(warning) == []
+
+
+@pytest.mark.parametrize("fullgraph", [False, True])
+def test_inspect_under_force_eager_counts_a_module_compile_part_once(fullgraph):
+    """Under ``force_eager`` the compiled call runs eagerly and reaches the ``forward`` wrapper; count the call once."""
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    model.encoder.compile(fullgraph=fullgraph, backend="eager")
+
+    with torch.compiler.set_stance("force_eager"):
+        assert _inspected_counts(model) == {".encoder": 2, ".head": 2}

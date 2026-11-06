@@ -222,6 +222,21 @@ transformer_modules = [
 modules_info = ait.inspect(model, input_data, min_depth=1)
 ```
 
+### Models with parts compiled by `torch.compile`
+
+A part compiled with `torch.compile` or `nn.Module.compile()` counts as one call: `inspect` times the compiled module
+but not the modules it calls, so `get_modules()` cannot return them, and `inspect` logs a warning for each such part.
+To inspect inside compiled parts, run `inspect` with compilation turned off; compiled parts then run eagerly, and their
+times are eager times:
+
+```python
+with torch.compiler.set_stance("force_eager"):
+    modules_info = ait.inspect(model, input_data, min_depth=2)
+```
+
+A child compiled with `torch.compile(module)` is an `OptimizedModule` that holds the original module as `_orig_mod`, so
+its submodules are one level deeper: `.encoder._orig_mod.proj` instead of `.encoder.proj`.
+
 ## Summary
 
 Ahead-of-time inspection can be a first step in exploring your model's structure and performance. It can also be used to select modules for tuning. For details on the tuning workflow, head to the [AOT Tuning Guide](aot_tuning.md).
