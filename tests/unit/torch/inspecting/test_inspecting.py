@@ -716,6 +716,56 @@ def test_inspect_does_not_warn_about_unused_submodules_under_force_eager(mocker)
     assert _compiled_module_warnings(warning) == []
 
 
+class _EagerBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lin = nn.Linear(10, 10)
+
+    @torch.compiler.disable
+    def forward(self, x):
+        return self.lin(x)
+
+
+class _EncoderWithEagerBlock(_Encoder):
+    def __init__(self):
+        super().__init__()
+        self.eager_block = _EagerBlock()
+
+    def forward(self, x):
+        return self.out(self.eager_block(self.proj(x)))
+
+
+class _EncoderWithBlocks(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.blocks = nn.ModuleList([nn.Linear(10, 10), nn.Linear(10, 10)])
+
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        return x
+
+
+@pytest.mark.parametrize("force_eager", [False, True])
+@pytest.mark.parametrize("how", ["forward", "module.compile", "torch.compile"])
+@pytest.mark.parametrize("encoder_class", [_EncoderWithEagerBlock, _EncoderWithBlocks])
+def test_inspect_warns_only_when_the_compiled_part_was_traced(mocker, encoder_class, how, force_eager):
+    """Modules below a ``torch.compiler.disable`` call are counted, but their traced siblings still need the warning.
+
+    The submodules of a container such as ``nn.ModuleList`` count as called by the compiled part directly.
+    """
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(encoder_class())
+    _compile_encoder(model, how, fullgraph=False)
+    warning = mocker.patch.object(module_inspector.logger, "warning")
+
+    with torch.compiler.set_stance("force_eager" if force_eager else "default"):
+        _inspected_counts(model, min_depth=2)
+
+    expected = [] if force_eager else [".encoder is compiled with torch.compile;"]
+    assert [message.split(" the modules")[0] for message in _compiled_module_warnings(warning)] == expected
+
+
 def test_inspect_under_force_eager_inspects_inside_compiled_parts(mocker):
     torch._dynamo.reset()
     model = _ModelWithEncoder(_Encoder())

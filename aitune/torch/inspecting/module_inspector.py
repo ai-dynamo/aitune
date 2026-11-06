@@ -30,7 +30,7 @@ Environment variables that could be used:
 """
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import cache, wraps
 from logging import getLogger
@@ -150,22 +150,17 @@ class ModuleInspector:
     def warn_about_compiled_modules(self) -> None:
         """Warn about compiled modules whose submodules were not inspected.
 
-        A compiled module is reported if it ran but none of its submodules were counted. This happens when
-        Dynamo traces the compiled code, because the submodule wrappers then call through without counting.
+        A compiled module is reported if it ran but none of the submodules it calls directly were counted. This
+        happens when Dynamo traces the compiled code, because the submodule wrappers then call through without
+        counting. Deeper submodules are not checked: those below a ``torch.compiler.disable`` call run eagerly and
+        are counted even when Dynamo traced the compiled code.
         """
-        compiled_with_submodules: dict[int, ModuleInfo] = {}
-        ran_below: set[int] = set()
         for module_info in self._module_info.values():
-            parent = module_info.parent
-            while parent is not None:
-                if module_info.execution_count:
-                    ran_below.add(id(parent))
-                elif parent.execution_count and self._is_compiled(parent.module):
-                    compiled_with_submodules[id(parent)] = parent
-                parent = parent.parent
-        for key, module_info in compiled_with_submodules.items():
-            if key in ran_below:
-                continue  # submodules ran, so compiled code ran eagerly (``force_eager``); unused ones stay uncounted
+            if not module_info.execution_count or not self._is_compiled(module_info.module):
+                continue
+            called = [self._module_info[c] for c in _directly_called(module_info.module) if c in self._module_info]
+            if not called or any(child.execution_count for child in called):
+                continue  # a direct submodule ran, so compiled code ran eagerly (``force_eager``)
             logger.warning(
                 "%s is compiled with torch.compile; the modules inside it were not inspected. To inspect them, run "
                 'ait.inspect under torch.compiler.set_stance("force_eager").',
@@ -511,3 +506,12 @@ def _get_inspect_debug() -> bool:
 
 def _get_inspect_debug_raise() -> bool:
     return get_bool_env_variable("AITUNE_INSPECT_DEBUG_RAISE", DEFAULT_INSPECT_DEBUG_RAISE)
+
+
+def _directly_called(module: torch.nn.Module) -> Iterator[torch.nn.Module]:
+    """The submodules ``module`` can call directly: its children, and the children of containers such as ModuleList."""
+    for child in module.children():
+        if type(child).forward is torch.nn.Module.forward:
+            yield from _directly_called(child)
+        else:
+            yield child
