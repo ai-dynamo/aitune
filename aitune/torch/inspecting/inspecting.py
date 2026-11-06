@@ -64,8 +64,9 @@ def inspect(
     logger.info("Inspecting object searching for executed nn.Module members.")
     recorder = CallRecorder() if call_tree else None
     model_inspector = ModuleInspector(min_depth=min_depth, max_depth=max_depth, recorder=recorder)
-    model_inspector.inspect(obj)
     try:
+        model_inspector.inspect(obj)
+
         # If no inference function is provided, use the obj
         if inference_function is None:
             inference_function = obj
