@@ -8,6 +8,7 @@ title: "Changelog"
 ## 0.8.0 (unreleased)
 
 - feat: record a model's call tree with `ait.inspect(..., call_tree=True)`: module `forward` calls and model-defined methods, keyed by their chain of callers, with call counts, times and the code that moves modules with `.to()`
+- feat: report the weights a module holds that are read, have their device looked up, or are moved outside it with `CallTree.shared_weights_of(...)`; reads and device lookups are recorded per op during the call-tree pass (compiled code runs eagerly there)
 
 ## 0.7.0 (unreleased)
 

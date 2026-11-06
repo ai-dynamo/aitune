@@ -10,8 +10,8 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
     """Apply rank zero's call counts and timings to the local call tree.
 
     Every rank must have recorded the same tree: the same node keys (adapter names), with the same owner class and
-    call count per key. Times are taken from rank zero so that every rank reports the same times. Sequences and ``.to()``
-    callers stay local; they follow from the verified structure.
+    call count per key. Times are taken from rank zero so that every rank reports the same times. Sequences, ``.to()`` callers
+    and recorded weight accesses stay local; they follow from the verified structure.
 
     Args:
         tree: The local call tree.

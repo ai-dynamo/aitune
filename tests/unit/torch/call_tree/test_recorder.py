@@ -365,3 +365,85 @@ def test_flush_synchronizes_every_end_event(mocker):
 
     assert recorder._ms[("root.forward",)] == 2.0
     cuda_synchronize.assert_not_called()
+
+
+def test_accesses_are_recorded_only_inside_recording():
+    """Ops on weights outside recording() leave no weight_accesses."""
+    from tests.unit.torch.call_tree.helpers import instrumented
+
+    model = torch.nn.Linear(4, 4)
+    recorder = CallRecorder()
+    with instrumented(recorder, model):
+        model.weight.sum()  # outside recording: not recorded
+        with recorder.recording():
+            recorder.begin_iteration()
+            model.weight.sum()
+            recorder.end_iteration()
+        model.weight.sum()  # outside again
+    tree = recorder.result()
+    assert len(tree.weight_accesses) >= 1
+
+
+def test_access_mode_is_removed_after_recording_raises():
+    """An exception inside recording() still restores torch_function state."""
+    model = torch.nn.Linear(4, 4)
+    recorder = CallRecorder()
+    with pytest.raises(RuntimeError):
+        with recorder.recording():
+            recorder.begin_iteration()
+            model.weight.sum()
+            raise RuntimeError("boom")
+    # if the mode leaked, this op would be recorded
+    model.weight.sum()
+    assert recorder.result().weight_accesses == {}
+
+
+def test_ops_inside_apply_are_not_recorded():
+    """.to() internals (moves) don't produce weight accesses."""
+    from tests.unit.torch.call_tree.helpers import instrumented
+
+    model = torch.nn.Linear(4, 4)
+    recorder = CallRecorder()
+    with instrumented(recorder, model), recorder.recording():
+        recorder.begin_iteration()
+        model.to("cpu")
+        recorder.end_iteration()
+    assert recorder.result().weight_accesses == {}
+
+
+def test_a_failing_access_mode_leaves_no_apply_probe_behind(mocker):
+    original_apply = nn.Module._apply
+    mocker.patch("aitune.torch.call_tree.accesses.WeightAccessMode.__init__", side_effect=RuntimeError("boom"))
+    recorder = CallRecorder()
+
+    with pytest.raises(RuntimeError, match="boom"):
+        with recorder.recording():
+            pass
+
+    assert nn.Module._apply is original_apply
+    assert CallRecorder._recording_now is None
+
+
+def test_weight_accesses_accumulate_over_recording_passes():
+    linear = nn.Linear(8, 8)
+    recorder = CallRecorder()
+    recorder.register_module("root", linear)
+
+    with recorder.recording():
+        torch.nn.functional.linear(torch.randn(2, 8), linear.weight)
+    with recorder.recording():
+        pass
+
+    assert {kind for _, kind, _ in recorder.result().weight_accesses[id(linear.weight)]} == {"read"}
+
+
+def test_reads_after_a_cast_during_recording_are_tracked_under_the_new_storage():
+    linear = nn.Linear(8, 8).double()
+    recorder = CallRecorder()
+    recorder.register_module("root", linear)
+
+    with recorder.recording():
+        linear.float()  # new storage for the weight
+        torch.nn.functional.linear(torch.randn(2, 8), linear.weight)
+
+    assert {kind for _, kind, _ in recorder.result().weight_accesses[id(linear.weight)]} == {"read"}

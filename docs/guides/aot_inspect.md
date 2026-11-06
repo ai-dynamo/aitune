@@ -240,17 +240,49 @@ What is recorded:
   on modules and on plain pipeline objects outside any module. Methods of library classes (`torch`,
   `transformers`, `diffusers`, ...) are not recorded, but methods of your own subclasses of them are;
 - calls of `.to()`, `.cuda()` and similar that reach a module from code outside it, with the code that made them;
+- every torch op that reads a module's parameter or buffer, or looks up its device, with the recorded call it ran in;
 - times from CUDA events without synchronizing after every call, or from `time.perf_counter` without CUDA.
 
-`call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. `get_modules()` and
+`call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. In that pass, parts
+compiled with `torch.compile` run eagerly, so their calls and weight reads are recorded too, and the call tree's
+times for them are eager times, not compiled ones. `get_modules()` and
 `describe()` are unchanged: they still come from the synchronized pass. The object walk has to reach the linear
 layers, so deep models need a larger `max_depth` (8 for BAGEL-sized pipelines).
 
 Limits: exact `nn.Sequential`, `nn.ModuleList` and
 `nn.ModuleDict` containers are skipped and their children attached to the caller; a call that takes a callable as an
-argument (a checkpoint helper) is skipped the same way; free functions are not recorded; calls inside parts compiled
-with `torch.compile` are not recorded. CUDA times come from events on the device that was current when a call
-started, so work that a call runs on other GPUs is not fully counted.
+argument (a checkpoint helper) is skipped the same way; free functions are not recorded. CUDA times come from
+events on the device that was current when a call started, so work that a call runs on other GPUs is not fully
+counted.
+
+## Shared weights
+
+After tuning, AITune offloads a module's original weights (`device_after_tuning`, `"meta"` by default). That breaks a
+model when something outside the tuned module still needs one of those weights:
+
+- a head tied to an embedding that another module uses;
+- an embedding looked up outside the module, for example by the pipeline before it calls the module;
+- a pipeline that reads the module's device from its parameters, as diffusers' `_get_execution_device` does with
+  `next(module.parameters()).device`;
+- library code that moves the whole model with `.to()` on every call, as `SentenceTransformer.encode` does.
+
+The call tree finds these. `shared_weights_of` takes a module, a node path or a list of them, and returns the weights
+the unit holds that something outside it still reads (`read_by`), looks up the device of (`device_by`) or moves
+(`moved_by`), grouped by who does. Reads count per op, so a direct read such as `F.linear(x, model.lm_head.weight)`
+in a caller is found, and a called module whose `forward` uses only some of its weights reports only those. A module
+holds all its parameters and buffers, because offloading moves all of them; a module the call tree has no `forward`
+of (an exact `nn.Sequential`, or a `forward` that takes a callable) stands for the recorded calls inside it:
+
+```python
+tree = modules_info.call_tree
+tree.shared_weights_of(model.lm_head)
+# [SharedWeights(params=["llm.embed.weight"], bytes=512, held_by=["lm_head"],
+#                read_by=["forward > llm.embed.forward"], device_by=[], moved_by=[])]
+tree.shared_weights_of(model.dit)    # []: can be tuned and offloaded on its own
+```
+
+The call tree only knows the paths the recording ran: a weight read or a device lookup on another path (another
+branch, another input size) is not seen.
 
 ## Troubleshooting
 
