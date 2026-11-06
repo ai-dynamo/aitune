@@ -182,3 +182,27 @@ class PlainPipeline:
 
     def _apply_checkpoint(self, func, x):
         return func(x)
+
+
+class DirectReadToy(nn.Module):
+    """The caller reads the unit's weight directly in its own forward, outside any module call."""
+
+    def __init__(self):
+        super().__init__()
+        self.unit = Llm(layers=2)
+
+    def forward(self, tokens):
+        return self.unit(self.unit.embed(tokens)) @ self.unit.scale.T
+
+
+class DeviceLookupToy(nn.Module):
+    """The caller only asks for a weight's device outside the unit, like Cosmos3-Nano's diffusers pipeline in
+    ``_get_execution_device``."""
+
+    def __init__(self):
+        super().__init__()
+        self.unit = Llm(layers=2)
+
+    def forward(self, tokens):
+        _ = next(self.unit.parameters()).device
+        return self.unit(self.unit.embed(tokens))
