@@ -3,6 +3,7 @@
 
 import itertools
 from types import SimpleNamespace
+from typing import cast
 
 import onnx
 import pytest
@@ -575,69 +576,71 @@ def test_get_modules_after_inspection_with_limit(custom_object, sample_dataset, 
     assert executed_modules[1].execution_count == TEST_NUMBER_OF_ITERATIONS
 
 
+class _Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.proj = nn.Linear(10, 10)
+        self.out = nn.Linear(10, 10)
+
+    def forward(self, x):
+        return self.out(torch.relu(self.proj(x)))
+
+
+class _ModelWithEncoder(nn.Module):
+    def __init__(self, encoder: nn.Module):
+        super().__init__()
+        self.encoder = encoder
+        self.head = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.head(self.encoder(x))
+
+
+def _inspected_counts(model: nn.Module, min_depth: int = 1) -> dict[str | None, int]:
+    with torch.no_grad():
+        modules_info = inspect(
+            model, torch.randn(4, 10), number_of_iterations=2, warmup_iterations=1, min_depth=min_depth
+        )
+    return {info.object_path: info.execution_count for info in modules_info.get_modules()}
+
+
 def test_inspect_model_with_a_part_compiled_with_fullgraph():
     """A ``torch.compile(fullgraph=True)`` part is timed as one call; the calls Dynamo traces inside it are not."""
-
-    class Encoder(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.proj = nn.Linear(10, 10)
-            self.out = nn.Linear(10, 10)
-
-        def forward(self, x):
-            return self.out(torch.relu(self.proj(x)))
-
-    class Model(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.encoder = Encoder()
-            # The eager backend still traces with Dynamo, which is what failed, without compiling kernels.
-            self.encoder.forward = torch.compile(self.encoder.forward, fullgraph=True, backend="eager")
-            self.head = nn.Linear(10, 5)
-
-        def forward(self, x):
-            return self.head(self.encoder(x))
-
     torch._dynamo.reset()
-    model = Model()
+    model = _ModelWithEncoder(_Encoder())
+    # The eager backend still traces with Dynamo, which is what failed, without compiling kernels.
+    compiled_forward = torch.compile(model.encoder.forward, fullgraph=True, backend="eager")
+    model.encoder.forward = compiled_forward
 
-    with torch.no_grad():
-        modules_info = inspect(model, torch.randn(4, 10), number_of_iterations=2, warmup_iterations=1, min_depth=1)
-
-    counts = {info.object_path: info.execution_count for info in modules_info.get_modules()}
-    assert counts == {".encoder": 2, ".head": 2}
+    assert _inspected_counts(model) == {".encoder": 2, ".head": 2}
+    assert model.encoder.forward is compiled_forward
 
 
 @pytest.mark.parametrize("fullgraph", [False, True])
 def test_inspect_model_with_a_part_compiled_with_module_compile(fullgraph):
     """``nn.Module.compile()`` compiles the whole call, so the compiled module is timed from outside it as one call."""
-
-    class Encoder(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.proj = nn.Linear(10, 10)
-            self.out = nn.Linear(10, 10)
-
-        def forward(self, x):
-            return self.out(torch.relu(self.proj(x)))
-
-    class Model(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.encoder = Encoder()
-            self.encoder.compile(fullgraph=fullgraph, backend="eager")
-            self.head = nn.Linear(10, 5)
-
-        def forward(self, x):
-            return self.head(self.encoder(x))
-
     torch._dynamo.reset()
-    model = Model()
+    model = _ModelWithEncoder(_Encoder())
+    model.encoder.compile(fullgraph=fullgraph, backend="eager")
     compiled_call = model.encoder._compiled_call_impl
 
-    with torch.no_grad():
-        modules_info = inspect(model, torch.randn(4, 10), number_of_iterations=2, warmup_iterations=1, min_depth=1)
-
-    counts = {info.object_path: info.execution_count for info in modules_info.get_modules()}
-    assert counts == {".encoder": 2, ".head": 2}
+    assert _inspected_counts(model) == {".encoder": 2, ".head": 2}
     assert model.encoder._compiled_call_impl is compiled_call
+
+
+def test_inspect_model_with_a_child_compiled_with_torch_compile():
+    """``torch.compile(module)`` gives an ``OptimizedModule`` child, timed as one call."""
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(cast(nn.Module, torch.compile(_Encoder(), backend="eager")))
+
+    assert _inspected_counts(model) == {".encoder": 2, ".head": 2}
+
+
+def test_inspect_model_compiled_whole_around_a_compiled_part():
+    """A ``nn.Module.compile()`` part inside a ``fullgraph=True`` compiled model is traced, not timed."""
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(_Encoder())
+    model.encoder.compile(backend="eager")
+    model.compile(fullgraph=True, backend="eager")
+
+    assert _inspected_counts(model, min_depth=0) == {"": 2}

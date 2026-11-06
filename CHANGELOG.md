@@ -7,7 +7,7 @@ title: "Changelog"
 
 ## 0.8.0 (unreleased)
 
-- fix: `inspect()` works on models with parts compiled by `torch.compile`; it no longer wraps calls inside compiled regions, where Dynamo cannot trace its timing
+- fix: `inspect()` works on models with parts compiled by `torch.compile` or `nn.Module.compile()`; it counts a compiled part as one call and no longer wraps the calls inside it, where Dynamo cannot trace its timing
 
 ## 0.7.0 (unreleased)
 
