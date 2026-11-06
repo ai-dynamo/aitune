@@ -335,6 +335,9 @@ class ModuleInspector:
 
         @wraps(original_forward)
         def wrapped_forward(*args, **kwargs):
+            # Inside a region that torch.compile traces, call through: Dynamo cannot trace the timing below.
+            if torch.compiler.is_compiling():
+                return original_forward(*args, **kwargs)
             module_info = self._module_info[module]
 
             execution_parent_module = ModuleInfo(name="root", module=None, object_path="root")
