@@ -606,3 +606,38 @@ def test_inspect_model_with_a_part_compiled_with_fullgraph():
 
     counts = {info.object_path: info.execution_count for info in modules_info.get_modules()}
     assert counts == {".encoder": 2, ".head": 2}
+
+
+@pytest.mark.parametrize("fullgraph", [False, True])
+def test_inspect_model_with_a_part_compiled_with_module_compile(fullgraph):
+    """``nn.Module.compile()`` compiles the whole call, so the compiled module is timed from outside it as one call."""
+
+    class Encoder(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.proj = nn.Linear(10, 10)
+            self.out = nn.Linear(10, 10)
+
+        def forward(self, x):
+            return self.out(torch.relu(self.proj(x)))
+
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.encoder = Encoder()
+            self.encoder.compile(fullgraph=fullgraph, backend="eager")
+            self.head = nn.Linear(10, 5)
+
+        def forward(self, x):
+            return self.head(self.encoder(x))
+
+    torch._dynamo.reset()
+    model = Model()
+    compiled_call = model.encoder._compiled_call_impl
+
+    with torch.no_grad():
+        modules_info = inspect(model, torch.randn(4, 10), number_of_iterations=2, warmup_iterations=1, min_depth=1)
+
+    counts = {info.object_path: info.execution_count for info in modules_info.get_modules()}
+    assert counts == {".encoder": 2, ".head": 2}
+    assert model.encoder._compiled_call_impl is compiled_call

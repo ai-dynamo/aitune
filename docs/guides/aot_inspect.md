@@ -222,6 +222,12 @@ transformer_modules = [
 modules_info = ait.inspect(model, input_data, min_depth=1)
 ```
 
+### Models with parts compiled by `torch.compile`
+
+A part compiled with `torch.compile` or `nn.Module.compile()` counts as one call: `inspect` times the compiled module
+but not the modules it calls, so `get_modules()` cannot return them. To inspect inside a compiled part, run `inspect`
+before compiling it.
+
 ## Summary
 
 Ahead-of-time inspection can be a first step in exploring your model's structure and performance. It can also be used to select modules for tuning. For details on the tuning workflow, head to the [AOT Tuning Guide](aot_tuning.md).

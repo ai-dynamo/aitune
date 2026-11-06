@@ -115,6 +115,7 @@ class ModuleInspector:
         """Initialize the module inspector."""
         self._module_info: dict[Any, ModuleInfo] = {}
         self._original_forward: dict[Any, Any] = {}
+        self._original_compiled_call: dict[Any, Any] = {}
         self._inspected_objects: set = set()  # Track objects that have been inspected
         self._min_recursion_depth = min_depth
         self._max_recursion_depth = max_depth
@@ -136,11 +137,14 @@ class ModuleInspector:
         # Restore original forward methods
         for module, original_forward in self._original_forward.items():
             module.forward = original_forward
+        for module, original_compiled_call in self._original_compiled_call.items():
+            module._compiled_call_impl = original_compiled_call
 
         self._inspected_objects.clear()  # Clear the set when starting a new inspection
 
         self._module_info.clear()
         self._original_forward.clear()
+        self._original_compiled_call.clear()
 
     def get_modules(self) -> list[ModuleInfo]:
         """Get list of top-level executed modules or their first executed children.
@@ -338,6 +342,9 @@ class ModuleInspector:
             # Inside a region that torch.compile traces, call through: Dynamo cannot trace the timing below.
             if torch.compiler.is_compiling():
                 return original_forward(*args, **kwargs)
+            return timed_call(original_forward, args, kwargs)
+
+        def timed_call(call, args, kwargs):
             module_info = self._module_info[module]
 
             execution_parent_module = ModuleInfo(name="root", module=None, object_path="root")
@@ -362,7 +369,7 @@ class ModuleInspector:
 
             # Measure execution time
             start_time = time.perf_counter()
-            output = original_forward(*args, **kwargs)
+            output = call(*args, **kwargs)
 
             # Synchronize CUDA after execution
             synchronize()
@@ -385,6 +392,29 @@ class ModuleInspector:
             return output
 
         module.forward = wrapped_forward
+        self._wrap_compiled_call(module, timed_call)
+
+    def _wrap_compiled_call(self, module, timed_call: Callable) -> None:
+        """Time a module compiled with ``nn.Module.compile()`` from outside its compiled call.
+
+        ``nn.Module.compile()`` compiles the whole call, the ``forward`` wrapper included, so that wrapper only calls
+        through. Wrapping the compiled call instead counts and times the module as one call.
+
+        Args:
+            module: The module, wrapped by ``_wrap_forward_methods``
+            timed_call: Its timing wrapper, called with the callable to run and its arguments
+        """
+        original_compiled_call = getattr(module, "_compiled_call_impl", None)
+        if original_compiled_call is None:
+            return
+        self._original_compiled_call[module] = original_compiled_call
+
+        def wrapped_compiled_call(*args, **kwargs):
+            if torch.compiler.is_compiling():
+                return original_compiled_call(*args, **kwargs)
+            return timed_call(original_compiled_call, args, kwargs)
+
+        module._compiled_call_impl = wrapped_compiled_call
 
     @cache
     @staticmethod
