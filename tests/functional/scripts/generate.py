@@ -31,6 +31,7 @@ from metadata import (  # noqa: E402
     Scope,
     get_runner,
     get_scope,
+    runs_on,
 )
 
 logger = logging.getLogger("generate")
@@ -85,6 +86,7 @@ def _matrix_entry(
         "docker_image": _replace_custom_docker_image(workflow_docker_image),
         "is_custom_docker_image": docker_image != default_docker_image,
         "runner": runner,
+        "runs_on": json.dumps(runs_on(runner)),
         "environment": json.dumps(_environment_for_job(config)),
         "kind": kind,
         "path": path,

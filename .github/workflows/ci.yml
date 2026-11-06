@@ -8,6 +8,13 @@ on:
       - "pull-request/[0-9]+"
   workflow_dispatch:
   workflow_call:
+    inputs:
+      extra_platforms:
+        description: >
+          Extra image platforms, comma-separated. linux/amd64 is always built.
+          Every platform is published under the same tag. Example: linux/arm64
+        type: string
+        default: ""
     secrets:
       FERN_TOKEN:
         required: true
@@ -247,10 +254,28 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image platforms
+        id: platforms
+        env:
+          EXTRA_PLATFORMS: ${{ inputs.extra_platforms }}
+        run: |
+          platforms=linux/amd64
+          if [[ -n "$EXTRA_PLATFORMS" ]]; then
+            platforms="${platforms},${EXTRA_PLATFORMS}"
+          fi
+          echo "platforms=${platforms}" >> "$GITHUB_OUTPUT"
+          echo "extra=${EXTRA_PLATFORMS}" >> "$GITHUB_OUTPUT"
+      - name: Set up QEMU
+        if: steps.platforms.outputs.extra != ''
+        uses: docker/setup-qemu-action@v4.4.0
+      - name: Set up Docker Buildx
+        if: steps.platforms.outputs.extra != ''
+        uses: docker/setup-buildx-action@v4.4.1
       - uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: .github/docker/Dockerfile
+          platforms: ${{ steps.platforms.outputs.platforms }}
           outputs: type=image,push=true,compression=zstd,oci-mediatypes=true
           build-args: |
             FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
