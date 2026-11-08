@@ -9,7 +9,7 @@ from typing import Any, TypeVar, cast
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.sharing import shared_weight_groups
+from aitune.torch.call_tree.weights.sharing import shared_weight_groups
 from aitune.torch.inspecting.module_info import ModuleInfo
 from aitune.torch.module.wrapper_module import Module, StrategyList, StrategyMap
 from aitune.torch.module_registry import MODULE_REGISTRY
@@ -81,9 +81,6 @@ def _keep_shared_weights(call_tree: CallTree, module: torch.nn.Module) -> None:
     params = {id(p): p for p in (*module.parameters(), *module.buffers())}
     for group, ids in groups:
         keep_on_device((params[i] for i in ids if i in params), owner=module)
-        if group.moved_by:
-            # ``.to()`` from outside moves the module's buffers too, so they must keep their data as well.
-            keep_on_device(module.buffers(), owner=module)
         users = [f"read by {', '.join(group.read_by)}"] if group.read_by else []
         users += [f"device looked up by {', '.join(group.device_by)}"] if group.device_by else []
         users += [f"moved by {', '.join(group.moved_by)}"] if group.moved_by else []
