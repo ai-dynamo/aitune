@@ -116,7 +116,7 @@ class ModuleInspector:
         self._module_info: dict[Any, ModuleInfo] = {}
         self._original_forward: dict[Any, Any] = {}
         self._original_compiled_call: dict[Any, Any] = {}
-        self._timing_compiled_call: set[int] = set()  # ids of modules timed by their compiled-call wrapper
+        self._timed_by_compiled_call: set[int] = set()  # ids of modules timed by their compiled-call wrapper
         self._inspected_objects: set = set()  # Track objects that have been inspected
         self._min_recursion_depth = min_depth
         self._max_recursion_depth = max_depth
@@ -158,8 +158,10 @@ class ModuleInspector:
         for module_info in self._module_info.values():
             if not module_info.execution_count or not self._is_compiled(module_info.module):
                 continue
-            called = [self._module_info[c] for c in _directly_called(module_info.module) if c in self._module_info]
-            if not called or any(child.execution_count for child in called):
+            direct_submodules = [
+                self._module_info[c] for c in _direct_submodules(module_info.module) if c in self._module_info
+            ]
+            if not direct_submodules or any(child.execution_count for child in direct_submodules):
                 continue  # a direct submodule ran, so compiled code ran eagerly (``force_eager``)
             logger.warning(
                 "%s is compiled with torch.compile; the modules inside it were not inspected. To inspect them, run "
@@ -367,69 +369,77 @@ class ModuleInspector:
         original_forward = module.forward
         self._original_forward[module] = original_forward
 
-        def _debug_run(module_info: ModuleInfo, exec_parent: ModuleInfo, depth: int = 0):
-            if _get_inspect_debug():
-                logger.debug("%-75s from %s", " " * depth * 2 + module_info.object_path + "()", exec_parent.object_path)
-
         @wraps(original_forward)
         def wrapped_forward(*args, **kwargs):
             # Inside a region that torch.compile traces, call through: Dynamo cannot trace the timing below.
             # Also call through while the compiled-call wrapper times this module (compiled code run eagerly).
-            if torch.compiler.is_compiling() or id(module) in self._timing_compiled_call:
+            if torch.compiler.is_compiling() or id(module) in self._timed_by_compiled_call:
                 return original_forward(*args, **kwargs)
-            return timed_call(original_forward, args, kwargs)
-
-        def timed_call(call, args, kwargs):
-            module_info = self._module_info[module]
-
-            execution_parent_module = ModuleInfo(name="root", module=None, object_path="root")
-            if self._execution_parent_module:
-                execution_parent_module = self._execution_parent_module[-1]
-
-            self._execution_parent_module.append(module_info)
-
-            _debug_run(module_info, execution_parent_module, len(self._execution_parent_module))
-            module_info.forward_called = True
-            module_info.execution_count += 1
-
-            # Record input types
-            input_info = {
-                "args": [type(arg).__name__ for arg in args],
-                "kwargs": {k: type(v).__name__ for k, v in kwargs.items()},
-            }
-            module_info.input_types.append(input_info)
-
-            # Synchronize CUDA before starting timing
-            synchronize()
-
-            # Measure execution time
-            start_time = time.perf_counter()
-            output = call(*args, **kwargs)
-
-            # Synchronize CUDA after execution
-            synchronize()
-
-            # Collect end time
-            end_time = time.perf_counter()
-
-            # Update execution time
-            module_info.total_execution_time += end_time - start_time
-
-            # Record output type
-            if isinstance(output, (tuple, list)):
-                output_info = {"type": type(output).__name__, "elements": [type(x).__name__ for x in output]}
-            else:
-                output_info = {"type": type(output).__name__}
-            module_info.output_types.append(output_info)
-
-            self._execution_parent_module.pop()
-
-            return output
+            return self._time_call(module, original_forward, args, kwargs)
 
         module.forward = wrapped_forward
-        self._wrap_compiled_call(module, timed_call)
+        self._wrap_compiled_call(module)
 
-    def _wrap_compiled_call(self, module, timed_call: Callable) -> None:
+    def _time_call(self, module: torch.nn.Module, call: Callable, args: tuple, kwargs: dict) -> Any:
+        """Count one call of ``module``, run ``call`` with the arguments, and add its time to the module's info.
+
+        Args:
+            module: The inspected module the call belongs to
+            call: What to run: the module's original ``forward``, or its original compiled call for a module
+                compiled with ``nn.Module.compile()``
+            args: The positional arguments to call with
+            kwargs: The keyword arguments to call with
+
+        Returns:
+            The output of ``call``
+        """
+        module_info = self._module_info[module]
+
+        execution_parent_module = ModuleInfo(name="root", module=None, object_path="root")  # type: ignore[bad-argument-type]
+        if self._execution_parent_module:
+            execution_parent_module = self._execution_parent_module[-1]
+
+        self._execution_parent_module.append(module_info)
+
+        _debug_run(module_info, execution_parent_module, len(self._execution_parent_module))
+        module_info.forward_called = True
+        module_info.execution_count += 1
+
+        # Record input types
+        input_info = {
+            "args": [type(arg).__name__ for arg in args],
+            "kwargs": {k: type(v).__name__ for k, v in kwargs.items()},
+        }
+        module_info.input_types.append(input_info)
+
+        # Synchronize CUDA before starting timing
+        synchronize()
+
+        # Measure execution time
+        start_time = time.perf_counter()
+        output = call(*args, **kwargs)
+
+        # Synchronize CUDA after execution
+        synchronize()
+
+        # Collect end time
+        end_time = time.perf_counter()
+
+        # Update execution time
+        module_info.total_execution_time += end_time - start_time
+
+        # Record output type
+        if isinstance(output, (tuple, list)):
+            output_info = {"type": type(output).__name__, "elements": [type(x).__name__ for x in output]}
+        else:
+            output_info = {"type": type(output).__name__}
+        module_info.output_types.append(output_info)
+
+        self._execution_parent_module.pop()
+
+        return output
+
+    def _wrap_compiled_call(self, module) -> None:
         """Time a module compiled with ``nn.Module.compile()`` from outside its compiled call.
 
         ``nn.Module.compile()`` compiles the whole call, the ``forward`` wrapper included, so that wrapper only calls
@@ -437,7 +447,6 @@ class ModuleInspector:
 
         Args:
             module: The module, wrapped by ``_wrap_forward_methods``
-            timed_call: Its timing wrapper, called with the callable to run and its arguments
         """
         original_compiled_call = getattr(module, "_compiled_call_impl", None)
         if original_compiled_call is None:
@@ -447,11 +456,11 @@ class ModuleInspector:
         def wrapped_compiled_call(*args, **kwargs):
             if torch.compiler.is_compiling():
                 return original_compiled_call(*args, **kwargs)
-            self._timing_compiled_call.add(id(module))
+            self._timed_by_compiled_call.add(id(module))
             try:
-                return timed_call(original_compiled_call, args, kwargs)
+                return self._time_call(module, original_compiled_call, args, kwargs)
             finally:
-                self._timing_compiled_call.discard(id(module))
+                self._timed_by_compiled_call.discard(id(module))
 
         module._compiled_call_impl = wrapped_compiled_call
 
@@ -508,10 +517,15 @@ def _get_inspect_debug_raise() -> bool:
     return get_bool_env_variable("AITUNE_INSPECT_DEBUG_RAISE", DEFAULT_INSPECT_DEBUG_RAISE)
 
 
-def _directly_called(module: torch.nn.Module) -> Iterator[torch.nn.Module]:
+def _debug_run(module_info: ModuleInfo, exec_parent: ModuleInfo, depth: int = 0):
+    if _get_inspect_debug():
+        logger.debug("%-75s from %s", " " * depth * 2 + (module_info.object_path or "") + "()", exec_parent.object_path)
+
+
+def _direct_submodules(module: torch.nn.Module) -> Iterator[torch.nn.Module]:
     """The submodules ``module`` can call directly: its children, and the children of containers such as ModuleList."""
     for child in module.children():
         if type(child).forward is torch.nn.Module.forward:
-            yield from _directly_called(child)
+            yield from _direct_submodules(child)
         else:
             yield child
