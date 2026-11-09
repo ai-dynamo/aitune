@@ -168,26 +168,6 @@ def test_plain_object_methods_and_to_calls_are_recorded(dataset):
     assert tree.external_apply[id(model.get_submodule("0.layers.0.proj"))] == {"root.encode"}
 
 
-def test_call_tree_records_cuda_times(torch_device):
-    if torch_device.type != "cuda":
-        pytest.skip("CUDA event timing requires a GPU")
-    model = VlaToy().to(torch_device)
-    tokens, image = (t.to(torch_device) for t in vla_inputs())
-    dataset = torch.randn(10, 8, device=torch_device)
-
-    info = inspect(
-        model,
-        dataset,
-        inference_function=lambda _x: model(tokens, image),
-        number_of_iterations=2,
-        call_tree=True,
-    )
-
-    tree = _tree(info)
-    assert tree.nodes[("root.forward",)].time_ms > 0
-    assert tree.nodes[("root.forward", "root.dit_forward")].time_ms > 0
-
-
 def test_recording_pass_flushes_after_every_inference(mocker, dataset):
     model, fn = _vla()
     spy = mocker.spy(CallRecorder, "flush")
