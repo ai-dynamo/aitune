@@ -41,11 +41,6 @@ SKIP_METHODS = frozenset({
     "apply",
 })
 
-# Exact classes, never subclasses: JIT mode does not patch these classes (``_DEFAULT_PATCH_EXCLUDE`` matches the exact
-# qualified name), so skipping them gives both modes the same tree. Subclasses must stay: ``SentenceTransformer``
-# subclasses ``nn.Sequential`` and its ``forward`` is a unit of its own.
-TRANSPARENT_CONTAINERS: tuple[type[nn.Module], ...] = (nn.Sequential, nn.ModuleList, nn.ModuleDict)
-
 
 def user_defined_methods(obj: Any) -> list[str]:
     """Return the names of the user-defined methods of ``obj``, without ``forward``.
@@ -84,13 +79,18 @@ def user_defined_methods(obj: Any) -> list[str]:
 def is_transparent_container(obj: Any) -> bool:
     """Whether ``obj`` is an exact torch container class, whose calls are not recorded as nodes.
 
+    Only the exact classes ``nn.Sequential``, ``nn.ModuleList`` and ``nn.ModuleDict``, never subclasses: JIT mode does
+    not patch these classes (``_DEFAULT_PATCH_EXCLUDE`` matches the exact qualified name), so skipping them gives both
+    modes the same tree. Subclasses must stay: ``SentenceTransformer`` subclasses ``nn.Sequential`` and its ``forward``
+    is a unit of its own.
+
     Example:
         >>> class Encoder(nn.Sequential):
         ...     pass
         >>> is_transparent_container(nn.Sequential()), is_transparent_container(Encoder())
         (True, False)
     """
-    return type(obj) in TRANSPARENT_CONTAINERS
+    return type(obj) in (nn.Sequential, nn.ModuleList, nn.ModuleDict)
 
 
 def is_transparent_call(args: tuple[Any, ...], kwargs: dict[str, Any] | None = None) -> bool:
