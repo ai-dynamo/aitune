@@ -36,7 +36,8 @@ def _qkv(device: torch.device, seed: int) -> tuple[torch.Tensor, ...]:
     "modes.aot-tune/kernel-selector",
     "topology.kernel-selector/single-gpu",
 )
-def test_kernel_selector_attention(device: torch.device):
+@pytest.mark.parametrize("repeat", range(100))
+def test_kernel_selector_attention(device: torch.device, repeat: int, caplog, record_property):
     """The selector evaluates attention providers, builds the delegate, and matches eager attention."""
     backend = KernelSelectorBackend()
     tuned = ait.Module(Attention().eval(), "attention", strategy=pinned_strategy(backend))
@@ -45,6 +46,12 @@ def test_kernel_selector_attention(device: torch.device):
         # Default dispatch already runs the provider kernels, so pin a slower eager baseline to make selection stable.
         with sdpa_kernel(SDPBackend.MATH):
             tuned.tune(device=device)
+
+        for record in caplog.records:
+            if record.msg.startswith("Kernel candidates results"):
+                improvement = record.args[1]["Improvement"]
+                record_property("max_improvement", float(improvement.max()))
+                record_property("improvements", improvement.round(3).to_dict())
 
         selector = selected_backend(tuned, KernelSelectorBackend)
         assert selector._runtime is not None and selector._runtime.plan.providers, "no attention provider selected"
