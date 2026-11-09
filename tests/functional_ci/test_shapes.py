@@ -4,6 +4,7 @@
 
 from collections.abc import Callable
 from dataclasses import replace
+from functools import wraps
 from unittest.mock import patch
 
 import pytest
@@ -19,6 +20,30 @@ from tests.functional_ci.lifecycle import TENSORRT_FP32, assert_matches_eager, p
 from tests.functional_ci.models import IN_FEATURES, make_image_model, make_input, make_mlp, seeded
 
 TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10))
+
+
+def _require_keywords(forward):
+    """Keep the original signature while requiring keyword arguments at runtime."""
+
+    @wraps(forward)
+    def wrapped(self, *args, **kwargs):
+        if args:
+            raise TypeError("This forward decorator requires keyword arguments")
+        return forward(self, **kwargs)
+
+    return wrapped
+
+
+class KeywordCallModel(nn.Module):
+    """An MLP whose decorated forward requires calls to retain their keyword layout."""
+
+    def __init__(self, device: torch.device, seed: int = 0):
+        super().__init__()
+        self.mlp = make_mlp(device, seed)
+
+    @_require_keywords
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.mlp(x)
 
 
 class StructuredModel(nn.Module):
@@ -211,6 +236,47 @@ def test_structured_io(case: BackendCase, device: torch.device):
 
     selected_backend(tuned, type(backend))
     assert_matches_eager(pipeline(tuned), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
+
+
+@pytest.mark.matrix("aot_tuning.models.keyword-calls")
+@with_backends("base")
+def test_keyword_call_layout(case: BackendCase, device: torch.device, tmp_path):
+    """Keyword calls survive recording, boundary validation, backend inference, and checkpoint reload."""
+    backend = case.factory()
+    reference = KeywordCallModel(device)
+    tuned = ait.Module(KeywordCallModel(device), "keyword-calls", strategy=pinned_strategy(backend))
+
+    ait.tune(
+        lambda value: tuned(x=value),
+        list(make_input(device, batch_size=8).unbind(0)),
+        batch_sizes=[1, 4],
+        device=device,
+        ignore_failing_modules=False,
+    )
+
+    selected_backend(tuned, type(backend))
+    assert_matches_eager(
+        lambda value: tuned(x=value),
+        lambda value: reference(x=value),
+        device,
+        case.tolerance,
+        batch_sizes=(1, 3, 4),
+    )
+
+    checkpoint = tmp_path / "keyword_calls.ait"
+    ait.save(tuned, checkpoint)
+    tuned.deactivate()
+    # Different initial weights ensure that loading also restores the saved model weights.
+    restored = ait.load(KeywordCallModel(device, seed=1), checkpoint)
+    assert isinstance(restored, ait.Module)
+    selected_backend(restored, type(backend))
+    assert_matches_eager(
+        lambda value: restored(x=value),
+        lambda value: reference(x=value),
+        device,
+        case.tolerance,
+        batch_sizes=(1, 3, 4),
+    )
 
 
 @pytest.mark.matrix("aot_tuning.models.nested-inputs/torch-tensorrt-aot")
