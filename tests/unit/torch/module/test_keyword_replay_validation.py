@@ -4,6 +4,7 @@
 
 import functools
 from collections import OrderedDict
+from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
@@ -73,11 +74,18 @@ def _typed_forward(wrapped, instance, args, kwargs):
 
 
 class SpeechReplayModel(torch.nn.Module):
-    @_typed_forward
-    def forward(self, input_signal=None, input_signal_length=None, processed_signal=None, processed_signal_length=None):
+    # wrapt preserves method binding, which its decorator return annotation does not express.
+    @cast(Any, _typed_forward)
+    def forward(
+        self,
+        input_signal: torch.Tensor | None = None,
+        input_signal_length: torch.Tensor | None = None,
+        processed_signal: torch.Tensor | None = None,
+        processed_signal_length: torch.Tensor | None = None,
+    ):
         if processed_signal is not None:
             return processed_signal + 1, processed_signal_length
-        return input_signal + 1, input_signal_length
+        return cast(torch.Tensor, input_signal) + 1, input_signal_length
 
 
 @pytest.mark.parametrize("signal_kind", ["input", "processed"])

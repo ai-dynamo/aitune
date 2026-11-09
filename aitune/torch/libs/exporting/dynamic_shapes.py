@@ -4,7 +4,7 @@
 
 import logging
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import torch
 
@@ -187,5 +187,5 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
                 tensor = torch.cat([tensor, tensor], dim=axis)
                 modified = True
         if modified:
-            forward_inputs.arguments = locator.set_value(forward_inputs.arguments, tensor)
+            forward_inputs.arguments = cast(dict[str, Any], locator.set_value(forward_inputs.arguments, tensor))
     return call_layout.restore(forward_inputs.arguments)
