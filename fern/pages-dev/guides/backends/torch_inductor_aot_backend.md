@@ -113,7 +113,7 @@ valid ranges and divisibility constraints from the model automatically.
 
 When recorded samples do not cover the full production range, provide explicit bounded dimensions on `ait.Module`.
 See [User-provided dynamic shapes](../aot_tuning.md#user-provided-dynamic-shapes) and the runnable
-[ResNet dynamic-shapes example](../../../examples/ResNet/README.md#user-provided-dynamic-shapes).
+[ResNet dynamic-shapes example](../../examples/ResNet/README.md#user-provided-dynamic-shapes).
 
 ## Save and Load
 

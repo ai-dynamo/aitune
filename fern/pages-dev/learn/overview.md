@@ -34,7 +34,7 @@ for individual modules according to the configured tuning strategy.
 Start with a model from Hugging Face or timm, or bring your own model and checkpoint. For supported applications,
 enable just-in-time tuning during inference, or use the explicit tuning API to prepare artifacts for deployment.
 
-Find your model in the [recipe catalog](../../examples/README.md), or follow the [quick start](quick_start.md).
+Find your model in the [recipe catalog](../examples/README.md), or follow the [quick start](quick_start.md).
 
 ## Why AITune?
 
@@ -94,6 +94,6 @@ for environment setup.
 
 ## Model recipes
 
-Explore [ready-to-use model recipes](../../examples/README.md) for tuning, validation, benchmarking, and deployment.
+Explore [ready-to-use model recipes](../examples/README.md) for tuning, validation, benchmarking, and deployment.
 Choose a model and a configuration for your GPU setup, precision, and deployment target, then adapt the recipe
 with your own compatible checkpoint and data.

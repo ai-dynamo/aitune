@@ -17,7 +17,7 @@ If you want Dynamo to serve an exported ONNX, TensorRT, or PT2 model, follow
 ## Serve FLUX on one GPU
 
 This walkthrough uses the existing FLUX worker and client from the AITune repository. Run the commands in the
-[FLUX example environment](../../../examples/FLUX/README.md#environment-setup), with access to FLUX.1-dev and a GPU
+[FLUX example environment](../../examples/FLUX/README.md#environment-setup), with access to FLUX.1-dev and a GPU
 with enough memory for the pipeline.
 
 ### 1. Prepare the tuned checkpoint
@@ -75,13 +75,13 @@ processes one generation request at a time.
 
 ## Multi-GPU workers
 
-Use the [WAN video generation example](../../../examples/WAN/README.md) to serve a pipeline across multiple GPUs.
+Use the [WAN video generation example](../../examples/WAN/README.md) to serve a pipeline across multiple GPUs.
 It uses Diffusers context parallelism, with every rank participating in each generation request.
 
 ### Prepare WAN on four GPUs
 
-Follow the [WAN environment setup](../../../examples/WAN/README.md#environment-setup) and
-[four-GPU tuning instructions](../../../examples/WAN/README.md#tune-on-four-gpus) first. Keep the same GPU count,
+Follow the [WAN environment setup](../../examples/WAN/README.md#environment-setup) and
+[four-GPU tuning instructions](../../examples/WAN/README.md#tune-on-four-gpus) first. Keep the same GPU count,
 context-parallel mode, and generation shapes for serving. Each rank loads its own checkpoint.
 
 From the repository root, enter `examples/WAN` and install the serving dependencies:
@@ -113,7 +113,7 @@ uv run python -m wan.dynamo.client --prompt "A white ferret swimming in a mounta
 ```
 
 The client calls `/v1/videos` and saves `output.mp4`. For a launcher that starts the service, sends one request, and
-shuts it down, see the [WAN serving example](../../../examples/WAN/README.md#serve-with-nvidia-dynamo).
+shuts it down, see the [WAN serving example](../../examples/WAN/README.md#serve-with-nvidia-dynamo).
 
 ## Worker configuration
 
@@ -188,7 +188,7 @@ AITune's `DynamoWorker` has the following limitations:
 
 ## Next steps
 
-- [FLUX image generation](../../../examples/FLUX/README.md)
-- [WAN video generation](../../../examples/WAN/README.md)
+- [FLUX image generation](../../examples/FLUX/README.md)
+- [WAN video generation](../../examples/WAN/README.md)
 - [Deploy through Triton](triton.md)
 - [Deployment overview](deployment.md)

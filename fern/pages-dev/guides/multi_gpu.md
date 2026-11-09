@@ -117,6 +117,6 @@ AITune coordinates worker stop but leaves process-group destruction to the appli
 does not impose inference barriers, CUDA synchronization, or forced process termination. An initialized multi-rank
 process group represents one collective model worker; deploy independent replicas as separate worker groups or pods.
 
-For complete applications, see the [LLM example](../../examples/LLM/README.md) for Transformers native tensor
-parallelism, the [Flux example](../../examples/FLUX/README.md) for image-generation context parallelism, and the
-[WAN example](../../examples/WAN/README.md) for context-parallel text-to-video generation.
+For complete applications, see the [LLM example](../examples/LLM/README.md) for Transformers native tensor
+parallelism, the [Flux example](../examples/FLUX/README.md) for image-generation context parallelism, and the
+[WAN example](../examples/WAN/README.md) for context-parallel text-to-video generation.

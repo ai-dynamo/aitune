@@ -149,7 +149,7 @@ Each dynamic shape definition must match the corresponding input tensor's rank a
 must include all dimension sizes present in the tuning samples.
 The explicit definitions then determine the ranges used by supported AOT backends.
 
-See the runnable [ResNet dynamic-shapes example](../../examples/ResNet/README.md#user-provided-dynamic-shapes), which
+See the runnable [ResNet dynamic-shapes example](../examples/ResNet/README.md#user-provided-dynamic-shapes), which
 records `(1, 3, 224, 224)` and runs the tuned model at `(2, 3, 256, 256)`.
 
 ### 3. Tuning Phase
