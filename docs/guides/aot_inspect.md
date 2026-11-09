@@ -292,11 +292,12 @@ Pass the call tree to `wrap`, and tuning keeps exactly those weights on the devi
 ```python
 model = ait.wrap(model, modules_info.get_modules(), call_tree=modules_info.call_tree)
 ait.tune(run_chunk, input_data)
-# Keeping llm.embed.weight (0.0 MB) of lm_head on the device after tuning: read by forward > llm.embed.forward
+# Keeping 1 weight (0.0 MB) of lm_head on the device after tuning: read by forward > llm.embed.forward
 ```
 
-Each kept group is logged once per module. When code outside the module moves it with `.to()`, the moved buffers
-stay along with its parameters, because that `.to()` moves them too.
+Each wrapped module logs one line for the weights it keeps (and a debug line per weight). When code outside the
+module moves it with `.to()`, the moved buffers stay along with its parameters, because that `.to()` moves them
+too.
 
 The cost is the memory of the kept weights. For weights that outside code reads, the model needs that memory
 anyway. For weights that outside code only moves, it does not: E5's `SentenceTransformer.encode` moves the

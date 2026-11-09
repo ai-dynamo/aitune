@@ -132,5 +132,7 @@ def test_wrap_without_call_tree_breaks_on_shared_weights(toy_id: str, case: Back
     with seeded(device, 0):
         toy = TOYS[toy_id](device)
 
-    with pytest.raises((RuntimeError, NotImplementedError)):
+    with pytest.raises(Exception) as error:
         _wrap_tune_and_run(toy, case, device, use_call_tree=False)
+    # PyTorch raises RuntimeError or NotImplementedError; ONNX Runtime raises a plain Exception for a meta input.
+    assert isinstance(error.value, (RuntimeError, NotImplementedError)) or "Unsupported device type" in str(error.value)

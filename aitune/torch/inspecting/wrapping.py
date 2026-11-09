@@ -9,7 +9,7 @@ from typing import Any, TypeVar, cast
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.weights.sharing import shared_weight_groups
+from aitune.torch.call_tree.weights.sharing import shared_weights_with_ids
 from aitune.torch.inspecting.module_info import ModuleInfo
 from aitune.torch.module.wrapper_module import Module, StrategyList, StrategyMap
 from aitune.torch.module_registry import MODULE_REGISTRY
@@ -41,8 +41,8 @@ def wrap(
         strategies: Strategies to use for patching.
         call_tree: Call tree from ``ait.inspect(..., call_tree=True)``. With it, the weights of a wrapped module that
             something outside the module still reads, looks up the device of, or moves
-            (``CallTree.shared_weights_of``) stay on the device when tuning offloads the module, and each kept
-            group is logged. Each wrapped module owns what it keeps: wrapping it again replaces its kept set, and a
+            (``aitune.torch.call_tree.shared_weights_of``) stay on the device when tuning offloads the module,
+            and each kept weight is logged. Each wrapped module owns what it keeps: wrapping it again replaces its kept set, and a
             tensor stays kept while any wrapped module keeps it.
 
     Returns:
@@ -56,7 +56,9 @@ def wrap(
         if isinstance(module, torch.nn.Module):
             release_kept_on_device(module)
             if call_tree is not None:
-                _keep_shared_weights(call_tree, module)
+                _keep_shared_weights(
+                    call_tree, module, module_info.object_path or module_info.name or type(module).__name__
+                )
         if module_info.parent is None:
             return Module(
                 cast(torch.nn.Module, obj), name=obj.__class__.__name__, strategy=strategy, strategies=strategies
@@ -68,26 +70,33 @@ def wrap(
     return obj
 
 
-def _keep_shared_weights(call_tree: CallTree, module: torch.nn.Module) -> None:
-    """Keep the weights of ``module`` that something outside it still uses or moves on the device; log each group."""
+def _keep_shared_weights(call_tree: CallTree, module: torch.nn.Module, name: str) -> None:
+    """Keep the weights of ``module`` that something outside it still uses or moves on the device; log them."""
     try:
-        groups = shared_weight_groups(call_tree, module)
+        weights = shared_weights_with_ids(call_tree, module)
     except ValueError:
-        logger.warning(
-            "Cannot check %s for shared weights: the call tree has no recorded call of it or its submodules",
-            type(module).__name__,
-        )
+        logger.warning("Cannot check %s for shared weights: it is not part of the recorded model", name)
         return
     params = {id(p): p for p in (*module.parameters(), *module.buffers())}
-    for group, ids in groups:
-        keep_on_device((params[i] for i in ids if i in params), owner=module)
-        users = [f"read by {', '.join(group.read_by)}"] if group.read_by else []
-        users += [f"device looked up by {', '.join(group.device_by)}"] if group.device_by else []
-        users += [f"moved by {', '.join(group.moved_by)}"] if group.moved_by else []
+    if weights:
+        keep_on_device((params[i] for _, i in weights if i in params), owner=module)
+        users = []
+        for kind, label in (("read", "read"), ("device", "device checked"), ("move", "moved")):
+            by = sorted({a.by for w, _ in weights for a in w.accesses if a.kind == kind})
+            if by:
+                users.append(f"{label} by {', '.join(by)}")
         logger.info(
-            "Keeping %s (%.1f MB) of %s on the device after tuning: %s",
-            ", ".join(group.params),
-            group.bytes / 1e6,
-            group.held_by[0],
+            "Keeping %d %s (%.1f MB) of %s on the device after tuning: %s",
+            len(weights),
+            "weight" if len(weights) == 1 else "weights",
+            sum(w.bytes for w, _ in weights) / 1e6,
+            name,
             "; ".join(users),
+        )
+    for weight, _ in weights:
+        logger.debug(
+            "Keeping %s of %s: %s",
+            weight.name,
+            name,
+            ", ".join(f"{a.kind} by {a.by}" for a in weight.accesses),
         )

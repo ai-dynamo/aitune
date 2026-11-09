@@ -428,6 +428,41 @@ def test_wrap_with_call_tree_keeps_weights_used_outside_the_module():
     assert not is_kept_on_device(dit_weight)
 
 
+def test_wrap_with_call_tree_logs_the_kept_weights(caplog):
+    """Wrapping ``lm_head`` logs one line naming its one kept weight and the outside call reading it."""
+    import logging
+
+    from aitune.torch.inspecting import inspect
+    from tests.toy_models.call_tree_models import VlaToy, vla_inputs
+
+    model = VlaToy().eval()
+    tokens, image = vla_inputs()
+    with torch.no_grad():
+        info = inspect(
+            model,
+            [(tokens, image)],
+            inference_function=lambda t, i: model(t, i),
+            number_of_iterations=1,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+            call_tree=True,
+        )
+    head = [m for m in info.get_modules() if m.module is model.lm_head]
+    dit = [m for m in info.get_modules() if m.module is model.dit]
+    assert head and dit
+
+    # ``wrap`` reconfigures the root logger, which would drop caplog's handler; attach it to the wrapping logger.
+    logging.getLogger("aitune.torch.inspecting.wrapping").addHandler(caplog.handler)
+    with caplog.at_level(logging.INFO, logger="aitune.torch.inspecting.wrapping"):
+        wrap(model, head + dit, call_tree=info.call_tree)
+
+    keeping = [r for r in caplog.records if "Keeping" in r.message and r.levelno == logging.INFO]
+    assert [r.message for r in keeping] == [
+        "Keeping 1 weight (0.0 MB) of .lm_head on the device after tuning: read by forward > llm.embed.forward"
+    ]
+
+
 def _wrap_vla_head():
     from aitune.torch.inspecting import inspect
     from tests.toy_models.call_tree_models import VlaToy, vla_inputs
