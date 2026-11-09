@@ -38,8 +38,8 @@ from typing import Any
 
 import torch
 
-from aitune.torch.call_tree.call_tree import ROOT_LABEL
 from aitune.torch.call_tree.methods import user_defined_methods
+from aitune.torch.call_tree.nodes import ROOT_LABEL
 from aitune.torch.call_tree.recorder import CallRecorder
 from aitune.torch.inspecting.module_info import (
     DictOfModulesInfo,

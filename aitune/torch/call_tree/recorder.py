@@ -16,7 +16,6 @@ inside ``recording()``. Timing uses CUDA events per call (no per-call synchroniz
 ``time.perf_counter`` otherwise; ``flush()`` resolves the pending events once per iteration.
 """
 
-import sys
 import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
@@ -26,42 +25,10 @@ from typing import Any
 import torch
 from torch import nn
 
-from aitune.torch.call_tree.call_tree import CallNode, CallTree, NodeKey
+from aitune.torch.call_tree.call_tree import CallNode, CallTree
+from aitune.torch.call_tree.callers import unrecorded_caller
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container
-
-OUTSIDE_ANY_CALL = "<outside any call>"
-
-_MOVING_METHODS = frozenset({
-    "_apply",
-    "to",
-    "cuda",
-    "cpu",
-    "xpu",
-    "mps",
-    "half",
-    "float",
-    "double",
-    "bfloat16",
-    "type",
-    "to_empty",
-})
-
-
-def _unrecorded_caller() -> str:
-    """Name the code that moved modules when no recorded call is running.
-
-    Walks up from the ``_apply`` probe and returns ``<unrecorded: qualname>`` for the first frame that is neither in
-    ``torch`` nor in this module, and is not itself a module-moving method (so a library ``.to()`` override such as
-    ``PreTrainedModel.to`` is skipped and its caller, e.g. ``SentenceTransformer.encode``, is named).
-    """
-    frame = sys._getframe(1)
-    while frame is not None:
-        module = frame.f_globals.get("__name__", "")
-        in_torch = module == "torch" or module.startswith("torch.")
-        if not in_torch and module != __name__ and frame.f_code.co_name not in _MOVING_METHODS:
-            return f"<unrecorded: {frame.f_code.co_qualname}>"
-        frame = frame.f_back
-    return OUTSIDE_ANY_CALL
+from aitune.torch.call_tree.nodes import NodeKey
 
 
 @dataclass
@@ -271,7 +238,7 @@ class CallRecorder:
         ``nn.Module._apply`` is the method that ``.to()``, ``.cuda()``, ``.half()`` and similar calls use to convert a
         module's parameters and buffers. The replacement runs ``original_apply`` unchanged. While the recorder is
         recording, it first records who called it: the label of the innermost recorded call, or the code found by
-        ``_unrecorded_caller`` if no recorded call is running. The caller is added to ``external_apply`` for the
+        ``unrecorded_caller`` if no recorded call is running. The caller is added to ``external_apply`` for the
         module and, unless ``recurse=False``, for all of its submodules. Only the outermost ``_apply`` of a
         conversion records, because ``_apply`` calls itself on each child.
 
@@ -286,7 +253,7 @@ class CallRecorder:
         def _apply(module: nn.Module, fn: Callable, *args: Any, **kwargs: Any) -> Any:
             # ``nn.Module._apply`` recurses through child ``_apply`` calls; only the outermost one records.
             if recorder._active and recorder._apply_depth == 0:
-                caller = recorder._nodes[recorder._stack[-1]].label if recorder._stack else _unrecorded_caller()
+                caller = recorder._nodes[recorder._stack[-1]].label if recorder._stack else unrecorded_caller()
                 recurse = kwargs.get("recurse", args[0] if args else True)
                 for submodule in module.modules() if recurse else [module]:
                     recorder._external_apply.setdefault(id(submodule), set()).add(caller)

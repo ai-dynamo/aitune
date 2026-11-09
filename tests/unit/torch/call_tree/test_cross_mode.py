@@ -9,7 +9,8 @@ methods on plain objects, modules created before JIT patching, and modules creat
 
 import torch
 
-from aitune.torch.call_tree.call_tree import CallNode, CallTree
+from aitune.torch.call_tree.call_tree import CallTree
+from aitune.torch.call_tree.nodes import CallNode
 from aitune.torch.call_tree.recorder import CallRecorder
 from aitune.torch.inspecting import inspect
 from tests.toy_models.call_tree_models import VlaToy, vla_inputs

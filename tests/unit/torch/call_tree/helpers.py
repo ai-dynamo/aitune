@@ -7,8 +7,9 @@ from contextlib import contextmanager
 
 from torch import nn
 
-from aitune.torch.call_tree.call_tree import CallNode, CallTree
+from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.methods import user_defined_methods
+from aitune.torch.call_tree.nodes import CallNode
 from aitune.torch.call_tree.recorder import CallRecorder
 from tests.toy_models.call_tree_models import Block, NoWeights
 

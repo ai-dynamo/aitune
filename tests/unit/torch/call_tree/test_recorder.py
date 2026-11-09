@@ -5,8 +5,9 @@ import pytest
 import torch
 from torch import nn
 
+from aitune.torch.call_tree.callers import OUTSIDE_ANY_CALL
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container, user_defined_methods
-from aitune.torch.call_tree.recorder import OUTSIDE_ANY_CALL, CallRecorder
+from aitune.torch.call_tree.recorder import CallRecorder
 from tests.toy_models.call_tree_models import (
     PlainPipeline,
     SequentialSubclassToy,
@@ -165,7 +166,7 @@ def test_apply_from_a_library_style_to_override_names_the_real_caller():
 
 
 def test_apply_with_only_torch_frames_falls_back_to_outside_any_call(mocker):
-    mocker.patch("aitune.torch.call_tree.recorder.sys._getframe", return_value=None)
+    mocker.patch("aitune.torch.call_tree.callers.sys._getframe", return_value=None)
     recorder = CallRecorder()
     module = nn.Linear(1, 1)
     with recorder.recording():
