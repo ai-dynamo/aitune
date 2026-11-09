@@ -6,6 +6,7 @@ import pytest
 import torch
 from torch import nn
 from torch.nn import functional
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 import aitune.torch as ait
 from aitune.torch.backend import KernelSelectorBackend
@@ -41,7 +42,9 @@ def test_kernel_selector_attention(device: torch.device):
     tuned = ait.Module(Attention().eval(), "attention", strategy=pinned_strategy(backend))
     with torch.no_grad():
         tuned(*_qkv(device, seed=0))
-        tuned.tune(device=device)
+        # Default dispatch already runs the provider kernels, so pin a slower eager baseline to make selection stable.
+        with sdpa_kernel(SDPBackend.MATH):
+            tuned.tune(device=device)
 
         selector = selected_backend(tuned, KernelSelectorBackend)
         assert selector._runtime is not None and selector._runtime.plan.providers, "no attention provider selected"
