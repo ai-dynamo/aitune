@@ -25,11 +25,22 @@ _MOVING_METHODS = frozenset({
 
 
 def unrecorded_caller() -> str:
-    """Name the code that moved modules when no recorded call is running.
+    """Name the code that is running when no recorded call is, for example the code that called ``.to()``.
 
-    Walks up from the ``_apply`` probe and returns ``<unrecorded: qualname>`` for the first frame that is neither in
-    ``torch`` nor in this package, and is not itself a module-moving method (so a library ``.to()`` override such as
-    ``PreTrainedModel.to`` is skipped and its caller, e.g. ``SentenceTransformer.encode``, is named).
+    Code that moves modules is often not a recorded call: a pipeline function outside the model, or library code
+    such as ``SentenceTransformer.encode``, which calls ``self.to(device)`` on every call. Instead of reporting all
+    of these as ``<outside any call>``, this names the code, e.g. ``<unrecorded: SentenceTransformer.encode>``.
+
+    It walks up the stack from its caller and skips frames:
+
+    - in ``torch`` (the ``.to()`` to ``_apply`` machinery);
+    - in ``aitune.torch.call_tree`` (the recorder's own probes);
+    - of a function named like a module-moving method (``to``, ``cuda``, ``half``, ...), so a library override such
+      as ``PreTrainedModel.to`` is skipped and its caller is named. A user function with such a name is skipped too;
+      that only changes which caller is shown.
+
+    Returns:
+        ``<unrecorded: qualname>`` of the first frame left, or ``<outside any call>`` if every frame is skipped.
     """
     frame = sys._getframe(1)
     while frame is not None:
