@@ -31,6 +31,16 @@ from tests.utilities.helpers import make_sample_store, requires_cuda
 INT8DQ_OUTPUT_SIZE = 8
 
 
+def test_torchao_rejects_legacy_inline_samples():
+    state = {
+        "type": "TorchAOBackend",
+        "config": TorchAOBackendConfig(quantization="int8wo").to_dict(),
+        "data": [((torch.randn(2),), {})],
+    }
+    with pytest.raises(KeyError, match="samples"):
+        TorchAOBackend.from_dict(nn.Linear(2, 2), state)
+
+
 class TorchAOInt8DQModel(ToyTorchModel):
     """Toy model with int8dq-compatible linear dimensions."""
 
@@ -290,12 +300,12 @@ def test_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
     assert compile_mock.call_args.kwargs["dynamic"] is True
 
 
-def test_activate_runs_compatibility_preflight(mocker):
+def test_activate_runs_compatibility_preflight(mocker, tmp_path):
     model = ToyTorchModel().eval()
     config = TorchAOBackendConfig(quantization="nvfp4dq")
     backend = TorchAOBackend(config=config)
     backend._orig_module = model
-    backend._data = []
+    backend._samples = model.sample_store(tmp_path, batch_sizes=[1])
     backend._device = torch.device("cpu")
     backend.state = BackendState.CHECKPOINT_LOADED
     quantize_mock = mocker.patch("aitune.torch.backend.torchao_backend.quantize_")
@@ -397,3 +407,29 @@ def test_torchao_config_from_dict_round_trip():
     assert restored.fullgraph is True
     assert restored.dynamic is True
     assert restored.mode == "reduce-overhead"
+
+
+def test_torchao_preserves_warmup_samples_after_deployment(mocker, tmp_path):
+    model = torch.nn.Linear(2, 2)
+    backend = TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo"))
+    backend._orig_module = model
+    backend._device = torch.device("cpu")
+    backend._samples = SampleStore.from_samples([((torch.ones(1, 2),), {})], tmp_path, "warmup")
+    loaded_backend = TorchAOBackend.from_dict(model, backend.to_dict())
+    # Exercise deployment and serialization without compiling a backend.
+    mocker.patch.object(loaded_backend, "_activate")
+    loaded_backend.deploy(torch.device("cpu"))
+
+    state = loaded_backend.to_dict()
+    assert state[TorchAOBackend.STATE_SAMPLES] == backend.to_dict()[TorchAOBackend.STATE_SAMPLES]
+
+    restored_backend = TorchAOBackend.from_dict(model, state)
+
+    assert restored_backend.to_dict()[TorchAOBackend.STATE_SAMPLES] == state[TorchAOBackend.STATE_SAMPLES]
+    assert restored_backend._samples is not None
+    restored_samples = list(restored_backend._samples.iter_samples(torch.device("cpu")))
+    assert len(restored_samples) == 1
+    args, kwargs = restored_samples[0]
+    assert len(args) == 1
+    torch.testing.assert_close(args[0], torch.ones(1, 2))
+    assert kwargs == {}

@@ -31,17 +31,8 @@ from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
 
 Tag = Literal[
     "base",
-    "save_load",
     "export",
-    "dynamic_batch",
-    "dynamic_non_batch",
-    "structured_io",
-    "multigraph",
     "onnx_input",
-    "jit",
-    "graph_breaks",
-    "torch_export",
-    "onnx_export",
 ]
 Capability = Tag
 
@@ -107,8 +98,6 @@ BACKENDS: dict[str, BackendCase] = {
         Tolerance(),
         _tags(
             "base",
-            "save_load",
-            "graph_breaks",
         ),
     ),
     "inductor-aot": BackendCase(
@@ -116,13 +105,7 @@ BACKENDS: dict[str, BackendCase] = {
         Tolerance(),
         _tags(
             "base",
-            "save_load",
             "export",
-            "dynamic_batch",
-            "dynamic_non_batch",
-            "structured_io",
-            "multigraph",
-            "torch_export",
         ),
         artifact_format="pt2",
     ),
@@ -131,11 +114,6 @@ BACKENDS: dict[str, BackendCase] = {
         TENSORRT_FP32,
         _tags(
             "base",
-            "save_load",
-            "dynamic_batch",
-            "dynamic_non_batch",
-            "structured_io",
-            "torch_export",
         ),
     ),
     "tensorrt": BackendCase(
@@ -143,14 +121,8 @@ BACKENDS: dict[str, BackendCase] = {
         TENSORRT_FP32,
         _tags(
             "base",
-            "save_load",
             "export",
-            "dynamic_batch",
-            "dynamic_non_batch",
-            "structured_io",
-            "multigraph",
             "onnx_input",
-            "onnx_export",
         ),
         artifact_format="tensorrt_plan",
     ),
@@ -159,12 +131,8 @@ BACKENDS: dict[str, BackendCase] = {
         TENSORRT_FP32,
         _tags(
             "base",
-            "save_load",
             "export",
-            "dynamic_batch",
-            "dynamic_non_batch",
             "onnx_input",
-            "onnx_export",
         ),
         artifact_format="onnx",
     ),
@@ -173,10 +141,6 @@ BACKENDS: dict[str, BackendCase] = {
         TENSORRT_FP32,
         _tags(
             "base",
-            "save_load",
-            "dynamic_batch",
-            "dynamic_non_batch",
-            "onnx_export",
         ),
     ),
     "torchao-int8wo": BackendCase(
@@ -184,8 +148,6 @@ BACKENDS: dict[str, BackendCase] = {
         Tolerance(rtol=5e-2, atol=5e-2),
         _tags(
             "base",
-            "save_load",
-            "graph_breaks",
         ),
     ),
     "inductor-jit": BackendCase(
@@ -193,7 +155,6 @@ BACKENDS: dict[str, BackendCase] = {
         Tolerance(),
         _tags(
             "base",
-            "jit",
         ),
     ),
     "torch-tensorrt-jit": BackendCase(
@@ -201,7 +162,6 @@ BACKENDS: dict[str, BackendCase] = {
         TENSORRT_FP32,
         _tags(
             "base",
-            "jit",
         ),
     ),
 }

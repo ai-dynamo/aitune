@@ -13,7 +13,6 @@ import wrapt
 
 from aitune.records import DeploymentArtifact
 from aitune.torch.backend.backend import Backend
-from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
 from aitune.torch.distributed import coordinator, distributed_cache_dir, resolve_tuning_device
 from aitune.torch.dynamic_shapes import DynamicShapes, validate_dynamic_shape_definitions
@@ -377,7 +376,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def _module_cache_dir(self) -> Path:
         """Return the cache directory identified by the configured module name."""
-        return distributed_cache_dir(aitune_cache_dir()) / self._self_name
+        return distributed_cache_dir(global_config.cache_dir) / self._self_name
 
     def _activate_wrapper(self):
         try:

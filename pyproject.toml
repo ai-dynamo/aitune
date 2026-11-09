@@ -53,9 +53,11 @@ dependencies = [
     "psutil",
     "tabulate>=0.9.0",
     "tensorrt>=10.3",
-    "torch>=2.8a0",
+    "torch>=2.8a0; python_version < '3.14'",
+    "torch>=2.14.0a0; python_version == '3.14'",
     "torchao>=0.12",
-    "torch-tensorrt>=2.8a0",
+    "torch-tensorrt>=2.8a0; python_version < '3.14'",
+    "torch-tensorrt>=2.14.0a0; python_version == '3.14'",
     "wrapt~=2.0"
 ]
 
@@ -73,33 +75,33 @@ triton = [
 ]
 
 torch28 = [ # nvcr.io/nvidia/pytorch:25.08-py3 is based on 2.8.0a0+34c6371d24.
-    "torch>=2.8.0a0,<2.9",
+    "torch>=2.8.0a0,<2.9; python_version < '3.14'",
     "torch-tensorrt>=2.8.0a0,<2.9; python_version < '3.14'",
     "torchao>=0.12,<0.13",
 ]
 torch29 = [ # nvcr.io/nvidia/pytorch:25.10-py3 is based on 2.9.0a0+145a3a7bda.
-    "torch>=2.9.0a0,<2.10",
+    "torch>=2.9.0a0,<2.10; python_version < '3.14'",
     "torch-tensorrt>=2.9.0a0,<2.10; python_version < '3.14'",
     "torchao>=0.14,<0.15",
 ]
 torch210 = [ # nvcr.io/nvidia/pytorch:26.01-py3 is based on 2.10.0a0+a36e1d39eb.
-    "torch>=2.10.0a0,<2.11",
+    "torch>=2.10.0a0,<2.11; python_version < '3.14'",
     "torch-tensorrt>=2.10.0a0,<2.11; python_version < '3.14'",
     "torchao>=0.15,<0.16",
     "nvidia-cuda-runtime-cu13==0.0.0a0",
 ]
 torch211 = [ # nvcr.io/nvidia/pytorch:26.03-py3 is based on 2.11.0a0+a6c236b9fd1.
-    "torch>=2.11.0a0,<2.12",
+    "torch>=2.11.0a0,<2.12; python_version < '3.14'",
     "torch-tensorrt>=2.11.0a0,<2.12; python_version < '3.14'",
     "torchao>=0.16,<0.17",
 ]
 torch212 = [ # nvcr.io/nvidia/pytorch:26.05-py3 is based on 2.12.0a0+5aff3928d8
-    "torch>=2.12.0a0,<2.13",
+    "torch>=2.12.0a0,<2.13; python_version < '3.14'",
     "torch-tensorrt>=2.12.0a0,<2.13; python_version < '3.14'",
     "torchao>=0.17,<0.18",
 ]
 torch213 = [
-    "torch>=2.13.0a0,<2.14",
+    "torch>=2.13.0a0,<2.14; python_version < '3.14'",
     "torch-tensorrt>=2.13.0a0,<2.14; python_version < '3.14'",
     "torchao>=0.17",
 ]
@@ -109,8 +111,8 @@ torch214 = [
     "torchao>=0.17",
 ]
 
-onnxruntime-gpu-cuda12 = ["onnxruntime-gpu"]
 onnxruntime-gpu-cuda13 = ["onnxruntime-gpu"]
+onnxruntime-gpu-cuda12 = ["onnxruntime-gpu; python_version < '3.14' and platform_machine != 'aarch64'"]
 
 [project.urls]
 "Documentation" = "https://docs.nvidia.com/aitune/"
@@ -198,18 +200,18 @@ conflicts = [
 
 [tool.uv.sources]
 onnxruntime-gpu = [
-    { index = "ort-cuda-13-nightly", extra = "onnxruntime-gpu-cuda13" },
-    { index = "pypi", extra = "onnxruntime-gpu-cuda12" },
+    { index = "ort-cuda-13", extra = "onnxruntime-gpu-cuda13" },
+    { index = "ort-cuda-12", extra = "onnxruntime-gpu-cuda12" },
 ]
 
 [[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
+name = "ort-cuda-13"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/"
 explicit = true
 
 [[tool.uv.index]]
-name = "ort-cuda-13-nightly"
-url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"
+name = "ort-cuda-12"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/"
 explicit = true
 
 [tool.pytest.ini_options]

@@ -483,6 +483,30 @@ def test_ensure_enough_samples_dataloader_factory():
     assert all("labels" in s for s in dataset)
 
 
+def test_ensure_enough_samples_min_max_random_dataset():
+    dataset = MinMaxRandomDataset(3, [InputConfig((2,), (4,), kwarg_name="input")])
+
+    samples = ensure_enough_samples(dataset, 10)
+
+    assert isinstance(samples, list)
+    assert len(samples) == 10
+    assert [sample["input"].shape for sample in samples[:3]] == [(2,), (4,), dataset[2]["input"].shape]
+    assert samples[3] is dataset[0]
+
+
+def test_ensure_enough_samples_keeps_dataloader_factory_dataset():
+    dataset = MinMaxRandomDataset(3, [InputConfig((2,), (4,), kwarg_name="input")])
+    dataloader = DataLoaderFactory(dataset)
+
+    limited = ensure_enough_samples(dataloader, 10)
+
+    assert isinstance(limited, DataLoaderFactory)
+    assert len(limited.dataset) == 10
+    assert dataloader.dataset is dataset
+    batches = [kwargs["input"].shape for _, _, kwargs in samples_generator(dataloader, [2])]
+    assert batches == [(2, 2), (2, 4), (2, *dataset[2]["input"].shape)]
+
+
 def test_ensure_enough_samples_empty_dataset():
     dataset = []
 

@@ -52,10 +52,10 @@ their own strategies.
 | `backends.py` | `BACKENDS` table, `Tag` names, `with_backends()` |
 | `lifecycle.py` | `Tolerance`, `TENSORRT_FP32`, `pinned_strategy`, `run_lifecycle`, `assert_matches_eager`, `selected_backend` |
 | `models.py` | Seeded toys: `make_mlp`, `make_image_model`, `make_input`, `seeded` |
-| `flux.py` | Toy Flux pipeline (`ToyFluxPipeline`): CLIP/T5-like encoders, MMDiT, VAE decoder |
+| `flux.py` | Toy Flux pipeline (`ToyFluxPipeline`): Flux component names and call shape, small linear modules |
 | `artifacts.py` | Runs exported artifacts (`pt2`, `tensorrt_plan`, `onnx`) in their native runtime, without AITune |
 | `conftest.py` | `device` fixture, cleanup after each test, `matrix` marker and JSON writer |
-| `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py` |
+| `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py`, `test_multiple_graphs.py`, `test_pipelines.py` |
 | other `test_*.py` | One file per feature area: lifecycle, shapes, topology, JIT, strategies, precision, ONNX input, pipelines, kernel selector |
 
 ## Backends
@@ -71,15 +71,15 @@ The backend id is the pytest parametrize id and the feature-matrix column.
 
 | Backend id | Backend class | Tolerance | Tags (besides `base`) |
 | --- | --- | --- | --- |
-| `torch-eager` | `TorchEagerBackend` | default | `save_load` |
-| `inductor-aot` | `TorchInductorAotBackend` | default | `save_load`, `export` (`pt2`), `dynamic_batch`, `dynamic_non_batch`, `structured_io`, `multigraph` |
-| `torch-tensorrt-aot` | `TorchTensorRTAotBackend` | `TENSORRT_FP32` | `save_load`, `dynamic_batch`, `dynamic_non_batch`, `structured_io` |
-| `tensorrt` | `TensorRTBackend` | `TENSORRT_FP32` | `save_load`, `export` (`tensorrt_plan`), `dynamic_batch`, `dynamic_non_batch`, `structured_io`, `multigraph`, `onnx_input` |
-| `onnxruntime-cuda` | `ONNXRuntimeBackend` (CUDA EP) | `TENSORRT_FP32` | `save_load`, `export` (`onnx`), `dynamic_batch`, `dynamic_non_batch`, `onnx_input` |
-| `onnxruntime-tensorrt` | `ONNXRuntimeBackend` (TensorRT EP) | `TENSORRT_FP32` | `save_load`, `dynamic_batch`, `dynamic_non_batch` |
-| `torchao-int8wo` | `TorchAOBackend` (`int8wo`) | `rtol=atol=5e-2` | `save_load` |
-| `inductor-jit` | `TorchInductorJitBackend` | default | `jit` |
-| `torch-tensorrt-jit` | `TorchTensorRTJitBackend` | `TENSORRT_FP32` | `jit` |
+| `torch-eager` | `TorchEagerBackend` | default | - |
+| `inductor-aot` | `TorchInductorAotBackend` | default | `export` (`pt2`) |
+| `torch-tensorrt-aot` | `TorchTensorRTAotBackend` | `TENSORRT_FP32` | - |
+| `tensorrt` | `TensorRTBackend` | `TENSORRT_FP32` | `export` (`tensorrt_plan`), `onnx_input` |
+| `onnxruntime-cuda` | `ONNXRuntimeBackend` (CUDA EP) | `TENSORRT_FP32` | `export` (`onnx`), `onnx_input` |
+| `onnxruntime-tensorrt` | `ONNXRuntimeBackend` (TensorRT EP) | `TENSORRT_FP32` | - |
+| `torchao-int8wo` | `TorchAOBackend` (`int8wo`) | `rtol=atol=5e-2` | - |
+| `inductor-jit` | `TorchInductorJitBackend` | default | - |
+| `torch-tensorrt-jit` | `TorchTensorRTJitBackend` | `TENSORRT_FP32` | - |
 
 TensorRT-based configs run fp32 without TF32; `tensorrt` also runs without CUDA graphs. `tensorrt_backend(**overrides)` builds
 TensorRT variants; `test_precision.py` uses it for fp16, int8, fp8, nvfp4, and CUDA graphs.
@@ -95,15 +95,9 @@ Before selecting tags for a test, read the actual `Tag` names and each backend's
 
 | Tag | Meaning | Tests |
 | --- | --- | --- |
-| `base` | Every backend; use-case tests | `test_graph_break_aot_tunning`, `test_graph_break_jit_tunning` |
-| `save_load` | Tune, `ait.save`, `ait.load` into other weights, same output | `test_backend_lifecycle`, `test_pipeline_lifecycle` |
+| `base` | Every backend; use-case tests | `test_<use_case>.py`, `test_backend_lifecycle`, `test_jit_tuning`, `test_shapes.py`, `test_partial_wrap_multigraph` |
 | `export` | `module.artifact()` runs in its native runtime | `test_exported_artifact` |
-| `dynamic_batch` | Batch range from recorded sizes or a user `BatchDim` | `test_recorded_batch_range`, `test_explicit_batch_dim` |
-| `dynamic_non_batch` | User `DynamicDim` on non-batch (spatial) dims | `test_explicit_spatial_dims` |
-| `structured_io` | Nested dict and list inputs, non-tensor args, nested outputs | `test_structured_io` |
-| `multigraph` | One wrapped module tunes one graph per input layout | `test_partial_wrap_multigraph` |
 | `onnx_input` | Tune an existing ONNX file (inline or external data) | `test_existing_onnx` |
-| `jit` | JIT tuning (`jit_config`, `prepare_for_jit_tuning`) | `test_jit_tuning`, `test_pipeline_jit` |
 
 To add a tag, add the name to `Tag`, add it to the backends that pass, and use it in `with_backends`.
 
@@ -113,7 +107,7 @@ Put a strict mark on one backend case through `marks=`:
 
 ```python
 @with_backends(
-    "dynamic_non_batch",
+    "base",
     marks={"torch-tensorrt-aot": pytest.mark.xfail(TORCH_2_8_TO_2_10, reason="... (aitune#118)", strict=True)},
 )
 ```
@@ -139,8 +133,7 @@ formatting is checked.
 
 | Table | Row examples | Column |
 | --- | --- | --- |
-| `aot_tuning.models`, `jit_tuning.models` | `graph-breaks` | backend id |
-| `models` | `tensor-inputs`, `static-shapes`, `single-graph`, `dynamic-batch-recorded`, `dynamic-batch-user`, `dynamic-non-batch`, `non-tensor-inputs`, `nested-inputs`, `structured-outputs`, `multiple-graphs`, `pipelines` | backend id or `kernel-selector` |
+| `aot_tuning.models`, `jit_tuning.models` | `tensor-inputs`, `static-shapes`, `single-graph`, `multiple-graphs`, `graph-breaks`, `pipelines`, `dynamic-batch-recorded`, `dynamic-batch-user`, `dynamic-non-batch`, `non-tensor-inputs`, `nested-inputs`, `structured-outputs` | backend id or `kernel-selector` |
 | `modes` | `aot-tune`, `aot-save-load`, `aot-inspect-wrap`, `aot-export`, `aot-existing-onnx`, `jit-tune_eager`, `jit-tune_deferred`, `jit-inspect` | backend id or `kernel-selector` |
 | `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run` | `aot-tune`, `jit-tune`, `selection-checked` |
 | `topology` | backend id or `kernel-selector` | `single-gpu` |
@@ -153,7 +146,6 @@ Examples:
 @pytest.mark.matrix("modes.aot-export")                  # modes.aot-export/tensorrt, ...
 @pytest.mark.matrix("topology.{backend}/single-gpu")     # topology.inductor-aot/single-gpu, ...
 @pytest.mark.matrix("modes.jit-{mode.value}")            # modes.jit-tune_eager/inductor-jit, ...
-@pytest.mark.matrix("models.pipelines/kernel-selector")  # fixed cell, no backend param
 ```
 
 With `AITUNE_MATRIX_RESULTS=<path>`, the session writes:
