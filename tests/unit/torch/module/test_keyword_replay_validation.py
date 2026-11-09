@@ -16,7 +16,7 @@ from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.task.correctness import check_dynamic_shape_boundary_inference
 from aitune.torch.utils.shapes import prepare_export_sample
-from tests.utilities.helpers import make_graph_spec, update_input_spec
+from tests.utilities.helpers import make_graph_spec
 
 
 def _require_keywords(forward):
@@ -114,7 +114,15 @@ def test_speech_keyword_replay_survives_recording_export_and_dispatch(tmp_path, 
 def test_dynamic_boundary_checks_preserve_keyword_replay():
     model = KeywordReplayModel()
     sample = ((), {"x": torch.ones(2, 3)})
-    graph = make_graph_spec(model.forward, sample, model(**sample[1]))
-    update_input_spec(graph, ((), {"x": torch.ones(4, 3)}))
+    graph = make_graph_spec(model.forward, sample, model(**sample[1]), batch_size=2)
+    larger_sample = ((), {"x": torch.ones(4, 3)})
+    larger_graph = make_graph_spec(model.forward, larger_sample, model(**larger_sample[1]), batch_size=4)
+    # Both input and output metadata must describe the observed batch range.
+    graph.update_shapes_seen(larger_graph.input_spec, larger_graph.output_spec)
+    infer = Mock(side_effect=model)
 
-    check_dynamic_shape_boundary_inference(sample, graph, model, "keyword_replay")
+    check_dynamic_shape_boundary_inference(sample, graph, infer, "keyword_replay")
+
+    assert infer.call_count == 2
+    assert all(call.args == () and set(call.kwargs) == {"x"} for call in infer.call_args_list)
+    assert [call.kwargs["x"].shape for call in infer.call_args_list] == [(2, 3), (4, 3)]
