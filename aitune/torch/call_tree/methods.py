@@ -8,9 +8,9 @@ from typing import Any
 import torch
 from torch import nn
 
-# Classes from these packages are library code: their methods are not recorded as nodes (``forward`` is, through the
-# adapters' forward wrappers).
-LIBRARY_PREFIXES = (
+# Library packages whose classes' methods are not recorded as nodes; their ``forward`` still is, through the
+# adapters' forward wrappers.
+SKIP_LIBRARY_PREFIXES = (
     "torch.",
     "transformers.",
     "diffusers.",
@@ -66,7 +66,7 @@ def user_defined_methods(obj: Any) -> list[str]:
     base = set(dir(nn.Module)) if isinstance(obj, nn.Module) else set(dir(object))
     names: list[str] = []
     for cls in type(obj).__mro__:
-        if cls in (object, nn.Module) or cls.__module__.startswith(LIBRARY_PREFIXES):
+        if cls in (object, nn.Module) or cls.__module__.startswith(SKIP_LIBRARY_PREFIXES):
             continue
         for name, attr in vars(cls).items():
             if name.startswith("__") or name == "forward" or name in SKIP_METHODS or name in names or name in base:
