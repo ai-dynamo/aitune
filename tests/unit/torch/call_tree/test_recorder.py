@@ -100,7 +100,7 @@ def test_result_is_a_snapshot_that_later_recording_does_not_change():
     recorder = CallRecorder()
 
     def one_iteration():
-        with recorder.recording():
+        with recorder:
             recorder.begin_iteration()
             frame = recorder.enter("root.forward", model, "forward", ())
             model(torch.randn(2, 2))
@@ -120,13 +120,13 @@ def test_second_recorder_cannot_record_while_one_is_active():
     first, second = CallRecorder(), CallRecorder()
     original_apply = nn.Module._apply
 
-    with first.recording():
+    with first:
         with pytest.raises(RuntimeError, match="already recording"):
-            with second.recording():
+            with second:
                 pass
         assert nn.Module._apply is not original_apply
     assert nn.Module._apply is original_apply
-    with second.recording():
+    with second:
         pass
 
 
@@ -143,7 +143,7 @@ def test_apply_probe_records_callers_reaching_modules_from_outside():
 def test_apply_outside_any_recorded_call():
     recorder = CallRecorder()
     module = nn.Linear(1, 1)
-    with recorder.recording():
+    with recorder:
         module.to("cpu")
     assert recorder.result().external_apply[id(module)] == {"<unrecorded: test_apply_outside_any_recorded_call>"}
 
@@ -158,7 +158,7 @@ def test_apply_from_a_library_style_to_override_names_the_real_caller():
 
     recorder = CallRecorder()
     module = Wrapper(1, 1)
-    with recorder.recording():
+    with recorder:
         caller(module)
 
     expected = "<unrecorded: test_apply_from_a_library_style_to_override_names_the_real_caller.<locals>.caller>"
@@ -169,7 +169,7 @@ def test_apply_with_only_torch_frames_falls_back_to_outside_any_call(mocker):
     mocker.patch("aitune.torch.call_tree.callers.sys._getframe", return_value=None)
     recorder = CallRecorder()
     module = nn.Linear(1, 1)
-    with recorder.recording():
+    with recorder:
         module.to("cpu")
     assert recorder.result().external_apply[id(module)] == {OUTSIDE_ANY_CALL}
 
@@ -191,7 +191,7 @@ def test_apply_probe_records_once_for_one_recursive_to(mocker):
 def test_apply_probe_respects_recurse_false():
     recorder = CallRecorder()
     model = SequentialSubclassToy()
-    with recorder.recording():
+    with recorder:
         model._apply(lambda tensor: tensor, False)
     assert set(recorder.result().external_apply) == {id(model)}
 
@@ -200,7 +200,7 @@ def test_apply_probe_is_restored_after_an_exception():
     original = nn.Module._apply
     recorder = CallRecorder()
     with pytest.raises(RuntimeError):
-        with recorder.recording():
+        with recorder:
             assert nn.Module._apply is not original
             raise RuntimeError("boom")
     assert nn.Module._apply is original
@@ -227,7 +227,7 @@ def test_cpu_timing_is_recorded(mocker):
 
 
 def _record_one_call(recorder, model, x):
-    with instrumented(recorder, model), recorder.recording():
+    with instrumented(recorder, model), recorder:
         recorder.begin_iteration()
         model(x)
         recorder.end_iteration()
@@ -271,7 +271,7 @@ def test_flush_resolves_pending_events_into_totals():
     model = nn.Linear(2, 2).cuda()
     recorder = CallRecorder()
 
-    with recorder.recording():
+    with recorder:
         recorder.begin_iteration()
         frame = recorder.enter("root.forward", model, "forward", ())
         model(torch.randn(2, 2, device="cuda"))
@@ -313,7 +313,7 @@ def test_end_event_is_recorded_on_the_start_device_when_the_call_changes_device(
     recorder._use_cuda = True
     model = nn.Linear(2, 2)
 
-    with recorder.recording():
+    with recorder:
         recorder.begin_iteration()
         frame = recorder.enter("root.forward", model, "forward", ())
         current_device.return_value = 1  # the call changed the current device
@@ -357,7 +357,7 @@ def test_flush_synchronizes_every_end_event(mocker):
     recorder._use_cuda = True
     model = nn.Linear(2, 2)
 
-    with recorder.recording():
+    with recorder:
         recorder.begin_iteration()
         for _ in range(2):
             recorder.exit(recorder.enter("root.forward", model, "forward", ()))

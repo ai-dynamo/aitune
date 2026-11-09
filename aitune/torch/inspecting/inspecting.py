@@ -127,7 +127,7 @@ def _record_call_tree(
 ) -> CallTree:
     """Record the call tree in a pass of its own, resolving the recorder's events after every inference."""
     logger.info("Recording the call tree.")
-    with recorder.recording():
+    with recorder:
         for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
             recorder.begin_iteration()
             _run_inference(inference_function, args, kwargs)

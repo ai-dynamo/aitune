@@ -69,7 +69,7 @@ def instrumented(recorder: CallRecorder, root, root_label: str = "root"):
 def record(root, call, iterations: int = 2, root_label: str = "root") -> CallTree:
     """Record ``call()`` for ``iterations`` iterations with ``root`` instrumented."""
     recorder = CallRecorder()
-    with instrumented(recorder, root, root_label), recorder.recording():
+    with instrumented(recorder, root, root_label), recorder:
         for _ in range(iterations):
             recorder.begin_iteration()
             call()

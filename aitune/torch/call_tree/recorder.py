@@ -12,15 +12,14 @@ wraps the methods it finds and calls ``enter`` and ``exit`` around the original 
         recorder.exit(frame)
 
 The only hook the recorder owns is a process-wide probe on ``nn.Module._apply`` (``.to()``, ``.cuda()``, ...), active
-inside ``recording()``. Timing uses CUDA events per call (no per-call synchronization) when CUDA is available and
+inside a ``with recorder:`` block. Timing uses CUDA events per call (no per-call synchronization) when CUDA is available and
 ``time.perf_counter`` otherwise; ``flush()`` resolves the pending events once per iteration.
 """
 
 import time
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Self
 
 import torch
 from torch import nn
@@ -49,7 +48,7 @@ class CallRecorder:
 
     Example:
         >>> recorder = CallRecorder()
-        >>> with recorder.recording():
+        >>> with recorder:
         ...     recorder.begin_iteration()
         ...     outer = recorder.enter("root.forward", object(), "forward", ())
         ...     inner = recorder.enter("root.head.forward", object(), "forward", ())
@@ -73,6 +72,7 @@ class CallRecorder:
         self._current_sequence: list[NodeKey] | None = None
         self._external_apply: dict[int, set[str]] = {}
         self._apply_depth = 0
+        self._original_apply: Callable[..., Any] | None = None
         self._modules: list[tuple[str, nn.Module]] = []
         self._registered: set[int] = set()
         self._order = 0
@@ -81,7 +81,7 @@ class CallRecorder:
 
     @property
     def active(self) -> bool:
-        """Whether the recorder is inside ``recording()``."""
+        """Whether the recorder is inside its ``with`` block."""
         return self._active
 
     def register_module(self, label_prefix: str, module: nn.Module) -> None:
@@ -154,24 +154,25 @@ class CallRecorder:
             self._sequences.append(self._current_sequence)
         self._current_sequence = None
 
-    @contextmanager
-    def recording(self) -> Generator["CallRecorder", None, None]:
-        """Record calls inside the context, with the ``nn.Module._apply`` probe installed."""
+    def __enter__(self) -> Self:
+        """Start recording: install the ``nn.Module._apply`` probe; calls are recorded until ``__exit__``."""
         if CallRecorder._recording_now is not None:
             raise RuntimeError("Another CallRecorder is already recording; the nn.Module._apply probe is process-wide.")
-
-        original_apply = nn.Module._apply
+        self._original_apply = nn.Module._apply
         CallRecorder._recording_now = self
-        try:
-            nn.Module._apply = self._make_apply_probe(original_apply)
-            self._active = True
-            yield self
-        finally:
-            self._active = False
-            self._stack.clear()
-            self._current_sequence = None
-            nn.Module._apply = original_apply
-            CallRecorder._recording_now = None
+        nn.Module._apply = self._make_apply_probe(self._original_apply)
+        self._active = True
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        """Stop recording and restore ``nn.Module._apply``, also when the recorded code raised."""
+        self._active = False
+        self._stack.clear()
+        self._current_sequence = None
+        if self._original_apply is not None:
+            nn.Module._apply = self._original_apply
+            self._original_apply = None
+        CallRecorder._recording_now = None
 
     def result(self) -> CallTree:
         """Return the recorded call tree, with times resolved to milliseconds.
@@ -233,7 +234,7 @@ class CallRecorder:
             self._ms[key] = self._ms.get(key, 0.0) + (time.perf_counter() - frame.start) * 1000.0
 
     def _make_apply_probe(self, original_apply: Callable) -> Callable:
-        """Build the replacement for ``nn.Module._apply`` that ``recording()`` installs.
+        """Build the replacement for ``nn.Module._apply`` that ``__enter__`` installs.
 
         ``nn.Module._apply`` is the method that ``.to()``, ``.cuda()``, ``.half()`` and similar calls use to convert a
         module's parameters and buffers. The replacement runs ``original_apply`` unchanged. While the recorder is
@@ -243,7 +244,7 @@ class CallRecorder:
         conversion records, because ``_apply`` calls itself on each child.
 
         Args:
-            original_apply: The ``nn.Module._apply`` to call; restored by ``recording()`` on exit.
+            original_apply: The ``nn.Module._apply`` to call; restored by ``__exit__``.
 
         Returns:
             A function with the signature of ``nn.Module._apply``.

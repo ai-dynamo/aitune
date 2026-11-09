@@ -46,7 +46,7 @@ def _jit_tree(tokens, image) -> CallTree:
     with jit_recording_adapter(recorder):
         model = VlaToy()
         model(tokens, image)  # warmup, not recorded
-        with recorder.recording(), torch.no_grad():
+        with recorder, torch.no_grad():
             for _ in range(ITERATIONS):
                 recorder.begin_iteration()
                 model(tokens, image)
