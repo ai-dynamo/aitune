@@ -46,7 +46,7 @@ def test_call_tree_records_the_calls_and_their_cuda_times(device: torch.device):
     assert all(node.time_ms > 0 for node in tree.nodes.values())
 
 
-@pytest.mark.matrix("inspecting.call-tree/aot")
+@pytest.mark.matrix("inspecting.call-tree-modules-unchanged/aot")
 def test_call_tree_leaves_the_selected_modules_unchanged(device: torch.device):
     """``get_modules()`` selects the same modules with the same counts with and without ``call_tree=True``."""
     model, fn, dataset = _vla(device)
