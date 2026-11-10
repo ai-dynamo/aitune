@@ -112,6 +112,12 @@ class StatefulValidation:
     model accuracy requires a separate, model-specific evaluation.
     These checks do not change the exported graph. They cover the structure and aliases of
     state passed as inputs, not hidden Python attributes inside the model.
+
+    Validation compares tensor shapes, dtypes, layouts, devices, leaf types, object
+    identity, and shared storage. An engine replacement policy may relax pre-call
+    tensor identity checks while retaining post-call alias checks. Passing these
+    checks establishes compatibility only for the sampled call sequences; it does
+    not prove numerical equivalence or correctness for every future state.
     """
 
     def __init__(self, root: Path, graph_spec: GraphSpec, *, steps: int = 3):

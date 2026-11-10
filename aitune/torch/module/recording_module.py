@@ -84,6 +84,9 @@ class RecordingModule:
         # Binding is for metadata only: decorators may reject positional replay of valid keyword calls.
         sample_args, sample_kwargs = self._copy_inputs(args, kwargs)
         contract_capture = None
+        # One contract is captured per input graph. Subsequent samples extend shape
+        # observations without checking or replacing its mutation and alias rules.
+        # Calls grouped into the same graph must therefore share those rules.
         if inputs_metadata not in self._graph_specs:
             snapshot_inputs = self._forward_signature.normalize(sample_args, sample_kwargs)
             contract_capture = ForwardContractCapture.before_call(
