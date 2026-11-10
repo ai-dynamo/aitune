@@ -221,7 +221,7 @@ calls ran inside it. With `call_tree=True`, `inspect` also records a call tree: 
 model-defined method, keyed by the chain of calls that led to it, with its calls and time.
 
 ```python
-modules_info = ait.inspect(model, input_data, inference_function=run_chunk, max_depth=8, call_tree=True)
+modules_info = ait.inspect(model, input_data, inference_function=run_chunk, min_depth=1, max_depth=8, call_tree=True)
 tree = modules_info.call_tree
 
 for node in tree.find("dit"):    # recorded calls whose label contains "dit"
@@ -257,7 +257,7 @@ argument (a checkpoint helper) is skipped the same way; free functions are not r
 events on the device that was current when a call started, so work that a call runs on other GPUs is not fully
 counted.
 
-## Shared weights
+## Shared weights and wrap
 
 After tuning, AITune offloads a module's original weights (`device_after_tuning`, `"meta"` by default). That breaks a
 model when something outside the tuned module still needs one of those weights:
@@ -286,6 +286,34 @@ shared_weights_of(tree, model.lm_head)
 #               accesses=[WeightAccess("forward > llm.embed.forward", "read")])]
 shared_weights_of(tree, model.dit)    # []: can be tuned and offloaded on its own
 ```
+
+Wrap modules from an inspection with `call_tree=True`, and tuning keeps exactly those weights on the device when it
+offloads a wrapped module:
+
+```python
+head = [m for m in modules_info.get_modules() if m.module is model.lm_head]
+model = ait.wrap(model, head)
+ait.tune(run_chunk, input_data)
+# Keeping 1 weight (0.0 MB) of lm_head on the device after tuning: read by forward > llm.embed.forward
+```
+
+Each wrapped module logs one line for the weights it keeps (and a debug line per weight). When code outside the
+module moves it with `.to()`, the moved buffers stay along with its parameters, because that `.to()` moves them
+too.
+
+Move or cast the model before `wrap`. Kept weights are tracked as tensor objects: a device or dtype change after
+`wrap`, such as `model.to("cuda")` or `model.half()`, gives buffers new tensors, which are then no longer kept.
+
+The cost is the memory of the kept weights. For weights that outside code reads, the model needs that memory
+anyway. For weights that outside code only moves, it does not: E5's `SentenceTransformer.encode` moves the
+whole encoder with `.to()` on every call, so its 1.34 GB stay on the GPU next to the tuned engine. That is the same
+as the `device_after_tuning="cpu"` workaround, whose `.to()` brings them back, but offloading saves nothing there.
+
+Each wrapped module owns the weights it keeps: wrapping it again replaces its set, and a weight stays kept while any
+wrapped module keeps it, also across models in the same process.
+
+Modules from `inspect` without `call_tree=True`, or `ModuleInfo` built by hand, keep nothing, so `wrap` and tuning
+behave as before.
 
 The call tree has these limits:
 
