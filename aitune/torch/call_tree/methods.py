@@ -77,20 +77,29 @@ def user_defined_methods(obj: Any) -> list[str]:
 
 
 def is_transparent_container(obj: Any) -> bool:
-    """Whether ``obj`` is an exact torch container class, whose calls are not recorded as nodes.
+    """Whether ``obj`` only passes calls on, so its calls are not recorded as nodes.
 
     Only the exact classes ``nn.Sequential``, ``nn.ModuleList`` and ``nn.ModuleDict``, never subclasses: JIT mode does
     not patch these classes (``_DEFAULT_PATCH_EXCLUDE`` matches the exact qualified name), so skipping them gives both
     modes the same tree. Subclasses must stay: ``SentenceTransformer`` subclasses ``nn.Sequential`` and its ``forward``
     is a unit of its own.
 
+    The ``OptimizedModule`` that ``torch.compile(module)`` returns is transparent as well: it only calls the original
+    module (``_orig_mod``), which is recorded instead, so one call does not appear as two nested nodes.
+
     Example:
         >>> class Encoder(nn.Sequential):
         ...     pass
         >>> is_transparent_container(nn.Sequential()), is_transparent_container(Encoder())
         (True, False)
+        >>> is_transparent_container(torch.compile(nn.Linear(1, 1), backend="eager"))
+        True
     """
-    return type(obj) in (nn.Sequential, nn.ModuleList, nn.ModuleDict)
+    if type(obj) in (nn.Sequential, nn.ModuleList, nn.ModuleDict):
+        return True
+    from torch._dynamo.eval_frame import OptimizedModule
+
+    return isinstance(obj, OptimizedModule)
 
 
 def is_transparent_call(args: tuple[Any, ...], kwargs: dict[str, Any] | None = None) -> bool:
