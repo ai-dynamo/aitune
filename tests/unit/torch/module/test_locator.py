@@ -204,10 +204,14 @@ def test_find_leaves_registered_user_type():
 
 
 def test_find_leaves_exposes_registered_state_only_during_mutation_capture():
-    obj = UserType(1)
-    obj.tensor = torch.tensor(2)
+    class TensorState:
+        def __init__(self):
+            self.value = 1
+            self.tensor = torch.tensor(2)
+
+    obj = TensorState()
     try:
-        Locator.register_user_type(UserType, only_tensors=True, mutation_fields=("value",))
+        Locator.register_user_type(TensorState, only_tensors=True, mutation_fields=("value",))
 
         regular_leaves = {locator.path: value for locator, value in Locator.find_leaves(obj)}
         mutation_leaves = {
@@ -217,24 +221,28 @@ def test_find_leaves_exposes_registered_state_only_during_mutation_capture():
         assert regular_leaves == {"tensor": obj.tensor}
         assert mutation_leaves == {"tensor": obj.tensor, "value": 1}
     finally:
-        Locator.unregister_user_type(UserType)
+        Locator.unregister_user_type(TensorState)
 
 
 def test_register_user_type_replaces_previously_cached_mutation_fields():
-    obj = UserType(1)
-    obj.label = "original"
+    class LabeledState:
+        def __init__(self):
+            self.value = 1
+            self.label = "original"
+
+    obj = LabeledState()
     try:
-        Locator.register_user_type(UserType, only_tensors=True, mutation_fields=("value",))
+        Locator.register_user_type(LabeledState, only_tensors=True, mutation_fields=("value",))
         assert {locator.path for locator, _ in Locator.find_leaves(obj, include_mutation_fields=True)} == {"value"}
 
-        Locator.register_user_type(UserType, only_tensors=True, mutation_fields=("label",))
+        Locator.register_user_type(LabeledState, only_tensors=True, mutation_fields=("label",))
         assert {locator.path for locator, _ in Locator.find_leaves(obj, include_mutation_fields=True)} == {"label"}
 
-        Locator.unregister_user_type(UserType)
-        Locator.register_user_type(UserType, only_tensors=True)
+        Locator.unregister_user_type(LabeledState)
+        Locator.register_user_type(LabeledState, only_tensors=True)
         assert list(Locator.find_leaves(obj, include_mutation_fields=True)) == []
     finally:
-        Locator.unregister_user_type(UserType)
+        Locator.unregister_user_type(LabeledState)
 
 
 def test_find_leaves_ignored_type():

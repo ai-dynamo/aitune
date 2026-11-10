@@ -104,7 +104,10 @@ def test_capture_detects_inference_tensor_mutation_without_a_version_counter():
 def test_restore_reproduces_lazy_initialization_of_registered_input_state():
     class CacheState:
         def __init__(self):
-            self.keys = None
+            # Declare fields created during initialization without adding them to the fresh object.
+            self.device: torch.device
+            self.dtype: torch.dtype
+            self.keys: torch.Tensor | None = None
             self.is_initialized = False
             self.label = "original"
 
@@ -148,7 +151,7 @@ def test_restore_reproduces_lazy_initialization_of_registered_input_state():
 def test_restore_clears_a_tensor_field_no_longer_visible_in_tensor_only_traversal():
     class CacheState:
         def __init__(self):
-            self.keys = torch.ones(2)
+            self.keys: torch.Tensor | None = torch.ones(2)
 
     recorded_state = CacheState()
     arguments = {"state": recorded_state}

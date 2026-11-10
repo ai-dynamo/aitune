@@ -10,7 +10,7 @@ from aitune.torch.libs.exporting import TorchExporter
 from tests.utilities.helpers import make_graph_spec, make_recorded_graph_spec, update_input_spec
 
 transformers = pytest.importorskip("transformers")
-from transformers import StaticCache  # noqa: E402
+from transformers import StaticCache, StaticLayer  # noqa: E402
 from transformers.models.llama import LlamaConfig  # noqa: E402
 
 
@@ -59,7 +59,9 @@ class _ReadCache(nn.Module):
 def test_initialized_static_cache_preserves_caller_owned_output_identity():
     module = _UpdateCache().eval()
     recorded_cache = _make_initialized_cache()
-    value = torch.ones_like(recorded_cache.layers[0].keys)
+    recorded_keys = recorded_cache.layers[0].keys
+    assert recorded_keys is not None
+    value = torch.ones_like(recorded_keys)
     sample = ((value, recorded_cache), {})
     graph_spec = make_recorded_graph_spec(module, sample)
     exported = TorchExporter().export(module, sample, graph_spec).exported_program.module()
@@ -86,14 +88,17 @@ def test_lazy_static_cache_initialization_survives_the_tensor_export_boundary():
     flat_inputs = graph_spec.input_spec.flatten_tensors(arguments)
     output = graph_spec.restore_outputs(exported(*flat_inputs), arguments)
 
+    runtime_layer = runtime_cache.layers[0]
+    assert isinstance(runtime_layer, StaticLayer)
+    assert runtime_layer.keys is not None
     torch.testing.assert_close(output[..., :1, :], key)
-    torch.testing.assert_close(runtime_cache.layers[0].keys[..., :1, :], key)
-    assert runtime_cache.layers[0].is_initialized
-    assert runtime_cache.layers[0].device == key.device
-    assert runtime_cache.layers[0].dtype == key.dtype
-    assert runtime_cache.layers[0].max_batch_size == key.shape[0]
-    assert runtime_cache.layers[0].num_heads == key.shape[1]
-    assert runtime_cache.layers[0].head_dim == key.shape[3]
+    torch.testing.assert_close(runtime_layer.keys[..., :1, :], key)
+    assert runtime_layer.is_initialized
+    assert runtime_layer.device == key.device
+    assert runtime_layer.dtype == key.dtype
+    assert runtime_layer.max_batch_size == key.shape[0]
+    assert runtime_layer.num_heads == key.shape[1]
+    assert runtime_layer.head_dim == key.shape[3]
 
 
 @pytest.mark.parametrize(
