@@ -125,6 +125,7 @@ def test_trace_export_marks_mutable_state_output_as_dynamic(tmp_path):
     second_cache = [None]
     model(second_x, second_cache)
     update_input_spec(graph_spec, ((second_x, [None]), {}), strict=True)
+    assert graph_spec.post_input_spec is not None
     graph_spec.post_input_spec.update_shapes_seen(
         SampleMetadata.from_inputs({"x": second_x, "cache": second_cache}, strict=True)
     )
