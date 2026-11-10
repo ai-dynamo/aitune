@@ -79,9 +79,8 @@ def mock_onnx(mocker, graph_spec):
     """
 
     def _export(*args, **kwargs):
-        program = Mock()
-        program.save.side_effect = lambda path, **_: Path(path).write_bytes(b"onnx-model")
-        return program
+        Path(kwargs["f"]).write_bytes(b"onnx-model")
+        return Mock()
 
     export = mocker.patch("torch.onnx.export", side_effect=_export)
     mocker.patch("aitune.torch.libs.onnx.onnx_exporter.TopologicalSortPass")
@@ -289,14 +288,10 @@ def test_artifact_after_deactivation_exposes_the_final_onnx_interface(
 
 
 def export_with_external_data(*args, **kwargs):
-    program = Mock()
-
-    def _save(path, **_):
-        Path(path).write_bytes(b"onnx-model")
-        Path(f"{path}.data").write_bytes(b"external-data")
-
-    program.save.side_effect = _save
-    return program
+    path = Path(kwargs["f"])
+    path.write_bytes(b"onnx-model")
+    Path(f"{path}.data").write_bytes(b"external-data")
+    return Mock()
 
 
 @requires_cuda
@@ -498,6 +493,7 @@ def test_infer_restores_mutable_state_with_ort_owned_tensor(mocker):
     graph_spec = make_recorded_graph_spec(model, ((x, [torch.zeros(2)]), {}), strict=True)
     backend = ONNXRuntimeBackend()
     backend._graph_spec = graph_spec
+    backend._device = torch.device("cpu")
     backend._session = mocker.Mock()
     input_names = [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
     session_inputs = [mocker.Mock() for _ in input_names]

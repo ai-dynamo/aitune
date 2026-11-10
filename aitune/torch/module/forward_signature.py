@@ -5,7 +5,7 @@
 import functools
 import inspect
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from aitune.exceptions import AITuneUserInputError
 
@@ -27,7 +27,8 @@ def _resolve_argument_path(arguments: dict[str, Any], path: ForwardInputPath) ->
     """Resolve a normalized argument value from a call-layout path."""
     if isinstance(path, str):
         return arguments[path]
-    value = arguments[path[0]]
+    # Normalized input paths always start with a forward parameter name.
+    value = arguments[cast(str, path[0])]
     for component in path[1:]:
         value = value[component]
     return value
@@ -174,7 +175,7 @@ class ForwardSignature:
         """Capture how a valid call supplied each normalized argument."""
         self._signature.bind(*args, **kwargs)
 
-        positional_paths = []
+        positional_paths: list[ForwardInputPath] = []
         remaining_positional = len(args)
         for parameter in self.parameters:
             if parameter.kind in ("POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"):

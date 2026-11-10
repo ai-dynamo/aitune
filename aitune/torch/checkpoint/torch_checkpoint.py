@@ -3,16 +3,20 @@
 """Torch checkpoint module."""
 
 from collections import OrderedDict
+from logging import getLogger
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch.nn import Module as TorchModule
 
 from aitune.torch.checkpoint.checkpoint import Checkpoint
 from aitune.torch.checkpoint.storage import Storage
+from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module.wrapper_module import Module as WrapperModule
 from aitune.torch.utils.device import get_device
+
+logger = getLogger(__name__)
 
 
 class TorchCheckpoint(Checkpoint):
@@ -53,9 +57,21 @@ class TorchCheckpoint(Checkpoint):
         """
         if isinstance(module_or_pipeline, TorchModule):
             state_dict = module_or_pipeline.state_dict()
+            module_states = {"": state_dict}
         else:
             state_dict = TorchCheckpoint.state_dict_from_pipeline(module_or_pipeline)
+            module_states = state_dict
         self._storage.save(path, state_dict)
+        for module_path, module_state in module_states.items():
+            for prefix, stored_object in module_state.items():
+                if not isinstance(stored_object, dict) or WrapperModule.TUNED_MODULE_KEY not in stored_object:
+                    continue
+                stored_path = ".".join(part for part in (module_path, prefix.rstrip(".")) if part)
+                stored_path = stored_path or stored_object[WrapperModule.NAME_KEY]
+                logger.info("📦 Saved module %s:", stored_path)
+                tuned_state = stored_object[WrapperModule.TUNED_MODULE_KEY]
+                for graph_index, (_, backend_state) in enumerate(tuned_state[TunedModule.BACKENDS_KEY]):
+                    logger.info("  ✅ graph %s stored with %s", graph_index, backend_state[TunedModule.TYPE_KEY])
 
     def load(
         self,
@@ -193,6 +209,7 @@ class TorchCheckpoint(Checkpoint):
             tuned versions. Original torch modules that were not tuned are preserved.
         """
         top_module = None
+        checkpoint_module_path = module_name
 
         def replace_tuned_module(
             module: TorchModule,
@@ -219,6 +236,9 @@ class TorchCheckpoint(Checkpoint):
                 # This is a tuned module, replace with wrapper module
                 device = device_map.pop(module_name, None)
 
+                module_path = ".".join(part for part in (checkpoint_module_path, prefix.rstrip(".")) if part)
+                module_path = module_path or stored_object[WrapperModule.NAME_KEY]
+                logger.info("📦 Loading module %s:", module_path)
                 wrapper_module = WrapperModule.from_dict(module, stored_object, device)
                 if parent_module is None:
                     # We replace top module
@@ -227,6 +247,10 @@ class TorchCheckpoint(Checkpoint):
                 else:
                     # We replace a child module with wrapper module
                     setattr(parent_module, module_name, wrapper_module)
+                # from_dict() installs a TunedModule before returning the restored wrapper.
+                tuned_module = cast(TunedModule, wrapper_module.module)
+                for graph_index, backend in enumerate(tuned_module.backends.values()):
+                    logger.info("  ✅ graph %s restored with %s", graph_index, backend.name)
                 # Remove state_dict key - we already handled it
                 del local_state_dict[prefix]
             else:

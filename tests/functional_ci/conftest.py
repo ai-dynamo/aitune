@@ -77,18 +77,35 @@ def pytest_collection_modifyitems(config, items):
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item, call):
     report = yield
-    if report.when == "call" or report.outcome != "passed":
-        for cell_id in _item_cells.get(item.nodeid, []):
-            cell = _cells.setdefault(cell_id, {"state": "passed", "tests": set()})
-            cell["tests"].add(item.nodeid)
-            if _RANK[report.outcome] > _RANK[cell["state"]]:
-                cell["state"], cell["culprit"] = report.outcome, item.nodeid.split("/")[-1]
+    # Plain attributes travel with the report from pytest-xdist workers to the controller.
+    report.matrix_cells = _item_cells.get(item.nodeid, [])
+    report.matrix_reason = _reason(report, call) if report.outcome != "passed" else None
     return report
+
+
+def pytest_runtest_logreport(report):
+    if report.when == "call" or report.outcome != "passed":
+        for cell_id in getattr(report, "matrix_cells", []):
+            cell = _cells.setdefault(cell_id, {"state": "passed", "tests": set()})
+            cell["tests"].add(report.nodeid)
+            if _RANK[report.outcome] > _RANK[cell["state"]]:
+                cell["state"], cell["culprit"] = report.outcome, report.nodeid.split("/")[-1]
+                cell["reason"] = report.matrix_reason
+
+
+def _reason(report, call) -> str:
+    if hasattr(report, "wasxfail"):
+        return report.wasxfail
+    if report.skipped and isinstance(report.longrepr, tuple):
+        return report.longrepr[2].removeprefix("Skipped: ")
+    if call.excinfo is not None:
+        return call.excinfo.exconly().splitlines()[0]
+    return str(report.longrepr)
 
 
 def pytest_sessionfinish(session):
     path = os.environ.get("AITUNE_MATRIX_RESULTS")
-    if not path or not _cells:
+    if not path or not _cells or hasattr(session.config, "workerinput"):
         return
     run_url = os.environ.get("GITHUB_RUN_ID") and (
         "{GITHUB_SERVER_URL}/{GITHUB_REPOSITORY}/actions/runs/{GITHUB_RUN_ID}".format(**os.environ)
@@ -97,7 +114,9 @@ def pytest_sessionfinish(session):
         cell_id: {
             "state": cell["state"],
             "run": (
-                f"{cell['state']}: {cell['culprit']}" if "culprit" in cell else f"passed: {len(cell['tests'])} test(s)"
+                f"{cell['state']}: {cell['culprit']} ({cell['reason']})"
+                if "culprit" in cell
+                else f"passed: {len(cell['tests'])} test(s)"
             ),
         }
         for cell_id, cell in sorted(_cells.items())
