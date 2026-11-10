@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
+from aitune.torch.module.forward_contract import ForwardContract
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -35,6 +36,7 @@ def _graph_spec(batch_size: int | None = None) -> GraphSpec:
         input_spec=_input_metadata((1, 3), (2, 5), batch_size=batch_size),
         output_spec=_output_metadata((1, 7), batch_size=batch_size),
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
 
 
@@ -60,6 +62,7 @@ def _batching_graph_spec() -> GraphSpec:
         input_spec=input_spec,
         output_spec=_output_metadata((2, 7), batch_size=2),
         forward_signature=forward_signature,
+        forward_contract=ForwardContract(None),
     )
 
 
@@ -88,6 +91,7 @@ def test_graph_spec_tracks_post_call_input_metadata():
         input_spec=input_spec,
         output_spec=_output_metadata((1, 7)),
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
         post_input_spec=post_input_spec,
     )
 
@@ -102,6 +106,7 @@ def test_graph_spec_allows_missing_post_call_metadata():
         input_spec=input_spec,
         output_spec=_output_metadata((1, 7)),
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
 
     assert graph_spec.post_input_spec is None

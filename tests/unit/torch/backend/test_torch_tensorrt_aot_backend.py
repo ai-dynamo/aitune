@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch._export.verifier import SpecViolationError
 from torch.export.graph_signature import ConstantArgument, TensorArgument
 
-from aitune.torch.backend import ArtifactPath
+from aitune.torch.backend import ArtifactPath, torch_tensorrt_aot_backend
 from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
@@ -25,7 +25,7 @@ from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyTorchModel
 from tests.toy_models.torch_models import ToyTorchConditionalModel
-from tests.utilities.helpers import make_graph_spec, make_sample_store, requires_cuda, update_input_spec
+from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store, requires_cuda, update_input_spec
 
 
 @dataclass
@@ -70,8 +70,7 @@ def sample_data(torch_device, tmp_path) -> SampleStore:
 @pytest.fixture
 def graph_spec(model, sample_data) -> GraphSpec:
     args, kwargs = sample_data[0]
-    output = model(*args, **kwargs)
-    return make_graph_spec(model.forward, (args, kwargs), output, name="0", strict=True)
+    return make_recorded_graph_spec(model, (args, kwargs), name="0", strict=True)
 
 
 @pytest.fixture
@@ -125,18 +124,21 @@ def test_save_compiled_model_uses_legacy_exporter_when_available(mocker, tmp_pat
     mock_torch_tensorrt.save.assert_called_once_with(program, (tmp_path / "model.pt").as_posix(), pickle_protocol=5)
 
 
-def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path: Path):
+@pytest.mark.parametrize("with_kwargs", [False, True], ids=["flat-tensors", "non-tensor-keyword"])
+def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path: Path, with_kwargs):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.save.side_effect = [SpecViolationError("direct save failed"), None]
     module = mocker.Mock(spec=nn.Module)
-    sample = ((mocker.sentinel.input,), {"output_hidden_states": True})
+    sample = ((mocker.sentinel.input,), {"output_hidden_states": True} if with_kwargs else {})
     dynamic_shapes = {"x": {0: mocker.sentinel.batch}}
     mock_export = mocker.patch("torch.export.export")
 
     _save_compiled_model(module, tmp_path / "model.pt", sample, dynamic_shapes=dynamic_shapes, pickle_protocol=5)
 
-    mock_export.assert_called_once_with(module, sample[0], sample[1], dynamic_shapes=dynamic_shapes, strict=False)
+    mock_export.assert_called_once_with(
+        module, sample[0], sample[1] or None, dynamic_shapes=dynamic_shapes, strict=False
+    )
     assert mock_torch_tensorrt.save.call_args_list == [
         mocker.call(
             mock_torch_tensorrt.dynamo.export.return_value,
@@ -222,9 +224,7 @@ def mock_torch_tensorrt(mocker, model: SimpleModel):
 
 
 def _graph_spec_from_samples(model: nn.Module, samples: list[Sample]) -> GraphSpec:
-    args, kwargs = samples[0]
-    output = model(*args, **kwargs)
-    graph_spec = make_graph_spec(model.forward, (args, kwargs), output, name="0", strict=True)
+    graph_spec = make_recorded_graph_spec(model, samples[0], name="0", strict=True)
     for args, kwargs in samples[1:]:
         output = model(*args, **kwargs)
         update_input_spec(graph_spec, (args, kwargs), strict=True)
@@ -295,6 +295,29 @@ def test_torch_tensorrt_timing_cache_path_is_rank_isolated(mocker, tmp_path):
     assert backend._config.compile_config.timing_cache_path == timing_cache.as_posix()
 
 
+def test_infer_restores_mutable_structured_inputs(mocker):
+    class StatefulDecoder(nn.Module):
+        def forward(self, x, cache):
+            cache[0] = x + 1
+            return x * 2
+
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
+    model = StatefulDecoder()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [None]), {}), strict=True)
+    backend = TorchTensorRTAotBackend()
+    backend._graph_spec = graph_spec
+    backend._opt_module = mocker.Mock(return_value=(x * 2, x + 1))
+    cache = [None]
+
+    result = backend._infer(x, cache)
+
+    backend._opt_module.assert_called_once_with(x)
+    torch.testing.assert_close(result, x * 2)
+    torch.testing.assert_close(cache[0], x + 1)
+
+
 @requires_cuda
 def test_mock_build(
     mocker,
@@ -307,7 +330,9 @@ def test_mock_build(
     tmp_path: Path,
 ):
     sentinel_exported = mocker.Mock(name="ExportedProgram")
+    sentinel_exported.example_inputs = ((mocker.sentinel.flat_input,), {})
     export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
+    save_compiled = mocker.spy(torch_tensorrt_aot_backend, "_save_compiled_model")
 
     active_backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
@@ -335,6 +360,7 @@ def test_mock_build(
     # Pin the pipeline shape: the ExportedProgram from torch.export.export must be
     # forwarded as the first positional arg to torch_tensorrt.dynamo.compile.
     assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is sentinel_exported
+    assert save_compiled.call_args.args[2] is sentinel_exported.example_inputs
 
 
 @pytest.mark.parametrize(
@@ -387,7 +413,7 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     )
 
     dynamic_shapes = export_mock.call_args.kwargs["dynamic_shapes"]
-    dim = dynamic_shapes["x"][0]
+    dim = dynamic_shapes["flat_inputs"][0][0]
     assert dim is not torch.export.Dim.AUTO
     assert dim.min == 1
     assert dim.max == expected_max

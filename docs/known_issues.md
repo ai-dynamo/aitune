@@ -4,6 +4,23 @@
 title: "Known Issues and Limitations"
 ---
 
+- **Torch-TensorRT JIT in-place input tensor mutations.** On the current CI stack, an in-place cache update such as
+  `state["cache"].add_(1)` does not reach the caller's tensor. The same failure occurs with direct
+  `torch.compile(model, backend="torch_tensorrt")`, without AITune. Replacing the cached tensor with
+  `state["cache"] = state["cache"] + 1` passes the native compilation and AITune tests. For models that require
+  in-place updates, use [Torch-TensorRT AOT](guides/backends/torch_tensorrt_aot_backend.md), which passes the mutable-input
+  lifecycle tests, or Torch Inductor JIT. See the
+  [native compiler comparison](https://github.com/ai-dynamo/aitune/actions/runs/42835107722/job/129896715452?pr=185).
+  Upstream [Torch-TensorRT PR #4894](https://github.com/pytorch/TensorRT/pull/4894) proposes preserving input
+  write-back operations for a closely matching failure; its applicability to this JIT case is not yet verified.
+- **Changing Python input state with compiled backends.** Input-dependent updates to non-tensor Python values inside
+  mutable inputs are not generally supported. A recorded mutation stores its resulting value: recording
+  `step[0] += 1` with `step=[0]` stores `1`; reusing that graph with `step=[5]` can restore `1` instead of `6`.
+  With `config.strict_mode=False`, graph matching and post-call input validation ignore non-tensor values, so the
+  incorrect update can go undetected. Strict graph matching can reject a changed starting value, but does not make
+  the update dynamic. Strict mode alone does not protect calls when graph checking is disabled or graph selection
+  uses only the LLM prefill/decode phase. Keep updates to Python counters and similar changing non-tensor state
+  outside the compiled module.
 - **Diffusers context parallelism with JIT tuning.** AITune's automatic JIT tuning currently degrades inference
   performance with Diffusers context parallelism because of module wrapping and patching order. Use the explicit AOT
   tuning API as a workaround. JIT backends may still be selected through the AOT API.

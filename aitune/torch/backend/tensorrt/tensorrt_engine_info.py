@@ -67,6 +67,13 @@ class TensorRTEngineInfo:
             self._output_shapes = {
                 output_name: engine.get_tensor_shape(output_name) for output_name in self._output_names
             }
+            get_aliased_input = getattr(engine, "get_aliased_input_tensor", None)
+            self._output_input_aliases = {}
+            if callable(get_aliased_input):
+                for output_name in self._output_names:
+                    input_name = get_aliased_input(output_name)
+                    if isinstance(input_name, str) and input_name:
+                        self._output_input_aliases[output_name] = input_name
 
             logger.debug("Extracted information for model:")
             logger.debug("  Inputs: %s", self._input_names)
@@ -120,3 +127,8 @@ class TensorRTEngineInfo:
             List of output tensor shapes
         """
         return self._output_shapes
+
+    @property
+    def output_input_aliases(self) -> dict[str, str]:
+        """Map outputs that share buffers to their corresponding inputs."""
+        return self._output_input_aliases

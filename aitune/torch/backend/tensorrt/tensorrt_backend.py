@@ -3,7 +3,6 @@
 """TensorRT backend."""
 
 import contextlib
-import copy
 import json
 import logging
 from collections import OrderedDict
@@ -41,12 +40,13 @@ from aitune.torch.backend.tensorrt.torch_quantization import TorchQuantizationCo
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.config import config as global_config
 from aitune.torch.distributed import distributed_output_path
-from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
+from aitune.torch.libs.exporting import ONNXExporter
+from aitune.torch.module.forward_contract import TensorMutationPolicy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
-from aitune.torch.utils.module import offload
+from aitune.torch.utils.module import move_module_to_device, offload
 from aitune.torch.utils.tensor import format_tensor_name
 from aitune.utils.monitoring import annotate
 
@@ -205,7 +205,6 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
     STATE_TYPE = "type"
     STATE_ENGINE_PATH = "engine_path"
     STATE_TRT_OPTIMIZATION_PROFILES_PATH = "trt_optimization_profiles_path"
-    STATE_OUTPUT_OBJECT = "output_object"
     STATE_GRAPH_SPEC = "graph_spec"
     STATE_DEVICE = "device"
     STATE_QUANTIZATION_CONFIG = "quantization_config"
@@ -249,12 +248,13 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         # build variables
         self._engine_artifact: ArtifactPath | None = None
         self._trt_optimization_profiles_artifact: ArtifactPath | None = None
-        self._output_object = None
         self._graph_spec = None
         self._samples: Sequence[Sample] | None = None
 
         # runtime variables
         self._output_allocator = None
+        self._output_input_aliases: dict[str, str] = {}
+        self._aliased_outputs: dict[str, torch.Tensor] = {}
         self._trt_runtime = None
         self._trt_optimization_profiles: list[Profile] = []
 
@@ -352,11 +352,9 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
                 raise AITuneUserInputError(
                     "Torch quantization requires a Torch module; use ONNX quantization for OnnxModule."
                 )
-        self._output_object = (
-            {spec.name: None for _, spec in graph_spec.output_spec.tensor_data}
-            if isinstance(module, OnnxModule)
-            else self._get_output_object(module=module, sample=samples[0])
-        )
+        else:
+            # A previous graph or backend candidate may have offloaded this shared module to CPU.
+            move_module_to_device(module, self.device)
 
         quantization_config = self._config.quantization_config
         if isinstance(quantization_config, TorchQuantizationConfig):
@@ -603,7 +601,7 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
                     opset_version=self._config.opset_version,
                     output_path=path,
                 )
-                exporter.export(module=module, sample=sample, graph_spec=graph_spec)
+                exporter.export(module=module, sample=sample, graph_spec=graph_spec, device=self._device)
                 size = path.stat().st_size
 
             result["onnx_size_bytes"] = size
@@ -672,9 +670,13 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
             try:
                 if self._context is None:
                     raise RuntimeError("Engine not loaded. Call build() first.")
+                graph_spec = self._graph_spec
+                if graph_spec is None:
+                    raise RuntimeError("Graph specification is not loaded. Call build() first.")
 
                 # Prepare inputs
-                inputs = self._prepare_inputs(args, kwargs)
+                arguments = graph_spec.forward_signature.normalize(args, kwargs).arguments
+                inputs = self._prepare_inputs(arguments)
                 if not inputs:
                     raise ValueError("No input tensors provided for inference")
 
@@ -704,8 +706,8 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
                 elapsed_time = self._start_time.elapsed_time(self._end_time)
                 logger.debug("Inference completed in %s ms", elapsed_time)
 
-                # Return a copy of the outputs with the correct format
-                return self._prepare_outputs_for_return()
+                # Restore the outputs and observable input state.
+                return self._prepare_outputs_for_return(arguments)
 
             except Exception:
                 torch.cuda.synchronize()
@@ -756,16 +758,28 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
     def _create_output_allocator(self, context):
         """Attach an independent output allocator to an execution context."""
         allocator = TorchOutputAllocator(engine_info=self._engine_info)
+        self._configure_output_bindings(context, allocator)
+        return allocator
 
-        # Set output allocator for each output tensor individually
+    def _configure_output_bindings(self, context, allocator: TorchOutputAllocator) -> None:
+        """Register allocators for independent outputs and record input-aliased outputs."""
+        engine_aliases = getattr(self._engine_info, "output_input_aliases", {})
+        self._output_input_aliases = engine_aliases if isinstance(engine_aliases, dict) else {}
+        self._aliased_outputs = {}
+
         for output_name in self._output_names:
+            if output_name in self._output_input_aliases:
+                logger.debug(
+                    "Output tensor '%s' aliases input tensor '%s'",
+                    output_name,
+                    self._output_input_aliases[output_name],
+                )
+                continue
             success = context.set_output_allocator(output_name, allocator)
             if not success:
                 logger.error("Failed to set output allocator for tensor '%s'", output_name)
                 raise RuntimeError(f"Failed to set output allocator for tensor '{output_name}'")
             logger.debug("Set output allocator for tensor '%s'", output_name)
-
-        return allocator
 
     def _create_artifact(self) -> DeploymentArtifact:
         """Create an artifact from the saved engine interface and recorded bounds."""
@@ -913,6 +927,12 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
                 "_outputs",
                 "_context",
                 "_output_allocator",
+                "_output_input_aliases",
+                "_aliased_outputs",
+                "_cuda_graph",
+                "_last_input_shapes",
+                "_static_inputs",
+                "_infer_cuda_graph",
             ]:
                 if hasattr(self, attr_name):
                     delattr(self, attr_name)
@@ -926,25 +946,6 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         After deploying, the backend is ready to do inference. Backend cannot be deactivated anymore.
         """
         self._activate()
-
-    def _get_output_object(self, module: nn.Module, sample: Sample) -> Any:
-        """Get the output object from the module and sample.
-
-        Args:
-            module: PyTorch module
-            sample: Sample input to use for model inference.
-
-        Returns:
-            The output object from the module.
-
-        Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
-        the output object.
-        """
-        module.to(self.device)
-        args, kwargs = sample
-        with torch.no_grad():
-            output_object = module(*args, **kwargs)
-        return copy.deepcopy(output_object)
 
     def _save_trt_optimization_profiles(self, optimization_profiles: list[Profile], cache_dir: Path) -> Path:
         """Save the TensorRT optimization profiles to a file."""
@@ -969,44 +970,46 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
             # profile 0 is used by default
             return []
 
-    def _prepare_outputs_for_return(self) -> Any:
-        """Prepare the outputs for return.
-
-        This method will prepare the outputs for return according to the original model's output structure.
-        Tensors are retrieved from the output allocator with correct shapes.
-
-        Returns:
-            The outputs in the same format as the original model.
-        """
+    def _prepare_outputs_for_return(self, arguments: dict[str, Any]) -> Any:
+        """Collect TensorRT outputs, restore input changes, and rebuild the module result."""
+        graph_spec = self._graph_spec
+        if graph_spec is None:
+            raise RuntimeError("Graph specification is not loaded. Call build() first.")
         # Get outputs from the allocator (already properly shaped by TensorRT)
         outputs = self._output_allocator.outputs
+        outputs.update(self._aliased_outputs)
+        # Cached graphs reuse output storage, including outputs that replace input state.
+        user_output_names = tuple(
+            GraphSpec.tensor_name(locator, spec, "output") for locator, spec in graph_spec.output_spec.tensor_data
+        )
+        state_output_names = graph_spec.output_names()[len(user_output_names) :]
+        flat_outputs = tuple(
+            outputs.pop(name) if not self._use_cuda_graphs else cast(torch.Tensor, outputs.pop(name)).clone()
+            for name in user_output_names + state_output_names
+        )
+        mutation_policies = {
+            mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
+            for mutation in graph_spec.forward_contract.input_mutations
+            if mutation.output_index is not None
+        }
+        result = graph_spec.restore_outputs(
+            flat_outputs,
+            arguments,
+            tensor_mutation_policies=mutation_policies,
+        )
 
-        result = copy.deepcopy(self._output_object)  # make each results a unique copy of the original output object
-        for locator, tensor_spec in self._graph_spec.output_spec.tensor_data:
-            name = GraphSpec.tensor_name(locator, tensor_spec, "output")
-            if name in outputs:
-                result = locator.set_value(result, outputs[name].clone())
-                del outputs[name]
-            else:
-                logger.debug("Output: %s not found in outputs", name)
-
-        if len(outputs) > 0:
+        if outputs:
             logger.warning("Outputs not found in graph spec.")
-            if isinstance(outputs, dict):
-                for name, tensor in outputs.items():
-                    logger.debug(" - %s not found in graph spec: %s", name, tensor.shape)
-            elif isinstance(outputs, list):
-                for tensor in outputs:
-                    logger.debug(" - not found in graph spec: %s", tensor.shape)
+            for name, tensor in outputs.items():
+                logger.debug(" - %s not found in graph spec: %s", name, tensor.shape)
 
         return result
 
-    def _prepare_inputs(self, args, kwargs):
-        """Prepare input tensors from args and kwargs.
+    def _prepare_inputs(self, arguments: dict[str, Any]):
+        """Prepare input tensors from normalized arguments.
 
         Args:
-            args: Positional input tensors
-            kwargs: Named input tensors
+            arguments: Inputs keyed by normalized forward parameter name.
 
         Returns:
             dict: Dictionary mapping input names to tensors
@@ -1017,11 +1020,10 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         # Use input_names property directly from engine_info
         engine_input_names = set(self._engine_info.input_names)
         inputs = {}
-        forward_inputs = self._graph_spec.forward_signature.normalize(args, kwargs)
         for locator, tensor_spec in self._graph_spec.input_spec.tensor_data:
             name = GraphSpec.tensor_name(locator, tensor_spec, "input")
             if name in engine_input_names:
-                inputs[name] = locator.get_value(forward_inputs.arguments)
+                inputs[name] = locator.get_value(arguments)
             else:
                 logger.debug("Input: %s not found in inputs", name)
 
@@ -1035,6 +1037,7 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         Args:
             inputs: Dictionary mapping input names to tensors
         """
+        bound_inputs = {}
         for name, tensor in inputs.items():
             # Ensure tensor is contiguous and on CUDA
             if not tensor.is_contiguous():
@@ -1075,6 +1078,23 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
             if not success:
                 raise RuntimeError(f"TensorRT rejected the address for input {name!r}")
             logger.debug("Set tensor address for %s successfully", name)
+            bound_inputs[name] = tensor
+
+        self._bind_aliased_outputs(bound_inputs)
+
+    def _bind_aliased_outputs(self, bound_inputs: dict[str, torch.Tensor]) -> None:
+        """Bind aliased outputs to the addresses of their corresponding inputs."""
+        self._aliased_outputs = {}
+        for output_name, input_name in self._output_input_aliases.items():
+            tensor = bound_inputs.get(input_name)
+            if tensor is None:
+                raise RuntimeError(f"Aliased TensorRT output {output_name!r} refers to missing input {input_name!r}")
+            success = self._context.set_tensor_address(output_name, tensor.data_ptr())
+            if not success:
+                raise RuntimeError(
+                    f"TensorRT rejected aliased address for output {output_name!r} and input {input_name!r}"
+                )
+            self._aliased_outputs[output_name] = tensor
 
     def _set_optimization_profiles(self, inputs: dict[str, torch.Tensor]) -> None:
         """Select an ordinary context or the static profile's cached graph context."""
@@ -1084,7 +1104,8 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         if self._base_context is not None:
             self._context = self._base_context
             self._output_allocator = self._base_output_allocator
-        if self._config.use_cuda_graphs and self._cuda_graphs.is_eligible(index):
+        # Capture warmup and replay would apply in-place state updates more than once.
+        if self._config.use_cuda_graphs and not self._output_input_aliases and self._cuda_graphs.is_eligible(index):
             profile = self._cuda_graphs.select(
                 index, self._base_context.engine, self._cuda_stream, self._create_output_allocator
             )
@@ -1268,7 +1289,6 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_ENGINE_PATH: self._engine_artifact,
-            self.STATE_OUTPUT_OBJECT: self._output_object,
             self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_QUANTIZATION_CONFIG: self._config.quantization_config,
@@ -1293,7 +1313,6 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         # Reconstruct config with quantization settings
         backend._config = TensorRTBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
-        backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]
         # Ensure CUDA graphs are disabled when loading from checkpoint
         # CUDA graphs cannot be serialized and must be re-captured
         if backend._config.use_cuda_graphs:

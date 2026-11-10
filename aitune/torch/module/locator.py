@@ -328,7 +328,7 @@ class Locator:
         """
         if issubclass(obj_type, list | tuple):
             return Locator._iter_sequence
-        elif issubclass(obj_type, (dict, UserDict)):
+        elif issubclass(obj_type, dict | UserDict):
             return Locator._iter_dict
         elif dataclasses.is_dataclass(obj_type):
             return Locator._iter_dataclass
@@ -344,6 +344,11 @@ class Locator:
         if obj_type in Locator._user_types:
             return Locator._user_types[obj_type]
         return parent_only_tensors
+
+    @staticmethod
+    def is_traversable(value: object) -> bool:
+        """Return whether this locator can visit children of ``value``."""
+        return Locator._get_iter_handler(type(value)) is not None
 
     @staticmethod
     def find_leaves(
@@ -409,6 +414,22 @@ class Locator:
                 stack.pop()
                 if stack:
                     path.pop()
+
+    @staticmethod
+    def find_nodes(obj: object, is_output: bool = False) -> Generator[tuple["Locator", object], None, None]:
+        """Yield the root and every value contained in ``obj``."""
+        stack = [(Locator((), is_output), obj)]
+        while stack:
+            locator, value = stack.pop()
+            if type(value) in Locator._ignored_types:
+                continue
+            yield locator, value
+
+            iter_handler = Locator._get_iter_handler(type(value))
+            if iter_handler is None:
+                continue
+            for accessor, child, obj_type in reversed(list(iter_handler(value))):
+                stack.append((Locator((*locator._access_path, (accessor, obj_type)), is_output), child))
 
     @staticmethod
     def register_user_type(cls: type, only_tensors: bool = False):

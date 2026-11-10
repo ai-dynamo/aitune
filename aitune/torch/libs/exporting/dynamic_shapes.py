@@ -67,7 +67,10 @@ def axis_dims_for_tensor(
     axis_dims: dict[int, Any] = {}
     if batch_dim is not None:
         for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
-            axis_dims[axis] = batch_dim if multiplier == 1 else multiplier * batch_dim
+            if use_auto:
+                axis_dims[axis] = torch.export.Dim.AUTO
+            else:
+                axis_dims[axis] = batch_dim if multiplier == 1 else multiplier * batch_dim
     for index, entry in enumerate(tensor_spec.shape):
         if isinstance(entry, str) and entry.startswith("dim"):
             if tensor_spec.min_shape[index] != tensor_spec.max_shape[index]:

@@ -41,6 +41,7 @@ from torch import nn
 from aitune.torch.backend.tensorrt import TensorRTBackend, TensorRTBackendConfig, TensorRTProfile
 from aitune.torch.backend.tensorrt.cuda_graphs import TensorRTCudaGraphCache
 from aitune.torch.dynamic_shapes import DynamicDim
+from aitune.torch.module.forward_contract import ForwardContract
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -88,11 +89,13 @@ def _built_backend(cache_dir, scenario="static_profiles"):
     with torch.no_grad():
         sample_outputs = [model(value) for value in inputs]
     samples = [((value,), {}) for value in inputs]
+    output_spec = SampleMetadata.from_outputs(sample_outputs[0])
     graph_spec = GraphSpec(
         name="cuda-graph-shape-changes",
         forward_signature=ForwardSignature.from_callable(model.forward),
         input_spec=SampleMetadata.from_inputs({"x": inputs[0]}),
-        output_spec=SampleMetadata.from_outputs(sample_outputs[0]),
+        output_spec=output_spec,
+        forward_contract=ForwardContract(output_spec.without_tensors(sample_outputs[0])),
         dynamic_shapes=(
             {"x": (2, DynamicDim("tokens", min=16, opt=32, max=64), 128)} if scenario == "dynamic_range" else {}
         ),
