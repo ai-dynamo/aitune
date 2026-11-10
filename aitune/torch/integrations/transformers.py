@@ -3,7 +3,7 @@
 """Transformers integrations."""
 
 try:
-    from transformers import DynamicCache, StaticCache, StaticLayer, StaticSlidingWindowLayer
+    from transformers import DynamicCache, EncoderDecoderCache, StaticCache, StaticLayer, StaticSlidingWindowLayer
 
     from aitune.torch.module.locator import Locator
 
@@ -30,6 +30,13 @@ try:
         only_tensors=True,
         mutation_fields=_STATIC_LAYER_INITIALIZATION_FIELDS,
     )
+    # Whisper's static cache wraps separate self-attention and cross-attention caches.
+    # Keep the wrapper's non-tensor is_updated flags visible: they select whether
+    # cross-attention initializes its cache or reuses it. Strict metadata separates
+    # these phases, while nested StaticCache objects retain tensor-only inspection.
+    # Cache selection remains the caller's responsibility; nested DynamicCache
+    # objects remain unsupported and ignored below.
+    Locator.register_user_type(EncoderDecoderCache)
     # disable inspection of dynamic cache as it is not supported by neither jit nor aot backends
     # the only exception is TorchEagerBackend as it is basically passthrough with some dtype casts
     Locator.ignore_type(DynamicCache)

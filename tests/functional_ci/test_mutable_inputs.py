@@ -129,7 +129,14 @@ class TensorMutationModel(nn.Module):
 
 @pytest.mark.matrix("aot_tuning.models.mutable-inputs")
 @pytest.mark.parametrize("operation", ["mul_", "index_copy_", "scatter_", "zero_"])
-@with_backends("base")
+@with_backends(
+    "base",
+    marks={
+        "torch-tensorrt-jit": pytest.mark.skip(
+            reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
+        ),
+    },
+)
 def test_tensor_mutation_lifecycle(case: BackendCase, device: torch.device, tmp_path, operation):
     """Numerical input updates survive repeated calls, interleaved caches, and checkpoint reload."""
     _check_mutable_input_lifecycle(

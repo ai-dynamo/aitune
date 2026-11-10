@@ -90,6 +90,23 @@ Collecting more samples improves shape coverage, but does not create a separate 
 only by tensor contents or hidden state. To separate such behavior into different graphs, use inputs that graph
 detection can distinguish. Otherwise, execute that behavior through a different model path.
 
+### Whisper Static Encoder-Decoder Caches
+
+Whisper callers can select `cache_implementation="static"` in `model.generate()`.
+Transformers then wraps static self-attention and cross-attention caches in an `EncoderDecoderCache`.
+AITune's Transformers integration inspects both nested caches and preserves the wrapper's per-layer
+`is_updated` flags, which control initialization and reuse of cross-attention state. AITune does not
+change the model's cache selection.
+
+Keep `ait.config.strict_mode=True` (the default) so different readiness flags select different graphs.
+Record both cross-attention initialization and subsequent decode calls; registering the cache type
+does not provide a compiled graph for a phase that was never recorded. Static cache capacity and
+encoder sequence length must cover the workload used during tuning and inference.
+
+This integration targets wrappers containing static caches. Nested `DynamicCache` objects remain
+unsupported. Cache-contract tests do not establish complete Whisper generation or backend support;
+those require model-level functional validation.
+
 ## What This Guide Covers
 
 This guide explores the technical details of execution graphs through the lens of `SampleMetadata`, the core class responsible for:
