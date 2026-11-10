@@ -152,6 +152,3 @@ def run_static_cache_aot_test(backend: Backend) -> None:
         del loaded_module, model, dataset
         gc.collect()
         torch.cuda.empty_cache()
-
-
-__all__ = ["run_static_cache_aot_test"]

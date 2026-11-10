@@ -220,6 +220,23 @@ def test_find_leaves_exposes_registered_state_only_during_mutation_capture():
         Locator.unregister_user_type(UserType)
 
 
+def test_register_user_type_replaces_previously_cached_mutation_fields():
+    obj = UserType(1)
+    obj.label = "original"
+    try:
+        Locator.register_user_type(UserType, only_tensors=True, mutation_fields=("value",))
+        assert {locator.path for locator, _ in Locator.find_leaves(obj, include_mutation_fields=True)} == {"value"}
+
+        Locator.register_user_type(UserType, only_tensors=True, mutation_fields=("label",))
+        assert {locator.path for locator, _ in Locator.find_leaves(obj, include_mutation_fields=True)} == {"label"}
+
+        Locator.unregister_user_type(UserType)
+        Locator.register_user_type(UserType, only_tensors=True)
+        assert list(Locator.find_leaves(obj, include_mutation_fields=True)) == []
+    finally:
+        Locator.unregister_user_type(UserType)
+
+
 def test_find_leaves_ignored_type():
     obj = UserType(1)
     # check type is found if not ignored
