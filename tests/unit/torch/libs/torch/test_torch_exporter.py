@@ -32,13 +32,18 @@ def test_export_moves_nested_tensor_leaves_to_device(mocker):
     result = TorchExporter(strict=False).export(model, sample, graph_spec, device="meta")
 
     args = export.call_args.args[1]
+    kwargs = export.call_args.kwargs["kwargs"]
+    assert len(args) == len(sample[0]) == 2
+    assert kwargs.keys() == sample[1].keys()
     assert args[0].device.type == "meta"
     assert args[1][0].device.type == "meta"
-    assert args[2]["residuals"][0].device.type == "meta"
-    assert args[3].device.type == "meta"
-    assert export.call_args.kwargs["kwargs"] is None
+    assert kwargs["options"]["residuals"][0].device.type == "meta"
+    assert kwargs["scale"].device.type == "meta"
+    assert args[1][1] is None
+    assert kwargs["options"]["residuals"][1] is None
+    assert kwargs["options"]["metadata"] == {"mode": "add"}
     assert result.sample[0] is args
-    assert result.sample[1] == {}
+    assert result.sample[1] is kwargs
 
 
 def test_export_preserves_distributed_tensor_placement(mocker):
@@ -78,8 +83,7 @@ def test_export_model_matrix(use_auto, strict, model_name, model_factory, batch_
     exported_module = export_result.exported_program.module()
     for sample_args, sample_kwargs in samples:
         expected = model(*sample_args, **sample_kwargs)
-        normalized = graph_spec.forward_signature.normalize(sample_args, sample_kwargs)
-        actual = exported_module(*normalized.args, **normalized.kwargs)
+        actual = exported_module(*sample_args, **sample_kwargs)
         torch.testing.assert_close(actual, expected)
 
 

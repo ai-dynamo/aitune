@@ -12,6 +12,7 @@ from torch.utils.data import Dataset
 
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch import tuning
+from aitune.torch.config import config as global_config
 from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
@@ -118,6 +119,26 @@ def test_tune_with_cache_clear(mocker, clear_cache):
         batch_size_counter[bs] += 1
 
     assert batch_size_counter == Counter({1: max_batches, 2: max_batches, 4: max_batches})
+
+
+def test_tune_clear_cache_removes_configured_cache_dir(mocker, tmp_path, aitune_cache_dir):
+    # given
+    mock_module = Mock()
+    mock_module.backends = {}
+    configured_cache_dir = tmp_path / "configured_cache"
+    (configured_cache_dir / "test_module").mkdir(parents=True)
+    (aitune_cache_dir / "test_module").mkdir(parents=True)
+    global_config.cache_dir = configured_cache_dir
+
+    mocker.patch.dict(MODULE_REGISTRY.modules, {"test_module": mock_module}, clear=True)
+    mocker.patch("aitune.torch.tuning._describe_module")
+
+    # when
+    tune(mock_module, DummyDataset(size=1), batch_sizes=[1], clear_cache=True)
+
+    # then
+    assert not configured_cache_dir.exists()
+    assert (aitune_cache_dir / "test_module").is_dir()
 
 
 def test_tune_with_dataloader_factory(mocker):

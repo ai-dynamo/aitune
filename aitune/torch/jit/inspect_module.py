@@ -94,7 +94,7 @@ class InspectModule:
         self._name += f" 📊{params}"
         if self._should_be_skipped():
             self._unpatch()
-            return self.__wrapped__(*args, **kwargs)
+            return self._original_forward(*args, **kwargs)
 
         if InspectModule.stack:
             parent = InspectModule.stack[-1]
@@ -106,7 +106,7 @@ class InspectModule:
             else:
                 # too deep, skip the module
                 self._unpatch()
-                return self.__wrapped__(*args, **kwargs)
+                return self._original_forward(*args, **kwargs)
         else:
             self._parent = None
             self._level = 0
@@ -199,6 +199,8 @@ class InspectModule:
         Removes it also from Patcher object registry.
         """
         self._restore_original_forward()
+        self.__wrapped__._forward_pre_hooks = self._original_forward_pre_hooks
+        self.__wrapped__._forward_hooks = self._original_forward_hooks
 
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 

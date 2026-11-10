@@ -8,7 +8,7 @@ from collections import UserDict
 from collections.abc import Generator, Iterable
 from enum import IntEnum
 from functools import cache, cached_property
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 
 import torch
 
@@ -177,9 +177,9 @@ class Locator:
         """Get the value of the locator."""
         for accessor, obj_type in self._access_path:
             if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
-                obj = getattr(obj, accessor)
+                obj = getattr(obj, cast(str, accessor))
             else:
-                obj = obj[accessor]
+                obj = cast(Any, obj)[accessor]
 
         return obj
 
@@ -193,11 +193,11 @@ class Locator:
             if i == num_paths - 1:
                 break
             if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
-                obj = getattr(obj, accessor)
+                obj = getattr(obj, cast(str, accessor))
             else:
                 obj = obj[accessor]  # type: ignore
         if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
-            setattr(obj, accessor, value)
+            setattr(obj, cast(str, accessor), value)
         elif isinstance(obj, tuple):
             items = list(obj)
             items[accessor] = value  # type: ignore
@@ -241,20 +241,21 @@ class Locator:
 
         if tuple_items is None:
             return current
-        return type(current)(*tuple_items) if hasattr(current, "_fields") else type(current)(tuple_items)
+        tuple_type = type(cast(tuple, current))
+        return tuple_type(*tuple_items) if hasattr(current, "_fields") else tuple_type(tuple_items)
 
     @staticmethod
     def _get_child(container: object, accessor: int | str, obj_type: ObjectType) -> object:
         """Read a child using its recorded access kind."""
         if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
-            return getattr(container, accessor)
+            return getattr(container, cast(str, accessor))
         return container[accessor]  # type: ignore[index]
 
     @staticmethod
     def _set_child(container: object, accessor: int | str, obj_type: ObjectType, value: object) -> None:
         """Update a child using its recorded access kind."""
         if obj_type == ObjectType.DATACLASS or obj_type == ObjectType.USER_TYPE:
-            setattr(container, accessor, value)
+            setattr(container, cast(str, accessor), value)
         else:
             container[accessor] = value  # type: ignore[index]
 

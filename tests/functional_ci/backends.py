@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Backend table for cross-backend cases: factory, tolerance, and the features each backend is tested on."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
 import torch
@@ -29,9 +29,12 @@ from aitune.torch.backend import (
 )
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
 
-Capability = Literal[
-    "save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph", "onnx_input", "jit"
+Tag = Literal[
+    "base",
+    "export",
+    "onnx_input",
 ]
+Capability = Tag
 
 
 @dataclass(frozen=True)
@@ -40,12 +43,12 @@ class BackendCase:
 
     factory: Callable[[], Backend]
     tolerance: Tolerance
-    capabilities: frozenset[str]
+    tags: frozenset[Tag]
     artifact_format: str | None = None
 
     def __post_init__(self):
-        """Keep the `export` capability and `artifact_format` in step."""
-        assert ("export" in self.capabilities) == (self.artifact_format is not None), "set both or neither"
+        """Keep the `export` tags and `artifact_format` in step."""
+        assert ("export" in self.tags) == (self.artifact_format is not None), "set both or neither"
 
 
 def _torch_tensorrt_config() -> TorchTensorRTConfig:
@@ -70,7 +73,8 @@ def _torch_tensorrt_jit() -> Backend:
 
 def tensorrt_backend(**overrides) -> Backend:
     """Build a standalone TensorRT backend without TF32 and CUDA graphs; `overrides` replace config fields."""
-    return TensorRTBackend(TensorRTBackendConfig(**{"enable_tf32": False, "use_cuda_graphs": False, **overrides}))
+    config: dict[str, Any] = {"enable_tf32": False, "use_cuda_graphs": False, **overrides}
+    return TensorRTBackend(TensorRTBackendConfig(**config))
 
 
 def _onnx_runtime(provider: ONNXExecutionProvider) -> Callable[[], Backend]:
@@ -83,50 +87,98 @@ def _torchao_int8_weight_only() -> Backend:
     return TorchAOBackend(TorchAOBackendConfig(quantization="int8wo", mode="default"))
 
 
-def _capabilities(*capabilities: Capability) -> frozenset[str]:
-    """Build a capability set; the `Capability` parameter lets pytype reject a misspelled name."""
-    return frozenset(capabilities)
+def _tags(*tags: Tag) -> frozenset[Tag]:
+    """Build a tags set; the `Tag` parameter lets linters reject a misspelled name."""
+    return frozenset(tags)
 
 
 BACKENDS: dict[str, BackendCase] = {
-    "torch-eager": BackendCase(TorchEagerBackend, Tolerance(), _capabilities("save_load")),
+    "torch-eager": BackendCase(
+        TorchEagerBackend,
+        Tolerance(),
+        _tags(
+            "base",
+        ),
+    ),
     "inductor-aot": BackendCase(
         TorchInductorAotBackend,
         Tolerance(),
-        _capabilities("save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph"),
+        _tags(
+            "base",
+            "export",
+        ),
         artifact_format="pt2",
     ),
     "torch-tensorrt-aot": BackendCase(
-        _torch_tensorrt_aot, TENSORRT_FP32, _capabilities("save_load", "dynamic_batch", "dynamic_non_batch")
+        _torch_tensorrt_aot,
+        TENSORRT_FP32,
+        _tags(
+            "base",
+        ),
     ),
     "tensorrt": BackendCase(
         tensorrt_backend,
         TENSORRT_FP32,
-        _capabilities(
-            "save_load", "export", "dynamic_batch", "dynamic_non_batch", "structured_io", "multigraph", "onnx_input"
+        _tags(
+            "base",
+            "export",
+            "onnx_input",
         ),
         artifact_format="tensorrt_plan",
     ),
     "onnxruntime-cuda": BackendCase(
         _onnx_runtime(ONNXExecutionProvider.CUDA),
         TENSORRT_FP32,
-        _capabilities("save_load", "export", "dynamic_batch", "dynamic_non_batch", "onnx_input"),
+        _tags(
+            "base",
+            "export",
+            "onnx_input",
+        ),
         artifact_format="onnx",
     ),
     "onnxruntime-tensorrt": BackendCase(
-        _onnx_runtime(ONNXExecutionProvider.TENSORRT), TENSORRT_FP32, _capabilities("save_load")
+        _onnx_runtime(ONNXExecutionProvider.TENSORRT),
+        TENSORRT_FP32,
+        _tags(
+            "base",
+        ),
     ),
     "torchao-int8wo": BackendCase(
-        _torchao_int8_weight_only, Tolerance(rtol=5e-2, atol=5e-2), _capabilities("save_load")
+        _torchao_int8_weight_only,
+        Tolerance(rtol=5e-2, atol=5e-2),
+        _tags(
+            "base",
+        ),
     ),
-    "inductor-jit": BackendCase(TorchInductorJitBackend, Tolerance(), _capabilities("jit")),
-    "torch-tensorrt-jit": BackendCase(_torch_tensorrt_jit, TENSORRT_FP32, _capabilities("jit")),
+    "inductor-jit": BackendCase(
+        TorchInductorJitBackend,
+        Tolerance(),
+        _tags(
+            "base",
+        ),
+    ),
+    "torch-tensorrt-jit": BackendCase(
+        _torch_tensorrt_jit,
+        TENSORRT_FP32,
+        _tags(
+            "base",
+        ),
+    ),
 }
 
 
-def with_backends(*capabilities: Capability) -> pytest.MarkDecorator:
-    """Parametrize `case` over every backend that has all `capabilities`; raise if no backend has them."""
-    selected = {backend_id: case for backend_id, case in BACKENDS.items() if case.capabilities.issuperset(capabilities)}
+def with_backends(*tags: Tag, marks: Mapping[str, pytest.MarkDecorator] | None = None) -> pytest.MarkDecorator:
+    """Parametrize `case` over backends with all `tags`; raise if none match.
+
+    `marks` maps a backend id to marks for that case only, e.g. a strict `pytest.mark.xfail` for a known failure.
+    """
+    marks = marks or {}
+    selected = {backend_id: case for backend_id, case in BACKENDS.items() if case.tags.issuperset(tags)}
     if not selected:
-        raise ValueError(f"no backend in BACKENDS has all capabilities {capabilities}")
-    return pytest.mark.parametrize("case", list(selected.values()), ids=list(selected))
+        raise ValueError(f"no backend in BACKENDS has all tags {tags}")
+    if unknown := marks.keys() - selected.keys():
+        raise ValueError(f"marks for backends without tags {tags}: {sorted(unknown)}")
+    return pytest.mark.parametrize(
+        "case",
+        [pytest.param(case, marks=marks.get(backend_id, ()), id=backend_id) for backend_id, case in selected.items()],
+    )

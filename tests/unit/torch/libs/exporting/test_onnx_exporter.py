@@ -46,6 +46,10 @@ def test_export_runs_nested_input_and_output_model(tmp_path, use_dynamo):
     torch.testing.assert_close(torch.from_numpy(actual), x + bias)
 
 
+@pytest.mark.skipif(
+    tuple(int(component) for component in torch.__version__.split(".")[:2]) < (2, 10),
+    reason="Requires PyTorch 2.10 or newer; PyTorch 2.9 generates invalid export guards referencing 'L'",
+)
 def test_dynamo_export_preserves_nested_dynamic_shapes(tmp_path):
     model = ToyNestedInputModel().eval()
     samples = model.samples(batch_sizes=[2, 4])

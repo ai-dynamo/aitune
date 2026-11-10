@@ -106,6 +106,10 @@ def test_export_supports_nested_dynamic_inputs(use_auto):
         torch.testing.assert_close(actual, (expected,))
 
 
+@pytest.mark.skipif(
+    tuple(int(component) for component in torch.__version__.split(".")[:2]) < (2, 10),
+    reason="Requires PyTorch 2.10 or newer; PyTorch 2.9 generates invalid export guards referencing 'L'",
+)
 def test_export_supports_different_batch_axis_multipliers():
     class Model(torch.nn.Module):
         def forward(self, x, doubled):

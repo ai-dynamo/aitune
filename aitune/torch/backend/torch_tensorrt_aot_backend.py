@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """TorchTensorRT backend with AOT compilation and intermediate model save."""
 
+import inspect
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
@@ -10,6 +11,8 @@ from typing import Any, ClassVar, Self, cast
 import torch
 import torch.nn as nn
 from torch._export.verifier import SpecViolationError
+from torch.export import ExportedProgram
+from torch.export.graph_signature import ConstantArgument, InputKind
 
 from aitune.torch.backend.backend import (
     Backend,
@@ -24,7 +27,7 @@ from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.exporting import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
-from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.module import move_module_to_device
@@ -212,7 +215,9 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
         self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self.device))
 
         with self._track_build_step(TorchTensorRTAotBuildStep.TORCH_EXPORT):
-            # ``use_auto=False`` creates finite ranges required by TensorRT optimization profiles.
+            # ``use_auto=False`` first tries the finite explicit ranges required by TensorRT optimization
+            # profiles. If Torch Export cannot prove the entire range valid, bounded ``Dim.DYNAMIC`` hints retain
+            # those limits while allowing it to infer guards. ``strict=False`` retains non-strict compatibility.
             export_result = TorchExporter(
                 use_auto=False,
                 strict=False,
@@ -224,6 +229,10 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
                 device=self.device,
             )
             exported = export_result.exported_program
+            # Retracing needs the captured flat tensors, not TensorRT optimization-profile descriptors.
+            export_sample = exported.example_inputs
+            if export_sample is None:
+                raise RuntimeError("Torch-TensorRT serialization requires the flat example inputs used during export.")
 
         # Optimization-profile inputs for TRT engine building.
         input_signature = []
@@ -261,7 +270,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
             _save_compiled_model(
                 trt_model_compiled,
                 self._exported_model_artifact.path,
-                input_signature,
+                export_sample,
                 export_result.dynamic_shapes,
                 self._config.pickle_protocol,
             )
@@ -275,6 +284,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
     def _activate(self):
         """Load compiled module."""
+        assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
         exported_model_artifact = cast(ArtifactPath, self._exported_model_artifact)
         with torch_tensorrt_errors(torch_tensorrt):
             loaded = torch_tensorrt.load(exported_model_artifact.path.as_posix())
@@ -333,35 +343,67 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
         return backend
 
 
+def _is_primitive(value: Any) -> bool:
+    """Check if a value is a primitive type (int, float, str, bool)."""
+    return isinstance(value, int | float | str | bool)
+
+
+def _restore_constant_inputs(program: ExportedProgram) -> None:
+    """Declare non-tensor user inputs of ``program`` as constants in place, as ``torch.export`` does.
+
+    Torch-TensorRT declares every placeholder as a tensor input, so serializing e.g. a float or ``None`` kwarg raises
+    ``KeyError``. Remove this workaround once the minimum supported Torch-TensorRT version includes the fix for
+    https://github.com/pytorch/TensorRT/issues/4941.
+    """
+    values = {
+        node.name: node.meta["val"] for node in program.graph.nodes if node.op == "placeholder" and "val" in node.meta
+    }
+    for spec in program.graph_signature.input_specs:
+        if spec.kind == InputKind.USER_INPUT and spec.arg.name in values:
+            value = values[spec.arg.name]
+            if value is None or _is_primitive(value):
+                spec.arg = ConstantArgument(name=spec.arg.name, value=value)
+
+
+def _export_compiled_model(module: torch.fx.GraphModule) -> ExportedProgram:
+    """Export a compiled graph as ``torch_tensorrt.save(retrace=False)`` does.
+
+    From Torch-TensorRT 2.11, that save uses the legacy exporter, but ``dynamo.export`` defaults to the new one.
+    """
+    assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
+    export = torch_tensorrt.dynamo.export
+    legacy: dict[str, Any] = (
+        {"use_legacy_exporter": True} if "use_legacy_exporter" in inspect.signature(export).parameters else {}
+    )
+    program = export(module, **legacy)
+    _restore_constant_inputs(program)
+    return program
+
+
 def _save_compiled_model(
-    module: nn.Module,
+    module: torch.fx.GraphModule,
     path: Path,
-    inputs: list[Any],
+    sample: Sample,
     dynamic_shapes: dict[str, Any] | None,
     pickle_protocol: int,
 ) -> None:
     """Save a compiled graph and retry a known export error with retracing."""
+    assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
     try:
         with torch_tensorrt_errors(torch_tensorrt):
-            torch_tensorrt.save(
-                module,
-                path.as_posix(),
-                retrace=False,
-                pickle_protocol=pickle_protocol,
-            )
+            program = _export_compiled_model(module)
+            torch_tensorrt.save(program, path.as_posix(), pickle_protocol=pickle_protocol)
         logger.info("Saved the Torch-TensorRT artifact without retracing.")
     except SpecViolationError:
         logger.warning(
-            "Direct Torch-TensorRT serialization failed; retrying with retrace enabled.",
+            "Direct Torch-TensorRT serialization failed; re-exporting the compiled graph with torch.export.",
             exc_info=True,
         )
+        args, kwargs = sample
         with torch_tensorrt_errors(torch_tensorrt):
-            torch_tensorrt.save(
-                module,
-                path.as_posix(),
-                retrace=True,
-                inputs=inputs,
-                dynamic_shapes=dynamic_shapes,
-                pickle_protocol=pickle_protocol,
+            # Not `save(retrace=True)`: it rejects non-tensor inputs, and on 2.8-2.10 it ignores `dynamic_shapes`.
+            program = torch.export.export(
+                module, tuple(args), kwargs or None, dynamic_shapes=dynamic_shapes, strict=False
             )
+            torch_tensorrt.save(program, path.as_posix(), pickle_protocol=pickle_protocol)
         logger.info("Saved the Torch-TensorRT artifact using the retracing fallback.")

@@ -28,8 +28,8 @@ class TwoTower(nn.Module):
         return self.head(self.encoder(x) + self.encoder(x.unsqueeze(1)).squeeze(1))
 
 
-@pytest.mark.matrix("models.multiple-graphs", "modes.aot-inspect-wrap")
-@with_backends("multigraph")
+@pytest.mark.matrix("aot_tuning.models.multiple-graphs", "modes.aot-inspect-wrap", "topology.inspect/single-gpu")
+@with_backends("base")
 def test_partial_wrap_multigraph(case: BackendCase, device: torch.device, tmp_path):
     """Wrap only the shared encoder; it tunes one graph per layout, hooks still fire, and the checkpoint reloads."""
     backend, tolerance = case.factory(), case.tolerance

@@ -5,6 +5,7 @@
 import logging
 from collections import defaultdict
 from pathlib import Path
+from typing import cast
 
 import onnx
 import torch
@@ -115,7 +116,8 @@ class ONNXExporter:
     @staticmethod
     def _create_dynamic_axes(graph_spec: GraphSpec) -> dict:
         """Create dynamic-axis rules for the legacy ONNX tracer."""
-        dynamic_axes = defaultdict(list)
+        # Inferred axes use index lists; explicit definitions use axis-name dictionaries.
+        dynamic_axes: defaultdict[str, list[int] | dict[int, str]] = defaultdict(list)
 
         for locator, tensor_spec in graph_spec.input_spec.tensor_data:
             definition = graph_spec.get_shape_definition(locator)
@@ -133,13 +135,13 @@ class ONNXExporter:
                 zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)
             ):
                 if min_size != max_size:
-                    dynamic_axes[format_tensor_name(locator.path, "input")].append(axis)
+                    cast(list[int], dynamic_axes[format_tensor_name(locator.path, "input")]).append(axis)
 
         for locator, tensor_spec in graph_spec.output_spec.tensor_data:
             for axis, (min_size, max_size) in enumerate(
                 zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)
             ):
                 if min_size != max_size:
-                    dynamic_axes[format_tensor_name(locator.path, "output")].append(axis)
+                    cast(list[int], dynamic_axes[format_tensor_name(locator.path, "output")]).append(axis)
 
         return dynamic_axes

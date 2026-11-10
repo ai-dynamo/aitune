@@ -40,7 +40,7 @@ def prepare_tensor_export(
     Returns:
         The module adapter and its flat example inputs.
     """
-    prepared_sample = prepare_export_sample(sample, graph_spec)
+    prepared_sample: Sample = prepare_export_sample(sample, graph_spec)
     if device is not None:
         prepared_sample = move_tensors_to_device(prepared_sample, device)
 

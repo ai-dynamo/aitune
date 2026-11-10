@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from onnx import TensorProto, helper
 
+from aitune.torch.dataloader import DataLoaderFactory, InputConfig, MinMaxRandomDataset
 from aitune.torch.distributed import DistributedOutcome
 from aitune.torch.inspecting import inspect
 from aitune.torch.inspecting.inspecting import _run_inference, _synchronize_inspection_result
@@ -87,6 +88,20 @@ def test_inspect_simple_model(simple_model, sample_dataset):
     assert any(info.forward_called for info in modules)
     assert any(info.execution_count > 0 for info in modules)
     assert any(info.total_execution_time > 0 for info in modules)
+
+
+@pytest.mark.parametrize("wrap_in_factory", [False, True])
+def test_inspect_min_max_random_dataset(simple_model, wrap_in_factory):
+    """Test inspecting with a MinMaxRandomDataset, directly or through a DataLoaderFactory."""
+    dataset = MinMaxRandomDataset(3, [InputConfig((10,), (10,))])
+    factory = DataLoaderFactory(dataset)
+
+    modules_info = inspect(
+        simple_model, factory if wrap_in_factory else dataset, number_of_iterations=4, warmup_iterations=2
+    )
+
+    assert any(info.execution_count == 4 for info in modules_info.get_modules())
+    assert factory.dataset is dataset
 
 
 def test_inspect_onnx_module_reports_declared_graph(tmp_path):
