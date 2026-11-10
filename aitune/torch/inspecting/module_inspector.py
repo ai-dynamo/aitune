@@ -401,11 +401,14 @@ class ModuleInspector:
         @wraps(original_forward)
         def wrapped_forward(*args, **kwargs):
             """Report the call to the recorder while it records; otherwise run the legacy inspection forward."""
+            # Dynamo must not trace the bookkeeping: while torch.compile traces a compiled part, run the
+            # original forward unchanged. Compiled parts run eagerly in the call-tree pass (``force_eager``),
+            # so this only applies while they actually compile.
+            if torch.compiler.is_compiling():
+                return original_forward(*args, **kwargs)
             # While the call-tree recorder records, report to it only: no per-call synchronization (it would
             # distort the recorder's timing) and no ModuleInfo updates (the legacy pass keeps its numbers).
             if recorder is not None and recorder.active:
-                if torch.compiler.is_compiling():
-                    return original_forward(*args, **kwargs)
                 label = f"{_label_prefix(self._module_info[module].object_path)}.forward"
                 frame = recorder.begin_call(label, module, "forward", args, kwargs)
                 try:

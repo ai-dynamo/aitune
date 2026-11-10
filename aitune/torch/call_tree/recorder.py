@@ -12,8 +12,8 @@ wraps the methods it finds and calls ``begin_call`` and ``end_call`` around the 
         recorder.end_call(frame)
 
 The only hook the recorder owns is a process-wide probe on ``nn.Module._apply`` (``.to()``, ``.cuda()``, ...), active
-inside a ``with recorder:`` block. Timing uses CUDA events per call (no per-call synchronization) when CUDA is available and
-``time.perf_counter`` otherwise; ``flush()`` resolves the pending events once per iteration.
+inside a ``with recorder:`` block. Timing uses CUDA events per call (no per-call synchronization) when CUDA is
+available and ``time.perf_counter`` otherwise; ``flush()`` resolves the pending events once per iteration.
 """
 
 from __future__ import annotations
@@ -29,7 +29,8 @@ from torch import nn
 from aitune.torch.call_tree.call_tree import CallNode, CallTree
 from aitune.torch.call_tree.callers import unrecorded_caller
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container
-from aitune.torch.call_tree.nodes import NodeKey
+from aitune.torch.call_tree.nodes import NodeKey, key_path
+from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, WeightAccessMode, storage_key
 
 
 class CallRecorder:
@@ -54,14 +55,16 @@ class CallRecorder:
     def __init__(self) -> None:
         """Create an empty recorder."""
         self._nodes: dict[NodeKey, CallNode] = {}
+        self._paths: dict[NodeKey, str] = {}
         self._stack: list[NodeKey] = []
         self._events: dict[NodeKey, list[tuple[Any, Any]]] = {}
         self._ms: dict[NodeKey, float] = {}
         self._sequences: list[list[NodeKey]] = []
         self._current_sequence: list[NodeKey] | None = None
-        self._external_apply: dict[int, set[str]] = {}
         self._apply_depth = 0
         self._original_apply: Callable[..., Any] | None = None
+        self._weight_access_log = WeightAccessLog()
+        self._weight_access_mode: WeightAccessMode | None = None
         self._modules: list[tuple[str, nn.Module]] = []
         self._registered: set[int] = set()
         self._order = 0
@@ -74,7 +77,17 @@ class CallRecorder:
             raise RuntimeError("Another CallRecorder is already recording; the nn.Module._apply probe is process-wide.")
         self._original_apply = nn.Module._apply
         CallRecorder._recording_now = self
-        nn.Module._apply = self._make_apply_probe(self._original_apply)
+        try:
+            nn.Module._apply = self._make_apply_probe(self._original_apply)
+            self._weight_access_log.start(self._modules)
+            weight_access_mode = WeightAccessMode(
+                self._weight_access_log, lambda: self._paths[self._stack[-1]] if self._stack else ""
+            )
+            weight_access_mode.__enter__()
+            self._weight_access_mode = weight_access_mode
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
         self._active = True
         return self
 
@@ -83,6 +96,9 @@ class CallRecorder:
         self._active = False
         self._stack.clear()
         self._current_sequence = None
+        if self._weight_access_mode is not None:
+            self._weight_access_mode.__exit__(None, None, None)
+            self._weight_access_mode = None
         if self._original_apply is not None:
             nn.Module._apply = self._original_apply
             self._original_apply = None
@@ -136,6 +152,7 @@ class CallRecorder:
             )
             self._order += 1
             self._nodes[key] = node
+            self._paths[key] = key_path(key)
             if parent in self._nodes:
                 self._nodes[parent].children.append(key)
         node.calls += 1
@@ -179,7 +196,7 @@ class CallRecorder:
             nodes=nodes,
             iterations=len(self._sequences),
             sequences=list(self._sequences),
-            external_apply={k: set(v) for k, v in self._external_apply.items()},
+            weight_accesses=self._weight_access_log.snapshot(),
             modules=list(self._modules),
         )
 
@@ -227,10 +244,12 @@ class CallRecorder:
 
         ``nn.Module._apply`` is the method that ``.to()``, ``.cuda()``, ``.half()`` and similar calls use to convert a
         module's parameters and buffers. The replacement runs ``original_apply`` unchanged. While the recorder is
-        recording, it first records who called it: the label of the innermost recorded call, or the code found by
-        ``unrecorded_caller`` if no recorded call is running. The caller is added to ``external_apply`` for the
-        module and, unless ``recurse=False``, for all of its submodules. Only the outermost ``_apply`` of a
-        conversion records, because ``_apply`` calls itself on each child.
+        recording, it first records a ``"move"`` access on every tracked weight of the module and, unless
+        ``recurse=False``, of all its submodules: the innermost recorded call's key, or the code found by
+        ``unrecorded_caller`` if no recorded call is running. Only the outermost ``_apply`` of a conversion records,
+        because ``_apply`` calls itself on each child. Recording goes through the storage map before
+        ``original_apply`` runs, so a tied alias outside the moved subtree is moved as well, and the storage reads
+        themselves do not count as accesses.
 
         Args:
             original_apply: The ``nn.Module._apply`` to call; restored by ``__exit__``.
@@ -243,15 +262,25 @@ class CallRecorder:
         def _apply(module: nn.Module, fn: Callable, *args: Any, **kwargs: Any) -> Any:
             # ``nn.Module._apply`` recurses through child ``_apply`` calls; only the outermost one records.
             if recorder._active and recorder._apply_depth == 0:
-                caller = recorder._nodes[recorder._stack[-1]].label if recorder._stack else unrecorded_caller()
+                caller = recorder._paths[recorder._stack[-1]] if recorder._stack else unrecorded_caller()
                 recurse = kwargs.get("recurse", args[0] if args else True)
-                for submodule in module.modules() if recurse else [module]:
-                    recorder._external_apply.setdefault(id(submodule), set()).add(caller)
+                with torch._C.DisableTorchFunction():
+                    for submodule in module.modules() if recurse else [module]:
+                        for weight in (*submodule.parameters(recurse=False), *submodule.buffers(recurse=False)):
+                            key = storage_key(weight)
+                            if recorder._weight_access_log.lookup(weight, key):
+                                recorder._weight_access_log.record(key, WeightAccess(caller, "move"))
             recorder._apply_depth += 1
             try:
+                if recorder._weight_access_mode is not None:
+                    with recorder._weight_access_mode.paused():
+                        return original_apply(module, fn, *args, **kwargs)
                 return original_apply(module, fn, *args, **kwargs)
             finally:
                 recorder._apply_depth -= 1
+                if recorder._apply_depth == 0 and recorder._active and recorder._weight_access_mode is not None:
+                    # A move or cast gives the tensors new storage; keep tracking them under it.
+                    recorder._weight_access_log.retrack()
 
         return _apply
 

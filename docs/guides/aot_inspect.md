@@ -240,17 +240,61 @@ What is recorded:
   on modules and on plain pipeline objects outside any module. Methods of library classes (`torch`,
   `transformers`, `diffusers`, ...) are not recorded, but methods of your own subclasses of them are;
 - calls of `.to()`, `.cuda()` and similar that reach a module from code outside it, with the code that made them;
+- every torch op that reads a module's parameter or buffer, or looks up its device, with the recorded call it ran in;
 - times from CUDA events without synchronizing after every call, or from `time.perf_counter` without CUDA.
 
-`call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. `get_modules()` and
+`call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. Parts compiled with
+`torch.compile` run compiled in the per-module pass, so calls inside them are not measured there; in the call-tree
+pass they run eagerly, so their calls and weight reads are recorded too, and the call tree's
+times for them are eager times, not compiled ones. Call-tree times also include the cost of recording weight accesses,
+so compare them with each other, not with deployed latency. `get_modules()` and
 `describe()` are unchanged: they still come from the synchronized pass. The object walk has to reach the linear
 layers, so deep models need a larger `max_depth` (8 for BAGEL-sized pipelines).
 
 Limits: exact `nn.Sequential`, `nn.ModuleList` and
 `nn.ModuleDict` containers are skipped and their children attached to the caller; a call that takes a callable as an
-argument (a checkpoint helper) is skipped the same way; free functions are not recorded; calls inside parts compiled
-with `torch.compile` are not recorded. CUDA times come from events on the device that was current when a call
-started, so work that a call runs on other GPUs is not fully counted.
+argument (a checkpoint helper) is skipped the same way; free functions are not recorded. CUDA times come from
+events on the device that was current when a call started, so work that a call runs on other GPUs is not fully
+counted.
+
+## Shared weights
+
+After tuning, AITune offloads a module's original weights (`device_after_tuning`, `"meta"` by default). That breaks a
+model when something outside the tuned module still needs one of those weights:
+
+- a head tied to an embedding that another module uses;
+- an embedding looked up outside the module, for example by the pipeline before it calls the module;
+- a pipeline that reads the module's device from its parameters, as diffusers' `_get_execution_device` does with
+  `next(module.parameters()).device`;
+- library code that moves the whole model with `.to()` on every call, as `SentenceTransformer.encode` does.
+
+The call tree finds these. `shared_weights_of` takes the call tree and a module, a node path or a list of them, and
+returns one entry per weight — a parameter or a buffer — whose `accesses` list the outside uses, sorted by name:
+reads (`"read"`), device lookups (`"device"`) and moves (`"move"`). `bytes` is `numel * element_size` per weight; views of
+one storage are each counted in full. Reads count per op, so a direct read such as `F.linear(x, model.lm_head.weight)`
+in a caller is found. A module outside the unit that itself holds one of the unit's weights counts as reading it
+whenever its `forward` runs, because it may pass the weight to a C++ or CUDA extension torch does not see. A module
+holds all its parameters and buffers, because offloading moves all of them; a module the call tree has no `forward` of
+(an exact `nn.Sequential`, or a `forward` that takes a callable) stands for the recorded calls inside it:
+
+```python
+from aitune.torch.call_tree import shared_weights_of
+
+tree = modules_info.call_tree
+shared_weights_of(tree, model.lm_head)
+# [SharedWeight(name="llm.embed.weight", aliases=["lm_head.weight"], bytes=512,
+#               accesses=[WeightAccess("forward > llm.embed.forward", "read")])]
+shared_weights_of(tree, model.dit)    # []: can be tuned and offloaded on its own
+```
+
+The call tree has these limits:
+
+- It only knows the paths the recording ran. A weight read or a device lookup on another path (another branch,
+  another input size) is not seen.
+- It assumes the model runs on one thread, like the rest of AITune: weight reads on other threads are not seen,
+  and a `.to()` on another thread during recording can hide reads.
+- It keeps following a parameter that gets new storage without `.to()`, for example through `param.data = ...` or
+  accelerate's `set_module_tensor_to_device`. It loses track of a buffer that is replaced the same way.
 
 ## Troubleshooting
 

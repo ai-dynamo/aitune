@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import aitune.torch.inspecting.inspecting as inspecting_module
+from aitune.torch.call_tree import WeightAccess
 from aitune.torch.call_tree.recorder import CallRecorder
 from aitune.torch.distributed import coordinator
 from aitune.torch.inspecting import inspect
@@ -165,7 +166,7 @@ def test_plain_object_methods_and_to_calls_are_recorded(dataset):
     info = inspect(model, dataset, inference_function=lambda x: model.encode(x), number_of_iterations=2, call_tree=True)
     tree = _tree(info)
     assert ("root.encode", "root.forward") in tree.nodes
-    assert tree.external_apply[id(model.get_submodule("0.layers.0.proj"))] == {"root.encode"}
+    assert WeightAccess("encode", "move") in tree.weight_accesses["0.layers.0.proj.weight"]
 
 
 def test_recording_pass_flushes_after_every_inference(mocker, dataset):
@@ -218,3 +219,36 @@ def test_flush_failure_is_raised_through_the_rank_failure_context(mocker, datase
 
     spy.assert_any_call("Resolving call tree timings")
     assert nn.Module._apply is original_apply
+
+
+def test_compiled_child_inspects_and_its_calls_appear_in_the_tree(dataset):
+    """A ``torch.compile`` child must not crash the legacy pass; the call tree sees inside it (force_eager)."""
+
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    model = Root(torch.compile(Inner(), backend="eager"))
+    fn = lambda x: model(x)  # noqa: E731
+
+    info = inspect(model, dataset, inference_function=fn, number_of_iterations=ITERATIONS, warmup_iterations=1)
+    assert info.call_tree is None
+
+    info = inspect(
+        model, dataset, inference_function=fn, number_of_iterations=ITERATIONS, warmup_iterations=1, call_tree=True
+    )
+    labels = [n.label for n in _tree(info).nodes.values()]
+    assert any("child" in label for label in labels)
+    assert any("lin" in label for label in labels)

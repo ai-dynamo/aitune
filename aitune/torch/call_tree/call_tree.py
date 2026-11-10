@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from torch import nn
 
 from aitune.torch.call_tree.nodes import CallNode, NodeKey
+from aitune.torch.call_tree.weights.accesses import WeightAccess
 
 
 @dataclass
@@ -17,8 +18,10 @@ class CallTree:
         nodes: All nodes by key.
         iterations: Number of recorded iterations.
         sequences: Per iteration, the keys of the entered nodes in call order.
-        external_apply: For each module (by ``id``), the labels of the calls during which ``nn.Module._apply``
-            (``.to()``, ``.cuda()``, ...) reached it. ``<outside any call>`` if no recorded call was running.
+        weight_accesses: For each parameter or buffer (by weight name: its object path, e.g.
+            ``vlm.lm_head.weight``; a tied weight appears under each of its names), the ``WeightAccess`` records of
+            accesses to it: reads, device checks and moves. Names stay valid when ``.to()`` or casts replace the
+            tensors.
         modules: Label prefix and module for every instrumented module, used for parameter names and sizes.
 
     Example:
@@ -47,7 +50,7 @@ class CallTree:
     nodes: dict[NodeKey, CallNode] = field(default_factory=dict)
     iterations: int = 0
     sequences: list[list[NodeKey]] = field(default_factory=list)
-    external_apply: dict[int, set[str]] = field(default_factory=dict)
+    weight_accesses: dict[str, set[WeightAccess]] = field(default_factory=dict)
     modules: list[tuple[str, nn.Module]] = field(default_factory=list)
 
     @property
