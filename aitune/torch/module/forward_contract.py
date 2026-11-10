@@ -33,12 +33,27 @@ class TensorMutationPolicy(str, Enum):
 
 @dataclass(frozen=True)
 class InputMutation:
-    """One observable input change made by a module call."""
+    """One observable input leaf change made by a module call.
+
+    ``output_index`` selects a tensor from the flat backend outputs, including
+    appended state outputs when the tensor is not a user output. ``value`` holds
+    the recorded replacement for a non-tensor leaf; it is replayed as a constant,
+    not recomputed from runtime inputs.
+    """
 
     locator: Locator
     kind: InputMutationKind
     output_index: int | None = None
     value: Any = None
+
+    def can_replace_input(self, arguments: dict[str, Any]) -> bool:
+        """Return whether replacement reaches a mutable container owned by the caller.
+
+        Rebinding a direct argument, or rebuilding only tuples above it, changes
+        the normalized argument dictionary without updating the caller's state.
+        """
+        steps = tuple(self.locator.path_iter())
+        return any(not isinstance(Locator(steps[:depth]).get_value(arguments), tuple) for depth in range(1, len(steps)))
 
 
 @dataclass(frozen=True)
@@ -51,7 +66,24 @@ class OutputInputAlias:
 
 @dataclass(frozen=True)
 class ForwardContract:
-    """Recorded output structure and input changes for one graph."""
+    """Recorded output structure and input changes for one graph.
+
+    Recording creates this contract on the first call for an input graph. Later
+    calls must agree on which inputs change, how they change, and which outputs
+    are the same objects as inputs. Updating observed shapes does not record a
+    new contract.
+
+    Tensor changes are restored by copying into existing inputs or replacing
+    tensor leaves. Backends may request replacement for copy mutations when the
+    leaf belongs to a caller-owned mutable container. Non-tensor replacements
+    reuse recorded constants. Output aliases return the same input tensors or
+    containers. They do not rebuild arbitrary tensor views that share storage.
+
+    The contract covers values reached by Locator, including explicitly
+    registered mutation fields. It does not describe leaf deletion, arbitrary
+    Python side effects, or hidden module attributes and buffers; module state
+    remains the responsibility of the exporter and backend.
+    """
 
     output_template: Any
     input_mutations: tuple[InputMutation, ...] = ()
@@ -92,7 +124,8 @@ class ForwardContract:
                 mutation.output_index,
                 TensorMutationPolicy.PRESERVE_INPUT,
             )
-            if mutation.kind == InputMutationKind.COPY_TENSOR and policy == TensorMutationPolicy.PRESERVE_INPUT:
+            replace_input = policy == TensorMutationPolicy.REPLACE_INPUT and mutation.can_replace_input(arguments)
+            if mutation.kind == InputMutationKind.COPY_TENSOR and not replace_input:
                 target = mutation.locator.get_value(arguments)
                 if not isinstance(target, torch.Tensor):
                     raise TypeError(

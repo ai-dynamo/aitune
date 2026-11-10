@@ -5,6 +5,7 @@
 from copy import deepcopy
 
 import numpy as np
+import pytest
 import torch
 
 from aitune.torch.module.forward_contract import (
@@ -267,3 +268,28 @@ def test_restore_preserves_a_tensor_returned_directly_from_inputs():
     result = contract.restore_outputs((torch.full((2,), 7.0),), {"x": input_tensor}, output_spec)
 
     assert result is input_tensor
+
+
+@pytest.mark.parametrize("container", [lambda tensor: tensor, lambda tensor: (tensor,), lambda tensor: ((tensor,),)])
+def test_replacement_policy_copies_mutations_back_through_immutable_arguments(container):
+    target = torch.zeros(2)
+    arguments = {"state": container(target)}
+    locator = SampleMetadata.from_inputs(arguments).tensor_data[0][0]
+    output_spec = SampleMetadata.from_outputs(torch.ones(2))
+    contract = ForwardContract(
+        output_template=None,
+        input_mutations=(InputMutation(locator, InputMutationKind.COPY_TENSOR, output_index=1),),
+    )
+
+    for increment in (1.0, 3.0):
+        replacement = target + increment
+        contract.restore_outputs(
+            (torch.ones(2), replacement),
+            arguments,
+            output_spec,
+            tensor_mutation_policies={1: TensorMutationPolicy.REPLACE_INPUT},
+        )
+        assert locator.get_value(arguments) is target
+        torch.testing.assert_close(target, replacement)
+
+    torch.testing.assert_close(target, torch.full((2,), 4.0))

@@ -87,6 +87,19 @@ config = TorchTensorRTAotBackendConfig(
 )
 ```
 
+### Export profiles and serialization
+
+Before compilation, AITune checks that the requested TensorRT optimization profiles fit
+within the Torch Export shape constraints. Incompatible profiles fail the candidate;
+AITune does not silently narrow the requested ranges.
+
+Serialization first exports the compiled graph directly. It preserves scalar and `None`
+input metadata so those constants remain serializable. Export specification errors and
+the known integer-parameter gradient error trigger a non-strict Torch Export retry;
+unrelated errors propagate. That retry uses the captured flat example tensors and
+positional dynamic-shape constraints, rather than TensorRT profile descriptors.
+AITune reloads the saved artifact before accepting the backend.
+
 ## AOT vs JIT Comparison
 
 For a detailed explanation of JIT vs AOT backends, see the [JIT vs AOT Torch-TensorRT](torch_tensorrt_jit_backend.md#jit-vs-aot-torch-tensorrt) section.

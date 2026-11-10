@@ -335,3 +335,26 @@ def test_private_check_output_tensor_shapes_mismatched_shapes():
     assert "Expected tensor output[1] to have shape [2, 10] but got [2, 8]" in error_message
     assert "Expected tensor output[2] to have shape [2, 10, 20] but got [2, 10]" in error_message
     assert "3 error(s) related to output tensor shapes" in error_message
+
+
+def test_boundary_checks_preserve_aliases_between_args_and_kwargs(mocker):
+    cache = []
+    sample = ((cache,), {"mask": cache})
+    output_spec = SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2)
+    graph_spec = make_graph_spec(_input_metadata(sample, batch_size=1), output_spec)
+    mocker.patch(
+        "aitune.torch.task.correctness._dynamic_shape_boundary_samples",
+        return_value=[sample, sample],
+    )
+    calls = []
+
+    def infer(state, *, mask):
+        assert state is mask
+        state.append("temporary")
+        calls.append(len(mask))
+        return torch.zeros(2, 4)
+
+    check_dynamic_shape_boundary_inference(sample, graph_spec, infer, name="shared-state")
+
+    assert calls == [1, 1]
+    assert cache == []

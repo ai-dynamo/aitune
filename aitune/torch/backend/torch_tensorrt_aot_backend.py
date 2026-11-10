@@ -26,6 +26,7 @@ from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_errors, t
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.exporting import TorchExporter
+from aitune.torch.libs.exporting.export_validation import validate_export_profiles
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
@@ -229,6 +230,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
                 device=self.device,
             )
             exported = export_result.exported_program
+            validate_export_profiles(exported, graph_spec)
             # Retracing needs the captured flat tensors, not TensorRT optimization-profile descriptors.
             export_sample = exported.example_inputs
             if export_sample is None:
@@ -267,11 +269,12 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
+            # The compiled graph takes positional tensors instead of the adapter's *flat_inputs.
             _save_compiled_model(
                 trt_model_compiled,
                 self._exported_model_artifact.path,
                 export_sample,
-                export_result.dynamic_shapes,
+                export_result.dynamic_shapes["flat_inputs"] if export_result.dynamic_shapes is not None else None,
                 self._config.pickle_protocol,
             )
             result["compiled_model_size_bytes"] = self._exported_model_artifact.path.stat().st_size
@@ -384,7 +387,7 @@ def _save_compiled_model(
     module: torch.fx.GraphModule,
     path: Path,
     sample: Sample,
-    dynamic_shapes: dict[str, Any] | None,
+    dynamic_shapes: dict[str, Any] | tuple[Any, ...] | None,
     pickle_protocol: int,
 ) -> None:
     """Save a compiled graph and retry known direct-export failures with retracing."""

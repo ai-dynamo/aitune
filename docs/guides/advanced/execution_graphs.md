@@ -55,6 +55,58 @@ Execution graphs are detected during the **Sample Gathering Phase** of tuning:
 
 For a complete overview of the tuning process, see [Tuning Workflow](tuning_workflow.md).
 
+## Mutable Inputs and the Forward Contract
+
+Modules may update inputs during inference, such as writing tensors into a cache and returning that same cache.
+Each `GraphSpec` stores a `ForwardContract` that describes the recorded output structure, input leaf changes,
+and outputs that are the same objects as inputs. Exporters use a flat tensor interface; backends use the contract
+to restore the structured output and apply recorded input changes.
+
+The supported restoration operations are:
+
+| Operation | Runtime behavior |
+| --- | --- |
+| Copy a changed tensor | Copy the backend result into the existing input tensor. A backend policy may instead replace the tensor inside a caller-owned mutable container. |
+| Replace a tensor leaf | Assign the backend result at the recorded input path. |
+| Replace a non-tensor leaf | Assign a copy of the value recorded during contract capture. This value is constant, not a runtime computation. |
+| Restore an output-to-input alias | Return the corresponding input tensor or container so the output shares its object identity. |
+
+Only values reached by `Locator` are checked for changes. A leaf is a value inside the input structure that
+`Locator` does not inspect further, such as a tensor or a number. Integrations can register non-tensor
+fields to check in otherwise tensor-only objects, such as the initialization fields of Transformers static
+cache layers. The contract does not describe deleted leaves, arbitrary Python side effects, or hidden module
+attributes and buffers. Exporters and backends handle module state separately. Restoring an alias means returning
+the same object. It does not support rebuilding every possible tensor view that shares memory with an input.
+
+### One Contract per Input Graph
+
+The first recorded call for an input graph establishes its mutation and alias rules. Later samples update
+observed input shapes, output shapes, and input shapes after the call, without recording or checking those rules
+again. Calls grouped into the same graph must therefore agree on which input values change, how they change,
+the output structure, and which outputs are the same objects as inputs. Recorded non-tensor replacement values
+must also remain valid for later calls.
+
+Collecting more samples improves shape coverage, but does not create a separate contract for behavior controlled
+only by tensor contents or hidden state. To separate such behavior into different graphs, use inputs that graph
+detection can distinguish. Otherwise, execute that behavior through a different model path.
+
+### Whisper Static Encoder-Decoder Caches
+
+Whisper callers can select `cache_implementation="static"` in `model.generate()`.
+Transformers then wraps static self-attention and cross-attention caches in an `EncoderDecoderCache`.
+AITune's Transformers integration inspects both nested caches and preserves the wrapper's per-layer
+`is_updated` flags, which control initialization and reuse of cross-attention state. AITune does not
+change the model's cache selection.
+
+Keep `ait.config.strict_mode=True` (the default) so different readiness flags select different graphs.
+Record both cross-attention initialization and subsequent decode calls; registering the cache type
+does not provide a compiled graph for a phase that was never recorded. Static cache capacity and
+encoder sequence length must cover the workload used during tuning and inference.
+
+This integration targets wrappers containing static caches. Nested `DynamicCache` objects remain
+unsupported. Cache-contract tests do not establish complete Whisper generation or backend support;
+those require model-level functional validation.
+
 ## What This Guide Covers
 
 This guide explores the technical details of execution graphs through the lens of `SampleMetadata`, the core class responsible for:
