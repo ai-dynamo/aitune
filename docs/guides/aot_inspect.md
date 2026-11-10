@@ -291,7 +291,8 @@ Wrap modules from an inspection with `call_tree=True`, and tuning keeps exactly 
 offloads a wrapped module:
 
 ```python
-model = ait.wrap(model, modules_info.get_modules())
+head = [m for m in modules_info.get_modules() if m.module is model.lm_head]
+model = ait.wrap(model, head)
 ait.tune(run_chunk, input_data)
 # Keeping 1 weight (0.0 MB) of lm_head on the device after tuning: read by forward > llm.embed.forward
 ```
@@ -299,6 +300,9 @@ ait.tune(run_chunk, input_data)
 Each wrapped module logs one line for the weights it keeps (and a debug line per weight). When code outside the
 module moves it with `.to()`, the moved buffers stay along with its parameters, because that `.to()` moves them
 too.
+
+Move or cast the model before `wrap`. Kept weights are tracked as tensor objects: a device or dtype change after
+`wrap`, such as `model.to("cuda")` or `model.half()`, gives buffers new tensors, which are then no longer kept.
 
 The cost is the memory of the kept weights. For weights that outside code reads, the model needs that memory
 anyway. For weights that outside code only moves, it does not: E5's `SentenceTransformer.encode` moves the
