@@ -135,6 +135,37 @@ def test_tensorrt_backend_config_describe():
     assert describe == "quantization_config=ONNXAutoCastConfig(precision='bf16', keep_io_types=True)"
 
 
+def test_build_places_shared_module_before_each_graph_export(mocker, tmp_path):
+    model = torch.nn.Linear(3, 2).eval()
+    sample = ((torch.ones(2, 3),), {})
+    graph_spec = make_recorded_graph_spec(model, sample, batch_size=2)
+    engine_path = tmp_path / "model.plan"
+    engine_path.write_bytes(b"engine")
+    profiles_path = tmp_path / "profiles.json"
+    profiles_path.write_text("[]")
+    events = []
+    move = mocker.patch(
+        "aitune.torch.backend.tensorrt.tensorrt_backend.move_module_to_device",
+        side_effect=lambda module, device: events.append("place-module"),
+    )
+    mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.cuda_set_device")
+
+    def export_graph(*args):
+        events.append("export-graph")
+        return engine_path
+
+    mocker.patch.object(TensorRTBackend, "_build_standard", side_effect=export_graph)
+    mocker.patch.object(TensorRTBackend, "_save_trt_optimization_profiles", return_value=profiles_path)
+    mocker.patch.object(TensorRTBackend, "_activate")
+    for _ in range(2):
+        backend = TensorRTBackend()
+        backend._device = torch.device("cpu")
+        backend._build(model, graph_spec, make_sample_store([sample], tmp_path), tmp_path)
+
+    assert events == ["place-module", "export-graph", "place-module", "export-graph"]
+    assert move.call_args_list == [mocker.call(model, torch.device("cpu"))] * 2
+
+
 def test_tensorrt_backend_init():
     """Test TensorRTBackend initialization."""
     # Test with default parameters

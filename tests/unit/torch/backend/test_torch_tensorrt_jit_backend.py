@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from dataclasses import dataclass
-from unittest.mock import Mock
 
 import pytest
 import torch
@@ -13,18 +12,13 @@ from aitune.torch.backend.torch_tensorrt_jit_backend import (
     TorchTensorRTJitBackendConfig,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
-from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from tests.toy_models import ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store, requires_cuda
 
 
-def _mock_graph_spec():
-    m = Mock(spec=GraphSpec)
-    m.name = "test"
-    m.input_spec = Mock()
-    m.input_spec.detected_dynamic_axis.return_value = False
-    return m
+def _static_graph_spec():
+    return ToyTorchModel().graph_spec(batch_sizes=[1])
 
 
 @dataclass
@@ -82,12 +76,59 @@ def backend_build(
 
     backend = torch_tensorrt_jit_backend.build(
         model,
-        graph_spec=_mock_graph_spec(),
+        graph_spec=_static_graph_spec(),
         samples=sample_data,
         device=torch_device,
         cache_dir=tmp_path,
     )
     return torch_mod, backend
+
+
+@pytest.mark.parametrize("autocast", [False, True])
+@pytest.mark.parametrize("reload", [False, True], ids=["built", "checkpoint"])
+def test_infer_restores_unreturned_mutable_state(mocker, tmp_path, autocast, reload):
+    class StatefulModel(torch.nn.Module):
+        def forward(self, x, state):
+            state["cache"].add_(x)
+            return {"value": x * 2}
+
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
+    mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
+
+    def compile_without_input_writes(module, **options):
+        def run(*flat_inputs):
+            # Emulate an engine that returns state outputs without writing into the caller's tensors.
+            return module(*(tensor.clone() for tensor in flat_inputs))
+
+        return run
+
+    mocker.patch(
+        "aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile",
+        side_effect=compile_without_input_writes,
+    )
+    model = StatefulModel()
+    x = torch.ones(2)
+    sample = ((x, {"cache": torch.zeros(2)}), {})
+    backend = TorchTensorRTJitBackend(TorchTensorRTJitBackendConfig(autocast_enabled=autocast))
+    backend.build(
+        model,
+        graph_spec=make_recorded_graph_spec(model, sample),
+        samples=make_sample_store([sample], tmp_path),
+        device=torch.device("cpu"),
+        cache_dir=tmp_path,
+    )
+    if reload:
+        backend = TorchTensorRTJitBackend.from_dict(model, backend.to_dict())
+        backend.activate()
+    cache_tensor = torch.full((2,), 3.0)
+    state = {"cache": cache_tensor}
+
+    result = backend.infer(x, state)
+
+    torch.testing.assert_close(result["value"], x * 2)
+    torch.testing.assert_close(state["cache"], torch.full((2,), 4.0))
+    assert state["cache"] is cache_tensor
 
 
 def test_torch_tensorrt_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
@@ -320,7 +361,7 @@ def test_mock_build(torch_tensorrt_jit_backend, model, sample_data, torch_device
 
     backend = torch_tensorrt_jit_backend.build(
         model,
-        graph_spec=_mock_graph_spec(),
+        graph_spec=_static_graph_spec(),
         samples=sample_data,
         device=torch_device,
         cache_dir=tmp_path,
@@ -375,7 +416,7 @@ def test_torch_compile_backend_infer_not_activated(
 
     backend = torch_tensorrt_jit_backend.build(
         model,
-        graph_spec=_mock_graph_spec(),
+        graph_spec=_static_graph_spec(),
         samples=sample_data,
         device=torch_device,
         cache_dir=tmp_path,
@@ -404,7 +445,7 @@ def test_torch_compile_backend_deactivate(
     # Build, activate, and deactivate
     backend = torch_tensorrt_jit_backend.build(
         model,
-        graph_spec=_mock_graph_spec(),
+        graph_spec=_static_graph_spec(),
         samples=sample_data,
         device=torch_device,
         cache_dir=tmp_path,
@@ -429,7 +470,7 @@ def test_torch_compile_backend_init(torch_tensorrt_jit_backend_config):
 def test_torch_compile_backend_build(torch_tensorrt_jit_backend, model, sample_data, torch_device, tmp_path):
     backend = torch_tensorrt_jit_backend.build(
         model,
-        graph_spec=_mock_graph_spec(),
+        graph_spec=_static_graph_spec(),
         samples=sample_data,
         device=torch_device,
         cache_dir=tmp_path,
@@ -444,7 +485,7 @@ def test_torch_compile_backend_compile(torch_tensorrt_jit_backend, model, sample
     args, kwargs = sample_data[0]
     backend = torch_tensorrt_jit_backend.build(
         model,
-        graph_spec=_mock_graph_spec(),
+        graph_spec=_static_graph_spec(),
         samples=sample_data,
         device=torch_device,
         cache_dir=tmp_path,

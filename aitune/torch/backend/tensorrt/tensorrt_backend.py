@@ -46,7 +46,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
-from aitune.torch.utils.module import offload
+from aitune.torch.utils.module import move_module_to_device, offload
 from aitune.torch.utils.tensor import format_tensor_name
 from aitune.utils.monitoring import annotate
 
@@ -352,6 +352,9 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
                 raise AITuneUserInputError(
                     "Torch quantization requires a Torch module; use ONNX quantization for OnnxModule."
                 )
+        else:
+            # A previous graph or backend candidate may have offloaded this shared module to CPU.
+            move_module_to_device(module, self.device)
 
         quantization_config = self._config.quantization_config
         if isinstance(quantization_config, TorchQuantizationConfig):

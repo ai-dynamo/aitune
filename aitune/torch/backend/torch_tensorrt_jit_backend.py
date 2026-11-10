@@ -14,6 +14,7 @@ from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
 from aitune.torch.distributed import distributed_output_path
+from aitune.torch.libs.exporting import prepare_tensor_export
 from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
@@ -134,6 +135,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
     STATE_SAMPLES = "samples"
     STATE_DEVICE = "device"
     STATE_COMPILE_DYNAMIC = "compile_dynamic"
+    STATE_GRAPH_SPEC = "graph_spec"
 
     # Supported devices
     _devices: ClassVar[list[str]] = ["cuda"]
@@ -155,6 +157,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
         self._compiled_module = None
         self._orig_module = None
         self._samples: SampleStore | None = None
+        self._graph_spec: GraphSpec | None = None
         self._compile_dynamic = self._config.dynamic
         self._infer_impl = self._infer_no_autocast
 
@@ -186,6 +189,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
         module = module.eval()
         self._orig_module = module
         self._samples = samples
+        self._graph_spec = graph_spec
         self._compile()
 
         return self
@@ -198,12 +202,19 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
 
     def _compile(self):
         """Compile module with Torch compile."""
-        if self._samples is None:
+        if self._samples is None or self._orig_module is None:
             raise RuntimeError("Backend has no warmup samples. Please call build() first.")
         logger.info("Start compiling torch module with torch.compile(backend='torch_tensorrt').")
         torch._dynamo.reset()
 
         move_module_to_device(self._orig_module, self.device)
+        compile_module = self._orig_module
+        if self._graph_spec is not None:
+            # TensorRT can omit writes back to input tensors. Expose changed state as ordinary graph outputs,
+            # then restore it explicitly after inference, matching the AOT tensor boundary.
+            compile_module = prepare_tensor_export(
+                self._orig_module, self._samples[0], self._graph_spec, device=self.device
+            ).adapter
 
         compile_options = self._compile_settings()
         if self.device.type == "cuda":
@@ -213,7 +224,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
 
         with torch_tensorrt_warnings(torch_tensorrt):
             self._compiled_module = torch.compile(
-                self._orig_module,
+                compile_module,
                 backend="torch_tensorrt",
                 options=compile_options,
                 fullgraph=self._config.fullgraph,
@@ -233,12 +244,22 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
-                return self._compiled_module(*args, **kwargs)
+                return self._call_compiled(*args, **kwargs)
 
     def _infer_no_autocast(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference without autocast."""
         with torch.no_grad():
+            return self._call_compiled(*args, **kwargs)
+
+    def _call_compiled(self, *args: Any, **kwargs: Any) -> Any:
+        """Run flat tensor inference and restore the recorded outputs and input changes."""
+        if self._graph_spec is None:
+            # Checkpoints created before flat state restoration retain their original compiled call boundary.
             return self._compiled_module(*args, **kwargs)
+        arguments = self._graph_spec.forward_signature.normalize(args, kwargs).arguments
+        flat_inputs = self._graph_spec.input_spec.flatten_tensors(arguments)
+        flat_outputs = self._compiled_module(*flat_inputs)
+        return self._graph_spec.restore_outputs(flat_outputs, arguments)
 
     def _select_infer_impl(self):
         """Select the inference implementation based on configuration."""
@@ -282,6 +303,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
             self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
+            self.STATE_GRAPH_SPEC: self._graph_spec.to_dict() if self._graph_spec is not None else None,
         }
 
     @classmethod
@@ -299,6 +321,8 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
         backend._samples = SampleStore.from_dict(state_dict[cls.STATE_SAMPLES])
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
+        graph_state = state_dict.get(cls.STATE_GRAPH_SPEC)
+        backend._graph_spec = GraphSpec.from_dict(graph_state) if graph_state is not None else None
         backend._orig_module = module
         module.load_state_dict(state_dict[cls.STATE_ORIG_MODULE], strict=False)
         backend.state = BackendState.CHECKPOINT_LOADED

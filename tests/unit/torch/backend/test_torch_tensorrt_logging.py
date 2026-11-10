@@ -43,7 +43,7 @@ def test_torch_tensorrt_errors_suppresses_serialization_diagnostics(mocker, capf
     torch_tensorrt = mocker.Mock()
     native_context = mocker.MagicMock()
     torch_tensorrt.logging.errors.return_value = native_context
-    logger_names = ("torch_tensorrt", "torch._library.fake_class_registry")
+    logger_names = ("torch_tensorrt", "torch._library.fake_class_registry", "torch._export.serde.serialize")
     original_levels = {name: logging.getLogger(name).level for name in logger_names}
 
     with torch_tensorrt_errors(torch_tensorrt):
@@ -58,3 +58,27 @@ def test_torch_tensorrt_errors_suppresses_serialization_diagnostics(mocker, capf
     native_context.__exit__.assert_called_once()
     captured = capfd.readouterr()
     assert "serialization diagnostic" not in captured.out
+
+
+def test_serialization_warning_cannot_abort_artifact_loading(mocker):
+    torch_tensorrt = mocker.Mock()
+    torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    serializer_logger = logging.getLogger("torch._export.serde.serialize")
+    original_level = serializer_logger.level
+    serializer_logger.setLevel(logging.WARNING)
+    handler = mocker.Mock(spec=logging.Handler)
+    handler.level = logging.WARNING
+    handler.handle.side_effect = lambda record: record.getMessage()
+    serializer_logger.addHandler(handler)
+    try:
+        with torch_tensorrt_errors(torch_tensorrt):
+            # The affected loader supplies one value for two placeholders after successfully loading its object.
+            serializer_logger.warning(
+                "Fallback to weights_only=False succeeded. Loaded object of type %s after initial failure: %s",
+                "ScriptObject",
+            )
+        handler.handle.assert_not_called()
+        assert serializer_logger.level == logging.WARNING
+    finally:
+        serializer_logger.removeHandler(handler)
+        serializer_logger.setLevel(original_level)
