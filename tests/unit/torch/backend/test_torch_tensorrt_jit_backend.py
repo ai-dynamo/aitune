@@ -132,7 +132,21 @@ def test_compile_preserves_native_mutable_inputs(mocker, tmp_path, autocast, rel
 
 @requires_cuda
 @pytest.mark.parametrize("compiler", ["native", "aitune"])
-@pytest.mark.parametrize("replace_cache", [False, True], ids=["inplace", "replacement"])
+@pytest.mark.parametrize(
+    "replace_cache",
+    [
+        pytest.param(
+            False,
+            id="inplace",
+            marks=pytest.mark.xfail(
+                reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
+                raises=AssertionError,
+                strict=True,
+            ),
+        ),
+        pytest.param(True, id="replacement"),
+    ],
+)
 def test_native_compiler_mutable_state(torch_device, tmp_path, compiler, replace_cache):
     class StatefulModel(torch.nn.Module):
         def forward(self, x, state):
@@ -144,9 +158,7 @@ def test_native_compiler_mutable_state(torch_device, tmp_path, compiler, replace
 
     model = StatefulModel().to(torch_device).eval()
     config = TorchTensorRTJitBackendConfig(
-        compile_config=TorchTensorRTConfig(
-            enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True, require_full_compilation=True
-        ),
+        compile_config=TorchTensorRTConfig(min_block_size=1, disable_tf32=True, require_full_compilation=True),
         dynamic=False,
     )
     x = torch.ones(2, 4, device=torch_device)

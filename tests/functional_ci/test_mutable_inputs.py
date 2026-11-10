@@ -38,15 +38,29 @@ class ReplacingCacheModel(nn.Module):
 
 
 @pytest.mark.matrix("aot_tuning.models.mutable-inputs")
-@with_backends("base")
-@pytest.mark.parametrize(
-    ("model_factory", "returns_state"),
-    [
-        pytest.param(InplaceCacheModel, False, id="inplace-unreturned-state"),
-        pytest.param(ReplacingCacheModel, True, id="replacement-returned-state"),
-    ],
+@with_backends(
+    "base",
+    marks={
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
+            raises=AssertionError,
+            strict=True,
+        ),
+    },
 )
-def test_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path, model_factory, returns_state):
+def test_inplace_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path):
+    """Unreturned in-place cache updates survive consecutive calls and save/load."""
+    _check_mutable_input_lifecycle(case, device, tmp_path, InplaceCacheModel, returns_state=False)
+
+
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@with_backends("base")
+def test_replacing_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path):
+    """Cache replacement and the returned container alias survive consecutive calls and save/load."""
+    _check_mutable_input_lifecycle(case, device, tmp_path, ReplacingCacheModel, returns_state=True)
+
+
+def _check_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path, model_factory, returns_state):
     """Outputs, accumulated input state, and container aliases survive tuning and save/load."""
     backend = case.factory()
     tuned = ait.Module(model_factory(device), "mutable-inputs", strategy=pinned_strategy(backend))
