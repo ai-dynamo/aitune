@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # /// script
-# dependencies = ["transformers>=4.54,<5"]
+# dependencies = ["transformers>=5,<6"]
 # docker_image = "nvcr.io/nvidia/pytorch:26.06-py3"
 # scope = "always"
 # allow_failure = false

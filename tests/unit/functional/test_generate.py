@@ -148,6 +148,9 @@ def test_unknown_tags_use_default_runner() -> None:
         (["gpu/2"], "prod-aitune-tester-rtx-pro-4500-4-v1"),
         (["gpu/4"], "prod-aitune-tester-rtx-pro-4500-4-v1"),
         (["gpu/8"], "prod-aitune-tester-rtx-pro-4500-8-v1"),
+        (["gpu/gb200"], "ai-dynamo-gb200-1-gpu"),
+        (["gpu/gb200/4"], "ai-dynamo-gb200-4-gpu"),
+        (["gpu/gb200", "gpu/4"], "ai-dynamo-gb200-4-gpu"),
     ],
 )
 def test_tags_map_to_runners(tags: list[str], expected: str) -> None:
@@ -264,7 +267,14 @@ def test_generate_matrix_from_repository_is_valid_json_and_under_limit() -> None
             "prod-aitune-tester-rtx-pro-4500-v1",
             "prod-aitune-tester-rtx-pro-4500-4-v1",
             "prod-aitune-tester-rtx-pro-4500-8-v1",
+            "ai-dynamo-gb200-1-gpu",
+            "ai-dynamo-gb200-4-gpu",
         }
+        runs_on = json.loads(entry["runs_on"])
+        if entry["runner"].startswith("ai-dynamo-gb200"):
+            assert runs_on == {"group": "ai-dynamo-gb200", "labels": entry["runner"]}
+        else:
+            assert runs_on == entry["runner"]
         assert isinstance(entry["is_custom_docker_image"], bool)
         json.loads(entry["environment"])
 
