@@ -36,13 +36,13 @@ class JitMLP(nn.Module):
 
 @pytest.mark.matrix(
     "modes.jit-{mode.value}",
-    "models.tensor-inputs",
-    "models.single-graph",
+    "jit_tuning.models.tensor-inputs",
+    "jit_tuning.models.single-graph",
     "topology.{backend}/single-gpu",
     "strategies.one-backend/jit-tune",
 )
 @pytest.mark.parametrize("mode", [JITMode.TUNE_EAGER, JITMode.TUNE_DEFERRED], ids=lambda mode: mode.value)
-@with_backends("jit")
+@with_backends("base")
 def test_jit_tuning(case: BackendCase, mode: JITMode, device: torch.device):
     """Record two batch sizes, tune in the requested mode, then serve an unseen in-range batch size."""
     backend, tolerance = case.factory(), case.tolerance

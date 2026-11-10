@@ -13,7 +13,6 @@ import wrapt
 
 from aitune.records import DeploymentArtifact
 from aitune.torch.backend.backend import Backend
-from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
 from aitune.torch.distributed import coordinator, distributed_cache_dir, resolve_tuning_device
 from aitune.torch.dynamic_shapes import DynamicShapes, validate_dynamic_shape_definitions
@@ -33,7 +32,10 @@ from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import (
     count_parameters,
     get_module_device,
+    is_kept_on_device,
+    keep_on_device,
     offload_after_tuning,
+    release_kept_on_device,
 )
 
 logger = getLogger(__name__)
@@ -74,6 +76,7 @@ class Module(wrapt.CallableObjectProxy):
 
     TYPE_KEY = "type"
     NAME_KEY = "name"
+    KEPT_ON_DEVICE_KEY = "kept_on_device"
     DYNAMIC_SHAPES_KEY = "dynamic_shapes"
     TUNED_MODULE_KEY = "tuned_module"
 
@@ -273,6 +276,17 @@ class Module(wrapt.CallableObjectProxy):
             state_dict[Module.NAME_KEY],
             dynamic_shapes=state_dict[Module.DYNAMIC_SHAPES_KEY],
         )
+        if Module.KEPT_ON_DEVICE_KEY in state_dict:
+            release_kept_on_device(module)
+        kept = state_dict.get(Module.KEPT_ON_DEVICE_KEY, [])
+        if kept:
+            named = dict(module.named_parameters(remove_duplicate=False)) | dict(
+                module.named_buffers(remove_duplicate=False)
+            )
+            missing = [n for n in kept if n not in named]
+            if missing:
+                logger.warning("Skipping kept-on-device names missing from the module: %s", missing)
+            keep_on_device((named[n] for n in kept if n in named), owner=module)
         self._self_state = ModuleState.TUNED
         self._self_wrapper = TunedModule.from_dict(module, state_dict[Module.TUNED_MODULE_KEY])
         self._deploy_wrapper(device)
@@ -292,11 +306,20 @@ class Module(wrapt.CallableObjectProxy):
 
         destination = OrderedDict() if destination is None else destination
 
+        kept = sorted(
+            name
+            for name, t in (
+                *self.__wrapped__.named_parameters(remove_duplicate=False),
+                *self.__wrapped__.named_buffers(remove_duplicate=False),
+            )
+            if is_kept_on_device(t, owner=self.__wrapped__)
+        )
         destination[prefix] = {
             self.TYPE_KEY: Module.__name__,  # self.__class__ returns wrapped class, use direct class object instead
             self.NAME_KEY: self._self_name,
             self.DYNAMIC_SHAPES_KEY: self._self_dynamic_shapes,
             self.TUNED_MODULE_KEY: self._self_wrapper.to_dict(),
+            self.KEPT_ON_DEVICE_KEY: kept,
         }
         return destination
 
@@ -377,7 +400,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def _module_cache_dir(self) -> Path:
         """Return the cache directory identified by the configured module name."""
-        return distributed_cache_dir(aitune_cache_dir()) / self._self_name
+        return distributed_cache_dir(global_config.cache_dir) / self._self_name
 
     def _activate_wrapper(self):
         try:

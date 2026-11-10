@@ -22,16 +22,23 @@ TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (
 
 
 class StructuredModel(nn.Module):
-    """Model with a nested dict input, non-tensor and optional arguments, and a nested dict/tuple output."""
+    """Model with nested dict and list inputs, non-tensor and optional arguments, and a nested dict/tuple output."""
 
     def __init__(self, mlp: nn.Module):
         """Wrap the toy MLP."""
         super().__init__()
         self.mlp = mlp
 
-    def forward(self, x, extras: dict[str, torch.Tensor], scale: float = 1.0, mask: torch.Tensor | None = None):
+    def forward(
+        self,
+        x,
+        extras: dict[str, torch.Tensor],
+        residuals: list[torch.Tensor],
+        scale: float = 1.0,
+        mask: torch.Tensor | None = None,
+    ):
         """Return the scaled MLP output and two row statistics."""
-        hidden = self.mlp(x + extras["bias"]) * scale
+        hidden = self.mlp(x + extras["bias"] + residuals[0] - residuals[1]) * scale
         if mask is not None:
             hidden = hidden * mask
         return {"out": hidden, "stats": (hidden.sum(-1), hidden.amax(-1))}
@@ -58,8 +65,8 @@ class NestedInputModel(nn.Module):
         return self.mlp(hidden * timestep[:, None])
 
 
-@pytest.mark.matrix("models.dynamic-batch-recorded")
-@with_backends("dynamic_batch")
+@pytest.mark.matrix("aot_tuning.models.dynamic-batch-recorded")
+@with_backends("base")
 def test_recorded_batch_range(case: BackendCase, device: torch.device):
     """Batch bounds come from recorded batch sizes; seen and unseen in-range batch sizes match eager."""
     backend = case.factory()
@@ -72,8 +79,8 @@ def test_recorded_batch_range(case: BackendCase, device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, case.tolerance, batch_sizes=(1, 2, 3, 4))
 
 
-@pytest.mark.matrix("models.dynamic-batch-user")
-@with_backends("dynamic_batch")
+@pytest.mark.matrix("aot_tuning.models.dynamic-batch-user")
+@with_backends("base")
 def test_explicit_batch_dim(case: BackendCase, device: torch.device):
     """A user `BatchDim` makes the batch dimension dynamic beyond the single recorded batch size."""
     backend = case.factory()
@@ -87,9 +94,9 @@ def test_explicit_batch_dim(case: BackendCase, device: torch.device):
     assert_matches_eager(tuned, make_mlp(device), device, case.tolerance, batch_sizes=(1, 5, 8))
 
 
-@pytest.mark.matrix("models.dynamic-non-batch")
+@pytest.mark.matrix("aot_tuning.models.dynamic-non-batch")
 @with_backends(
-    "dynamic_non_batch",
+    "base",
     marks={
         # AITune's `_activate` reloads the artifact via `torch_tensorrt.load`, which wraps the loader assertion in ValueError.
         "torch-tensorrt-aot": pytest.mark.xfail(
@@ -138,7 +145,7 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
             case.tolerance.assert_close(restored(value), reference(value))
 
 
-@pytest.mark.matrix("models.dynamic-non-batch/torch-tensorrt-aot")
+@pytest.mark.matrix("aot_tuning.models.dynamic-non-batch/torch-tensorrt-aot")
 def test_spatial_dims_export_retry(device: torch.device):
     """Torch-TensorRT AOT exports again with bounded dynamic hints if strict export rejects the user's spatial dims.
 
@@ -175,23 +182,30 @@ def test_spatial_dims_export_retry(device: torch.device):
 
 
 @pytest.mark.matrix(
-    "models.non-tensor-inputs",
-    "models.nested-inputs",
-    "models.structured-outputs",
+    "aot_tuning.models.non-tensor-inputs",
+    "aot_tuning.models.nested-inputs",
+    "aot_tuning.models.structured-outputs",
 )
-@with_backends("structured_io")
+@with_backends("base")
 def test_structured_io(case: BackendCase, device: torch.device):
-    """Nested dict input, a float and a `None` argument, and a nested dict/tuple output survive tuning."""
+    """Nested dict and list inputs, a float and a `None` argument, and a nested dict/tuple output survive tuning."""
     backend = case.factory()
     # Row sums in `stats` accumulate the per-element error over `OUT_FEATURES` values, so widen `atol`.
     tolerance = replace(case.tolerance, atol=5 * case.tolerance.atol)
     bias = torch.linspace(-1, 1, IN_FEATURES, device=device)
+    residuals = [bias.flip(0), 0.5 * bias]
     reference = StructuredModel(make_mlp(device))
     tuned = ait.Module(StructuredModel(make_mlp(device)), "structured", strategy=pinned_strategy(backend))
 
     def pipeline(model: Callable) -> Callable:
-        # Every tensor in the sample is batched, so the bias is repeated per row.
-        return lambda x: model(x, {"bias": bias.repeat(x.shape[0], 1)}, scale=2.0, mask=None)
+        # Every tensor in the sample is batched, so the bias and residuals are repeated per row.
+        return lambda x: model(
+            x,
+            {"bias": bias.repeat(x.shape[0], 1)},
+            [residual.repeat(x.shape[0], 1) for residual in residuals],
+            scale=2.0,
+            mask=None,
+        )
 
     ait.tune(pipeline(tuned), list(make_input(device, batch_size=8).unbind(0)), batch_sizes=[1, 4], device=device)
 
@@ -199,13 +213,13 @@ def test_structured_io(case: BackendCase, device: torch.device):
     assert_matches_eager(pipeline(tuned), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
 
 
-@pytest.mark.matrix("models.nested-inputs/torch-tensorrt-aot")
+@pytest.mark.matrix("aot_tuning.models.nested-inputs/torch-tensorrt-aot")
 @pytest.mark.parametrize("batch_sizes", [[2], [2, 4]], ids=["static", "dynamic"])
 def test_nested_tensor_inputs(batch_sizes: list[int], device: torch.device):
     """Torch-TensorRT AOT tunes nested tensor inputs passed as kwargs at static and dynamic batch, as in legacy 044.
 
-    The inputs are a dict, a list, an unbatched tensor, and a 1-D batched scalar. `test_structured_io` also passes
-    non-tensor arguments, which this backend cannot save yet, so it does not run on this backend.
+    The inputs are a dict, a list, an unbatched tensor, and a 1-D batched scalar. `test_structured_io` covers only a
+    nested dict and list, together with non-tensor arguments.
     """
     case = BACKENDS["torch-tensorrt-aot"]
     backend = case.factory()

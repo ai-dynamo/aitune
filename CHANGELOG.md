@@ -5,6 +5,13 @@ title: "Changelog"
 ---
 # Changelog
 
+## 0.8.0 (unreleased)
+
+- feat: record a model's call tree with `ait.inspect(..., call_tree=True)`: module `forward` calls and model-defined methods, keyed by their chain of callers, with call counts, times and the code that moves modules with `.to()`
+- feat: keep weights that code outside a tuned module still uses on the device when tuning offloads the module, for modules wrapped from `ait.inspect(..., call_tree=True)`; `aitune.torch.call_tree.shared_weights_of(call_tree, module)` lists them with each read, device lookup or move, and the kept set persists across `ait.save`/`ait.load`
+- fix: `inspect()` works on models with parts compiled by `torch.compile` or `nn.Module.compile()`; it counts a compiled part as one call and no longer wraps the calls inside it, where Dynamo cannot trace its timing
+- breaking change: `inspect()` no longer counts the modules inside a compiled part; it logs a warning for each compiled part, and running `inspect()` under `torch.compiler.set_stance("force_eager")` counts them
+
 ## 0.7.0 (unreleased)
 
 - feat: support tuning existing ONNX models with ONNX Runtime and TensorRT
@@ -13,7 +20,15 @@ title: "Changelog"
 - feat: generate Triton Model Analyzer configurations and representative Perf Analyzer input data during artifact publication
 - feat: resolve default AOT and JIT strategies per module using source format, execution topology, and compilation mode
 - feat: add tuning objectives and composable constraints through `resolve_strategy`, initially supporting maximum latency
+- feat: report the execution device of AOT- and JIT-tuned submodules through Diffusers and Transformers `device` properties
+- fix: reuse an already extracted checkpoint only when its SHA sums match the archive, and redo an interrupted extraction on the next load
+- fix: release original module storage and cached GPU allocations before restoring AOT backends during `aitune.load()`, reducing peak GPU memory usage
+- fix: retain disk-backed warmup samples after deployment for TorchInductor JIT, Torch-TensorRT JIT, and TorchAO so checkpoints saved after deployment can be restored without retaining sample tensors in memory
+- fix: save Torch-TensorRT AOT models whose inputs include non-tensor values
+- fix: `inspect()` accepts `MinMaxRandomDataset`, directly or through `DataLoaderFactory`, and no longer replaces the factory's dataset
+- fix: AOT tuning writes and clears module caches under `config.cache_dir` instead of always using `AITUNE_CACHE_DIR`
 - breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
+- breaking change: TorchInductor JIT, Torch-TensorRT JIT, and TorchAO checkpoints now require disk-backed warmup samples; legacy checkpoints with inline sample data are no longer supported
 
 ## 0.6.0
 

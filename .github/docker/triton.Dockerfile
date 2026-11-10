@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip download \
         --no-deps \
         --dest "$onnxruntime_wheel_dir" \
-        --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/ \
+        --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/ \
         onnxruntime-gpu && \
     pip install --force-reinstall "$onnxruntime_wheel_dir"/onnxruntime_gpu-*.whl 'protobuf>=6.33.5,<7' && \
     rm -r -- "$onnxruntime_wheel_dir"

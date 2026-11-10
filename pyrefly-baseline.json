@@ -561,27 +561,6 @@
       "severity": "error"
     },
     {
-      "column": 22,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `load`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `save`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `save`",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
@@ -663,13 +642,6 @@
       "path": "aitune/torch/backend/torchao_backend.py",
       "name": "not-callable",
       "concise_description": "Expected a callable, got `None`",
-      "severity": "error"
-    },
-    {
-      "column": 20,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "no-matching-overload",
-      "concise_description": "No matching overload found for function `iter` called with arguments: (Unknown | None)",
       "severity": "error"
     },
     {
@@ -859,20 +831,6 @@
       "path": "aitune/torch/inspecting/module_inspector.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Module | dict[Unknown, Unknown] | list[Unknown] | Any` is not assignable to parameter `module` with type `OnnxModule` in function `aitune.torch.inspecting.module_info.OnnxModuleInfo.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 47,
-      "path": "aitune/torch/inspecting/module_inspector.py",
-      "name": "unsupported-operation",
-      "concise_description": "`+` is not supported between `LiteralString` and `None`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "aitune/torch/inspecting/module_inspector.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.inspecting.module_info.ModuleInfo.__init__`",
       "severity": "error"
     },
     {

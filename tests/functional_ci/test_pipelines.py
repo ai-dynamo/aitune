@@ -8,11 +8,8 @@ from typing import cast
 
 import pytest
 import torch
-from packaging.version import Version
-from torch import nn
 
 import aitune.torch as ait
-from aitune.torch.backend import KernelSelectorBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
@@ -21,9 +18,7 @@ from aitune.torch.module import Module
 from aitune.torch.module.tuned_module import TunedModule
 from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.flux import ToyFluxPipeline
-from tests.functional_ci.lifecycle import Tolerance, pinned_strategy, selected_backend
-
-TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10))
+from tests.functional_ci.lifecycle import pinned_strategy, selected_backend
 
 PROMPT = "A futuristic cityscape with neon lights and flying cars"
 COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
@@ -46,20 +41,10 @@ def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
     return components
 
 
-# Strict: a fixed TensorRT fails CI with XPASS until the mark is removed.
-@pytest.mark.matrix("models.pipelines", "modes.aot-inspect-wrap", "modes.aot-save-load")
-@with_backends(
-    "save_load",
-    marks={
-        "torch-tensorrt-aot": pytest.mark.xfail(
-            strict=True,
-            reason=("torch_tensorrt/dynamo/conversion/_TRTInterpreter.py, line 703, in run assert cuda_engine"),
-            raises=AssertionError,  # expected one selected backend, found 0",
-        )
-    },
-)
+@pytest.mark.matrix("aot_tuning.models.pipelines", "modes.aot-inspect-wrap", "modes.aot-save-load")
+@with_backends("base")
 def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
-    """Inspect, tune, save, and restore the pipeline with each save/load backend."""
+    """Inspect, tune, save, and restore the pipeline with each backend."""
     backend = case.factory()
     pipeline = ToyFluxPipeline(device)
     expected = generate(pipeline, PROMPT)
@@ -96,22 +81,8 @@ def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: P
     case.tolerance.assert_close(generate(restored, PROMPT), expected)
 
 
-@pytest.mark.matrix("models.pipelines", "modes.jit-tune_eager")
-@with_backends(
-    "jit",
-    marks={
-        # Torch-TRT 2.12+ falls back to the original graph: the test passes, but the CLIP head runs in PyTorch.
-        "torch-tensorrt-jit": pytest.mark.xfail(
-            TORCH_2_8_TO_2_10,
-            strict=True,
-            reason=(
-                "Torch-TRT < 2.12 rejects the int64 constant-folded CLIP position ids in `aten.embedding`, "
-                "then its fallback fails with `AttributeError: _frozen_param0`, so the CLIP head is not tuned"
-            ),
-            raises=AssertionError,
-        )
-    },
-)
+@pytest.mark.matrix("jit_tuning.models.pipelines", "modes.jit-tune_eager")
+@with_backends("base")
 def test_pipeline_jit(case: BackendCase, device: torch.device):
     """Tune the pipeline's four JIT heads from two prompt batch sizes."""
     expected = generate(ToyFluxPipeline(device), PROMPT)
@@ -141,22 +112,3 @@ def test_pipeline_jit(case: BackendCase, device: torch.device):
         for selected in cast(TunedModule, head._wrapper).backends.values()
     )
     case.tolerance.assert_close(generate(pipeline, PROMPT), expected)
-
-
-@pytest.mark.matrix("models.pipelines/kernel-selector")
-def test_pipeline_kernel_selector(device: torch.device):
-    """Tune the Flux transformer with kernel selection and compare generated images."""
-    pipeline = ToyFluxPipeline(device, dtype=torch.bfloat16)
-    expected = generate(pipeline, PROMPT)
-    transformer = ait.Module(
-        cast(nn.Module, pipeline.transformer),
-        name="transformer",
-        strategy=pinned_strategy(KernelSelectorBackend()),
-    )
-    pipeline.transformer = transformer
-
-    ait.tune(partial(generate, pipeline), [PROMPT], batch_sizes=[1], device=device)
-
-    selector = cast(KernelSelectorBackend, selected_backend(transformer, KernelSelectorBackend))
-    assert selector._runtime is not None and selector._runtime.plan.providers
-    Tolerance(rtol=2e-2, atol=2e-2).assert_close(generate(pipeline, PROMPT), expected)

@@ -52,6 +52,7 @@ Non-batchable inputs should be handled by the user on module level.
 
 """
 
+import copy
 import itertools
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -289,15 +290,13 @@ class MinMaxRandomDataset(DynamicShapeDataset):
         self.input_configs = input_configs
         self.include_min_max_shapes = include_min_max_shapes
         self.is_dict = self._validate_names()
-        self.samples = self._generate_samples()
+        # The list storage is the only copy of the samples, so indexing, iteration and assignment agree.
+        super().__init__(self._generate_samples())
 
-    def __len__(self):
-        """Return the number of samples in the dataset."""
-        return self.num_samples
-
-    def __getitem__(self, index):
-        """Get a sample from the dataset."""
-        return self.samples[index]
+    @property
+    def samples(self):
+        """The generated samples, i.e. the dataset itself."""
+        return self
 
     def _validate_names(self):
         all_has_name = all(cfg.kwarg_name is not None for cfg in self.input_configs)
@@ -535,6 +534,7 @@ def ensure_enough_samples(
     """Ensures there is enough samples in the dataset to run the model for the given number of iterations.
 
     NOTE: This function trims the dataset to the given number of samples.
+    A DataLoaderFactory is returned as a shallow copy holding the trimmed dataset; the one passed in is not modified.
 
     Args:
         dataset: The dataset to make iterable.
@@ -568,5 +568,7 @@ def ensure_enough_samples(
         return limited_dataset
 
     if isinstance(dataset, DataLoaderFactory):
-        dataset.dataset = ensure_enough_samples(dataset.dataset, number_of_samples)
-        return dataset
+        # Work on a copy so the caller's factory keeps its original dataset, e.g. for a later tune().
+        factory = copy.copy(dataset)
+        factory.dataset = ensure_enough_samples(dataset.dataset, number_of_samples)
+        return factory

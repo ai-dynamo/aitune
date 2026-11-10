@@ -1268,11 +1268,13 @@ def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
     backend._prepare_inputs = mocker.MagicMock(return_value={"args_0": mocker.MagicMock()})
     backend._prepare_outputs_for_return = mocker.MagicMock(return_value="output")
     mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.torch.cuda.stream")
+    current_stream = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.torch.cuda.current_stream")
     calls = []
     backend._set_optimization_profiles = mocker.MagicMock(side_effect=lambda inputs: calls.append("profile"))
     backend._set_input_tensors = mocker.MagicMock(side_effect=lambda inputs: calls.append("inputs"))
 
     assert backend._infer() == "output"
+    backend._cuda_stream.wait_stream.assert_called_once_with(current_stream.return_value)
     assert calls == ["profile", "inputs"]
 
 

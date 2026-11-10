@@ -69,7 +69,7 @@ pip install --extra-index-url https://pypi.nvidia.com "aitune[torch29,onnxruntim
 CUDA 13 with pip needs an explicit ORT reinstall from the CUDA 13 feed:
 
 ```bash
-pip install onnxruntime-gpu==1.24.4 --no-deps --force-reinstall --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/
+pip install onnxruntime-gpu==1.26.0 --no-deps --force-reinstall --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/
 ```
 
 If ORT is already installed, use UV's targeted reinstall option with the CUDA 13 extra:

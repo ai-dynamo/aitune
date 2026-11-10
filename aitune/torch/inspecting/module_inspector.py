@@ -30,7 +30,7 @@ Environment variables that could be used:
 """
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import cache, wraps
 from logging import getLogger
@@ -38,6 +38,9 @@ from typing import Any
 
 import torch
 
+from aitune.torch.call_tree.methods import user_defined_methods
+from aitune.torch.call_tree.nodes import ROOT_LABEL
+from aitune.torch.call_tree.recorder import CallRecorder
 from aitune.torch.inspecting.module_info import (
     DictOfModulesInfo,
     ListOfModulesInfo,
@@ -111,14 +114,26 @@ class InspectContext:
 class ModuleInspector:
     """Class for inspecting PyTorch modules and tracking their execution."""
 
-    def __init__(self, min_depth: int = 0, max_depth: int = 5):
-        """Initialize the module inspector."""
+    def __init__(self, min_depth: int = 0, max_depth: int = 5, recorder: CallRecorder | None = None):
+        """Initialize the module inspector.
+
+        Args:
+            min_depth: Minimum depth of the modules returned by ``get_modules``.
+            max_depth: Maximum depth of the object walk.
+            recorder: Call recorder for the call tree. If set, the inspector also wraps user-defined methods of
+                modules and of plain objects outside modules, and reports every wrapped call to the recorder while
+                it is recording.
+        """
         self._module_info: dict[Any, ModuleInfo] = {}
         self._original_forward: dict[Any, Any] = {}
+        self._original_compiled_call: dict[Any, Any] = {}
+        self._timed_by_compiled_call: set[int] = set()  # ids of modules timed by their compiled-call wrapper
+        self._original_methods: list[tuple[Any, str, bool, Any]] = []
         self._inspected_objects: set = set()  # Track objects that have been inspected
         self._min_recursion_depth = min_depth
         self._max_recursion_depth = max_depth
         self._execution_parent_module: list[ModuleInfo] = []
+        self._recorder = recorder
         if _get_inspect_debug():
             self._debug_inspecting_functions()
 
@@ -136,11 +151,50 @@ class ModuleInspector:
         # Restore original forward methods
         for module, original_forward in self._original_forward.items():
             module.forward = original_forward
+        for module, original_compiled_call in self._original_compiled_call.items():
+            module._compiled_call_impl = original_compiled_call
+        self._restore_methods()
 
         self._inspected_objects.clear()  # Clear the set when starting a new inspection
 
         self._module_info.clear()
         self._original_forward.clear()
+        self._original_compiled_call.clear()
+
+    def warn_about_compiled_modules(self) -> None:
+        """Warn about compiled modules whose submodules were not inspected.
+
+        A compiled module is reported if it ran but none of the submodules it calls directly were counted. This
+        happens when Dynamo traces the compiled code, because the submodule wrappers then call through without
+        counting. Deeper submodules are not checked: those below a ``torch.compiler.disable`` call run eagerly and
+        are counted even when Dynamo traced the compiled code.
+        """
+        for module_info in self._module_info.values():
+            if not module_info.execution_count or not self._is_compiled(module_info.module):
+                continue
+            direct_submodules = [
+                self._module_info[c] for c in _direct_submodules(module_info.module) if c in self._module_info
+            ]
+            if not direct_submodules or any(child.execution_count for child in direct_submodules):
+                continue  # a direct submodule ran, so compiled code ran eagerly (``force_eager``)
+            logger.warning(
+                "%s is compiled with torch.compile; the modules inside it were not inspected. To inspect them, run "
+                'ait.inspect under torch.compiler.set_stance("force_eager").',
+                module_info.object_path or "The model",
+            )
+
+    def _is_compiled(self, module: Any) -> bool:
+        """Whether ``module`` is compiled with ``torch.compile`` or ``nn.Module.compile()``."""
+        if not isinstance(module, torch.nn.Module):
+            return False
+        from torch._dynamo.eval_frame import OptimizedModule
+
+        forward = self._original_forward.get(module, module.forward)
+        return (
+            isinstance(module, OptimizedModule)
+            or getattr(module, "_compiled_call_impl", None) is not None
+            or hasattr(forward, "_torchdynamo_orig_callable")
+        )
 
     def get_modules(self) -> list[ModuleInfo]:
         """Get list of top-level executed modules or their first executed children.
@@ -218,8 +272,19 @@ class ModuleInspector:
 
         # Handle objects
         if hasattr(obj, "__dict__"):
-            self._inspect_members(obj, members={}, context=context.clone(module_parent=context.create_module_info(obj)))
+            self._inspect_plain_object(obj, context=context)
             return
+
+    def _inspect_plain_object(self, obj: Any, *, context: InspectContext) -> None:
+        """Inspect the members of a plain object; for the call tree, also wrap its user-defined methods.
+
+        Args:
+            obj: The object to inspect
+            context: The context of the inspection
+        """
+        if self._recorder is not None and _outside_modules(context.module_parent, obj):
+            self._wrap_user_methods(obj, context.object_path)
+        self._inspect_members(obj, members={}, context=context.clone(module_parent=context.create_module_info(obj)))
 
     def _inspect_dict(self, obj: dict, *, context: InspectContext) -> None:
         """Inspect the values of a dictionary.
@@ -314,8 +379,46 @@ class ModuleInspector:
         self._module_info[module] = module_info
 
         self._wrap_forward_methods(module)
+        if self._recorder is not None:
+            self._recorder.register_module(_label_prefix(context.object_path), module)
+            self._wrap_user_methods(module, context.object_path)
 
         return module_info
+
+    def _wrap_user_methods(self, obj: Any, object_path: str) -> None:
+        """Wrap the user-defined methods of ``obj`` so that they report to the recorder while it records."""
+        recorder = self._recorder
+        if recorder is None:
+            return
+        prefix = _label_prefix(object_path)
+        for name in user_defined_methods(obj):
+            try:
+                original = getattr(obj, name)
+                was_instance = name in vars(obj)
+            except Exception as e:
+                self._debug_error("Failed to read method %s of %s", name, object_path, error=e)
+                continue
+            if not callable(original):
+                continue
+            wrapper = _recording_wrapper(recorder, obj, name, f"{prefix}.{name}", original)
+            try:
+                setattr(obj, name, wrapper)
+            except Exception as e:
+                self._debug_error("Failed to wrap method %s of %s", name, object_path, error=e)
+                continue
+            self._original_methods.append((obj, name, was_instance, original))
+
+    def _restore_methods(self) -> None:
+        """Restore the methods wrapped by ``_wrap_user_methods``."""
+        for obj, name, was_instance, original in reversed(self._original_methods):
+            try:
+                if was_instance:
+                    setattr(obj, name, original)
+                else:
+                    delattr(obj, name)
+            except Exception as e:
+                self._debug_error("Failed to restore method %s", name, error=e)
+        self._original_methods.clear()
 
     def _wrap_forward_methods(self, module) -> None:
         """Wrap forward methods of a module and its submodules.
@@ -329,59 +432,119 @@ class ModuleInspector:
         original_forward = module.forward
         self._original_forward[module] = original_forward
 
-        def _debug_run(module_info: ModuleInfo, exec_parent: ModuleInfo, depth: int = 0):
-            if _get_inspect_debug():
-                logger.debug("%-75s from %s", " " * depth * 2 + module_info.object_path + "()", exec_parent.object_path)
+        recorder = self._recorder
 
         @wraps(original_forward)
         def wrapped_forward(*args, **kwargs):
-            module_info = self._module_info[module]
-
-            execution_parent_module = ModuleInfo(name="root", module=None, object_path="root")
-            if self._execution_parent_module:
-                execution_parent_module = self._execution_parent_module[-1]
-
-            self._execution_parent_module.append(module_info)
-
-            _debug_run(module_info, execution_parent_module, len(self._execution_parent_module))
-            module_info.forward_called = True
-            module_info.execution_count += 1
-
-            # Record input types
-            input_info = {
-                "args": [type(arg).__name__ for arg in args],
-                "kwargs": {k: type(v).__name__ for k, v in kwargs.items()},
-            }
-            module_info.input_types.append(input_info)
-
-            # Synchronize CUDA before starting timing
-            synchronize()
-
-            # Measure execution time
-            start_time = time.perf_counter()
-            output = original_forward(*args, **kwargs)
-
-            # Synchronize CUDA after execution
-            synchronize()
-
-            # Collect end time
-            end_time = time.perf_counter()
-
-            # Update execution time
-            module_info.total_execution_time += end_time - start_time
-
-            # Record output type
-            if isinstance(output, (tuple, list)):
-                output_info = {"type": type(output).__name__, "elements": [type(x).__name__ for x in output]}
-            else:
-                output_info = {"type": type(output).__name__}
-            module_info.output_types.append(output_info)
-
-            self._execution_parent_module.pop()
-
-            return output
+            """Report the call to the recorder while it records; otherwise count and time it."""
+            # Dynamo must not trace the bookkeeping: while torch.compile traces a compiled part, run the
+            # original forward unchanged. Compiled parts run eagerly in the call-tree pass (``force_eager``),
+            # so this only applies while they actually compile.
+            if torch.compiler.is_compiling():
+                return original_forward(*args, **kwargs)
+            # While the call-tree recorder records, report to it only: no per-call synchronization (it would
+            # distort the recorder's timing) and no ModuleInfo updates (the legacy pass keeps its numbers).
+            if recorder is not None and recorder.active:
+                label = f"{_label_prefix(self._module_info[module].object_path)}.forward"
+                frame = recorder.begin_call(label, module, "forward", args, kwargs)
+                try:
+                    return original_forward(*args, **kwargs)
+                finally:
+                    recorder.end_call(frame)
+            # Call through while the compiled-call wrapper times this module (compiled code run eagerly).
+            if id(module) in self._timed_by_compiled_call:
+                return original_forward(*args, **kwargs)
+            return self._time_call(module, original_forward, args, kwargs)
 
         module.forward = wrapped_forward
+        self._wrap_compiled_call(module)
+
+    def _time_call(self, module: torch.nn.Module, call: Callable, args: tuple, kwargs: dict) -> Any:
+        """Count one call of ``module``, run ``call`` with the arguments, and add its time to the module's info.
+
+        Args:
+            module: The inspected module the call belongs to
+            call: What to run: the module's original ``forward``, or its original compiled call for a module
+                compiled with ``nn.Module.compile()``
+            args: The positional arguments to call with
+            kwargs: The keyword arguments to call with
+
+        Returns:
+            The output of ``call``
+        """
+        module_info = self._module_info[module]
+
+        execution_parent_module = ModuleInfo(name="root", module=None, object_path="root")  # type: ignore[bad-argument-type]
+        if self._execution_parent_module:
+            execution_parent_module = self._execution_parent_module[-1]
+
+        self._execution_parent_module.append(module_info)
+
+        _debug_run(module_info, execution_parent_module, len(self._execution_parent_module))
+        module_info.forward_called = True
+        module_info.execution_count += 1
+
+        # Record input types
+        input_info = {
+            "args": [type(arg).__name__ for arg in args],
+            "kwargs": {k: type(v).__name__ for k, v in kwargs.items()},
+        }
+        module_info.input_types.append(input_info)
+
+        # Synchronize CUDA before starting timing
+        synchronize()
+
+        # Measure execution time
+        start_time = time.perf_counter()
+        output = call(*args, **kwargs)
+
+        # Synchronize CUDA after execution
+        synchronize()
+
+        # Collect end time
+        end_time = time.perf_counter()
+
+        # Update execution time
+        module_info.total_execution_time += end_time - start_time
+
+        # Record output type
+        if isinstance(output, (tuple, list)):
+            output_info = {"type": type(output).__name__, "elements": [type(x).__name__ for x in output]}
+        else:
+            output_info = {"type": type(output).__name__}
+        module_info.output_types.append(output_info)
+
+        self._execution_parent_module.pop()
+
+        return output
+
+    def _wrap_compiled_call(self, module) -> None:
+        """Time a module compiled with ``nn.Module.compile()`` from outside its compiled call.
+
+        ``nn.Module.compile()`` compiles the whole call, the ``forward`` wrapper included, so that wrapper only calls
+        through. Wrapping the compiled call instead counts and times the module as one call.
+
+        Args:
+            module: The module, wrapped by ``_wrap_forward_methods``
+        """
+        original_compiled_call = getattr(module, "_compiled_call_impl", None)
+        if original_compiled_call is None:
+            return
+        self._original_compiled_call[module] = original_compiled_call
+
+        recorder = self._recorder
+
+        def wrapped_compiled_call(*args, **kwargs):
+            # While the call-tree recorder records, the forward wrapper reports the call; do not count it here.
+            if torch.compiler.is_compiling() or (recorder is not None and recorder.active):
+                return original_compiled_call(*args, **kwargs)
+            self._timed_by_compiled_call.add(id(module))
+            try:
+                return self._time_call(module, original_compiled_call, args, kwargs)
+            finally:
+                self._timed_by_compiled_call.discard(id(module))
+
+        module._compiled_call_impl = wrapped_compiled_call
 
     @cache
     @staticmethod
@@ -428,9 +591,55 @@ class ModuleInspector:
         self._register_module = self._wrap_debug_inspect(self._register_module)
 
 
+def _label_prefix(object_path: str | None) -> str:
+    """Recorder label of an object: ``root`` followed by its object path (``root.vlm.lm_head``)."""
+    return f"{ROOT_LABEL}{object_path or ''}"
+
+
+def _outside_modules(parent: ModuleInfo | None, obj: Any) -> bool:
+    """Whether a plain object is reached without passing through an ``nn.Module`` (pipeline level, not configs)."""
+    if isinstance(obj, torch.Tensor):
+        return False
+    while parent is not None:
+        if isinstance(parent.module, torch.nn.Module):
+            return False
+        parent = parent.parent
+    return True
+
+
+def _recording_wrapper(recorder: CallRecorder, obj: Any, name: str, label: str, original: Callable) -> Callable:
+    """Wrap a method so that its calls report to ``recorder`` while it records; otherwise call it unchanged."""
+
+    @wraps(original)
+    def wrapper(*args, **kwargs):
+        if not recorder.active or torch.compiler.is_compiling():
+            return original(*args, **kwargs)
+        frame = recorder.begin_call(label, obj, name, args, kwargs)
+        try:
+            return original(*args, **kwargs)
+        finally:
+            recorder.end_call(frame)
+
+    return wrapper
+
+
 def _get_inspect_debug() -> bool:
     return get_bool_env_variable("AITUNE_INSPECT_DEBUG", DEFAULT_INSPECT_DEBUG)
 
 
 def _get_inspect_debug_raise() -> bool:
     return get_bool_env_variable("AITUNE_INSPECT_DEBUG_RAISE", DEFAULT_INSPECT_DEBUG_RAISE)
+
+
+def _debug_run(module_info: ModuleInfo, exec_parent: ModuleInfo, depth: int = 0):
+    if _get_inspect_debug():
+        logger.debug("%-75s from %s", " " * depth * 2 + (module_info.object_path or "") + "()", exec_parent.object_path)
+
+
+def _direct_submodules(module: torch.nn.Module) -> Iterator[torch.nn.Module]:
+    """The submodules ``module`` can call directly: its children, and the children of containers such as ModuleList."""
+    for child in module.children():
+        if type(child).forward is torch.nn.Module.forward:
+            yield from _direct_submodules(child)
+        else:
+            yield child
