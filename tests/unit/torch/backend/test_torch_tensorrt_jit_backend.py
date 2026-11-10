@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import pytest
 import torch
@@ -8,11 +8,13 @@ import torch
 from aitune.exceptions import AITuneError
 from aitune.torch import FirstWinsStrategy
 from aitune.torch.backend.torch_tensorrt_jit_backend import (
+    TorchTensorRTConfig,
     TorchTensorRTJitBackend,
     TorchTensorRTJitBackendConfig,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store, requires_cuda
 
@@ -86,7 +88,7 @@ def backend_build(
 
 @pytest.mark.parametrize("autocast", [False, True])
 @pytest.mark.parametrize("reload", [False, True], ids=["built", "checkpoint"])
-def test_infer_restores_unreturned_mutable_state(mocker, tmp_path, autocast, reload):
+def test_compile_preserves_native_mutable_inputs(mocker, tmp_path, autocast, reload):
     class StatefulModel(torch.nn.Module):
         def forward(self, x, state):
             state["cache"].add_(x)
@@ -96,18 +98,9 @@ def test_infer_restores_unreturned_mutable_state(mocker, tmp_path, autocast, rel
     mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_torch_tensorrt")
     mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
 
-    def compile_without_input_writes(module, **options):
-        def run(*flat_inputs):
-            # Emulate an engine that returns state outputs without writing into the caller's tensors.
-            return module(*(tensor.clone() for tensor in flat_inputs))
-
-        return run
-
-    mocker.patch(
-        "aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile",
-        side_effect=compile_without_input_writes,
-    )
     model = StatefulModel()
+    compiled = mocker.Mock(wraps=model)
+    compile_mock = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch.compile", return_value=compiled)
     x = torch.ones(2)
     sample = ((x, {"cache": torch.zeros(2)}), {})
     backend = TorchTensorRTJitBackend(TorchTensorRTJitBackendConfig(autocast_enabled=autocast))
@@ -121,14 +114,70 @@ def test_infer_restores_unreturned_mutable_state(mocker, tmp_path, autocast, rel
     if reload:
         backend = TorchTensorRTJitBackend.from_dict(model, backend.to_dict())
         backend.activate()
+    assert compile_mock.call_count == (2 if reload else 1)
+    assert all(call.args[0] is model for call in compile_mock.call_args_list)
+    compiled.reset_mock()
     cache_tensor = torch.full((2,), 3.0)
     state = {"cache": cache_tensor}
 
-    result = backend.infer(x, state)
+    for expected in (4.0, 5.0):
+        result = backend.infer(x, state=state)
 
-    torch.testing.assert_close(result["value"], x * 2)
-    torch.testing.assert_close(state["cache"], torch.full((2,), 4.0))
-    assert state["cache"] is cache_tensor
+        assert compiled.call_args.args[0] is x
+        assert compiled.call_args.kwargs["state"] is state
+        torch.testing.assert_close(result["value"], x * 2)
+        torch.testing.assert_close(state["cache"], torch.full((2,), expected))
+        assert state["cache"] is cache_tensor
+
+
+@requires_cuda
+@pytest.mark.parametrize("compiler", ["native", "aitune"])
+@pytest.mark.parametrize("replace_cache", [False, True], ids=["inplace", "replacement"])
+def test_native_compiler_mutable_state(torch_device, tmp_path, compiler, replace_cache):
+    class StatefulModel(torch.nn.Module):
+        def forward(self, x, state):
+            if replace_cache:
+                state["cache"] = state["cache"] + 1
+            else:
+                state["cache"].add_(1)
+            return {"value": x + state["cache"]}
+
+    model = StatefulModel().to(torch_device).eval()
+    config = TorchTensorRTJitBackendConfig(
+        compile_config=TorchTensorRTConfig(
+            enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True, require_full_compilation=True
+        ),
+        dynamic=False,
+    )
+    x = torch.ones(2, 4, device=torch_device)
+    sample = ((x, {"cache": torch.zeros_like(x)}), {})
+    with torch.no_grad():
+        if compiler == "native":
+            # Use the same compiler settings as the AITune path, without its build or inference wrappers.
+            options = asdict(config.compile_config)
+            options["device"] = get_cuda_device(torch_device)
+            infer = torch.compile(
+                model, backend="torch_tensorrt", options=options, dynamic=config.dynamic, fullgraph=config.fullgraph
+            )
+            infer(*sample[0], **sample[1])
+        else:
+            backend = TorchTensorRTJitBackend(config)
+            backend.build(
+                model,
+                graph_spec=make_recorded_graph_spec(model, sample),
+                samples=make_sample_store([sample], tmp_path),
+                device=torch_device,
+                cache_dir=tmp_path,
+            )
+            infer = backend.infer
+
+        # An unchanged cache exposes lost input writes independently of engine numerical accuracy.
+        state = {"cache": torch.full_like(x, 0.25)}
+        for step in (1, 2, 3):
+            result = infer(x, state=state)
+            expected_cache = torch.full_like(x, 0.25 + step)
+            torch.testing.assert_close(state["cache"], expected_cache)
+            torch.testing.assert_close(result["value"], x + expected_cache)
 
 
 def test_torch_tensorrt_build_auto_dynamic_does_not_mutate_config(mocker, tmp_path):
