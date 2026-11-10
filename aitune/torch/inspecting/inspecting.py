@@ -85,6 +85,7 @@ def inspect(
         for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
             total_execution_time += _run_inference(inference_function, args, kwargs)
 
+        model_inspector.warn_about_compiled_modules()
         modules = model_inspector.get_modules()
         total_execution_time, modules = _synchronize_inspection_result(total_execution_time, modules)
 

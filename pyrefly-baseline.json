@@ -848,20 +848,6 @@
       "severity": "error"
     },
     {
-      "column": 47,
-      "path": "aitune/torch/inspecting/module_inspector.py",
-      "name": "unsupported-operation",
-      "concise_description": "`+` is not supported between `LiteralString` and `None`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "aitune/torch/inspecting/module_inspector.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.inspecting.module_info.ModuleInfo.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 77,
       "path": "aitune/torch/jit/inspect_module.py",
       "name": "bad-assignment",

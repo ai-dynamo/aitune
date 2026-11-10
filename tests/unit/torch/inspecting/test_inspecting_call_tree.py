@@ -252,3 +252,37 @@ def test_compiled_child_inspects_and_its_calls_appear_in_the_tree(dataset):
     labels = [n.label for n in _tree(info).nodes.values()]
     assert any("child" in label for label in labels)
     assert any("lin" in label for label in labels)
+
+
+def test_module_compiled_child_is_recorded_once_and_counts_stay_unchanged(dataset):
+    """A child compiled with ``nn.Module.compile()`` gets its call-tree nodes, and the recording pass leaves counts alone."""
+
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+    class Root(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.child = Inner()
+
+        def forward(self, x):
+            return self.child(x)
+
+    torch._dynamo.reset()
+    model = Root()
+    model.child.compile(backend="eager")
+    fn = lambda x: model(x)  # noqa: E731
+    kwargs = {"inference_function": fn, "number_of_iterations": ITERATIONS, "warmup_iterations": 1, "min_depth": 1}
+
+    without_tree = _legacy(inspect(model, dataset, **kwargs))
+    info = inspect(model, dataset, call_tree=True, **kwargs)
+
+    assert _legacy(info) == without_tree
+    nodes = _tree(info).nodes
+    assert nodes[("root.forward", "root.child.forward")].calls == ITERATIONS
+    assert ("root.forward", "root.child.forward", "root.child.lin.forward") in nodes
