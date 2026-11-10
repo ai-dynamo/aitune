@@ -9,6 +9,9 @@ from typing import Any
 
 import torch
 
+from aitune.torch.call_tree.call_tree import CallTree
+from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.sync import synchronize_call_tree
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, ensure_enough_samples, samples_generator
 from aitune.torch.distributed import coordinator
 from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo
@@ -32,6 +35,7 @@ def inspect(
     warmup_iterations: int = DEFAULT_WARMUP_ITERATIONS,
     min_depth: int = 0,
     max_depth: int = 5,
+    call_tree: bool = False,
 ) -> InspectedModulesInfo:
     """Inspect provided callable object searching for nn.Module members executed as part of forward pass.
 
@@ -43,6 +47,14 @@ def inspect(
         warmup_iterations: Number of iterations to run for warmup.
         min_depth: Minimum depth of the modules to inspect, if root level modules is not working, try to increase this value
         max_depth: Maximum depth of the modules to inspect
+        call_tree: Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran inside
+            which, keyed by their chain of callers, plus the reads and device lookups code outside a module
+            makes on its weights. This runs one more pass of ``number_of_iterations`` without per-module
+            synchronization, so inspection takes longer. Parts compiled with ``torch.compile`` run compiled in
+            the per-module pass, so calls inside them are not measured there; in the call-tree pass they run
+            eagerly, so their calls and weight reads are recorded but their times are eager times. For deep
+            models the walk must reach the linear layers, for example ``max_depth=8``.
+
     Returns:
         InspectedModulesInfo object.
 
@@ -53,9 +65,11 @@ def inspect(
     setup_logging(format_string=LOG_FORMAT)
 
     logger.info("Inspecting object searching for executed nn.Module members.")
-    model_inspector = ModuleInspector(min_depth=min_depth, max_depth=max_depth)
-    model_inspector.inspect(obj)
+    recorder = CallRecorder() if call_tree else None
+    model_inspector = ModuleInspector(min_depth=min_depth, max_depth=max_depth, recorder=recorder)
     try:
+        model_inspector.inspect(obj)
+
         # If no inference function is provided, use the obj
         if inference_function is None:
             inference_function = obj
@@ -75,9 +89,13 @@ def inspect(
         modules = model_inspector.get_modules()
         total_execution_time, modules = _synchronize_inspection_result(total_execution_time, modules)
 
+        tree = None
+        if recorder is not None:
+            tree = _record_call_tree(recorder, inference_function, dataset, number_of_iterations)
+
         logger.info("Inspection done. Found %d candidate modules for tuning.", len(modules))
 
-        inspected_modules_info = InspectedModulesInfo(total_execution_time, number_of_iterations)
+        inspected_modules_info = InspectedModulesInfo(total_execution_time, number_of_iterations, call_tree=tree)
         for module in modules:
             inspected_modules_info.add_module(module)
 
@@ -103,6 +121,25 @@ def _run_inference(obj: Callable, args: Sequence[Any], kwargs: dict[str, Any]) -
         synchronize()
     coordinator.barrier()
     return time.perf_counter() - start_time
+
+
+def _record_call_tree(
+    recorder: CallRecorder,
+    inference_function: Callable,
+    dataset: DatasetLike | DataLoaderFactory | torch.Tensor,
+    number_of_iterations: int,
+) -> CallTree:
+    """Record the call tree in a pass of its own, resolving the recorder's events after every inference."""
+    logger.info("Recording the call tree.")
+    with recorder, torch.compiler.set_stance("force_eager"):
+        # Recording reads each weight access eagerly; Dynamo cannot trace the TorchFunctionMode.
+        for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
+            recorder.begin_iteration()
+            _run_inference(inference_function, args, kwargs)
+            with coordinator.raise_if_any_rank_fails("Resolving call tree timings"):
+                recorder.flush()
+            recorder.end_iteration()
+    return synchronize_call_tree(recorder.result())
 
 
 def _reset_total_execution_time(inspector: ModuleInspector):
