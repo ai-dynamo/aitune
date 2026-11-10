@@ -221,7 +221,7 @@ calls ran inside it. With `call_tree=True`, `inspect` also records a call tree: 
 model-defined method, keyed by the chain of calls that led to it, with its calls and time.
 
 ```python
-modules_info = ait.inspect(model, input_data, inference_function=run_chunk, max_depth=8, call_tree=True)
+modules_info = ait.inspect(model, input_data, inference_function=run_chunk, min_depth=1, max_depth=8, call_tree=True)
 tree = modules_info.call_tree
 
 for node in tree.find("dit"):    # recorded calls whose label contains "dit"
