@@ -35,6 +35,7 @@ from aitune.torch.utils.module import (
     is_kept_on_device,
     keep_on_device,
     offload_after_tuning,
+    release_kept_on_device,
 )
 
 logger = getLogger(__name__)
@@ -275,6 +276,8 @@ class Module(wrapt.CallableObjectProxy):
             state_dict[Module.NAME_KEY],
             dynamic_shapes=state_dict[Module.DYNAMIC_SHAPES_KEY],
         )
+        if Module.KEPT_ON_DEVICE_KEY in state_dict:
+            release_kept_on_device(module)
         kept = state_dict.get(Module.KEPT_ON_DEVICE_KEY, [])
         if kept:
             named = dict(module.named_parameters(remove_duplicate=False)) | dict(
