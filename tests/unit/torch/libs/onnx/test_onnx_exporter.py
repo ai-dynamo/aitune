@@ -12,6 +12,7 @@ import pytest
 import torch
 import torch.nn as nn
 import wrapt
+from onnx.reference import ReferenceEvaluator
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.libs.onnx.onnx_exporter import _ONNX_FALLBACK_SUPPORTED, ONNXExporter
@@ -65,6 +66,42 @@ def mock_onnx_lib(mocker):
     mock.load.return_value = mocker.MagicMock()
     mock.checker.check_model.return_value = None
     return mock
+
+
+@pytest.mark.parametrize("use_dynamo", [False, True], ids=["trace", "dynamo"])
+@pytest.mark.parametrize("layout", ["positional", "mixed", "keyword", "reordered-keyword"])
+def test_export_preserves_input_names_across_call_layouts(tmp_path, use_dynamo, layout):
+    class WeightedInputs(nn.Module):
+        def forward(self, x, residual):
+            return x + 0.5 * residual
+
+    model = WeightedInputs().eval()
+    x = torch.arange(8, dtype=torch.float32).reshape(2, 4)
+    residual = x.flip(-1) + 10
+    samples = {
+        "positional": ((x, residual), {}),
+        "mixed": ((x,), {"residual": residual}),
+        "keyword": ((), {"x": x, "residual": residual}),
+        "reordered-keyword": ((), {"residual": residual, "x": x}),
+    }
+    sample = samples[layout]
+    graph_spec = make_graph_spec(model.forward, sample, model(x, residual))
+    output_path = tmp_path / "call-layout.onnx"
+
+    ONNXExporter(output_path, use_dynamo=use_dynamo).export(model, sample, graph_spec)
+
+    # Bind fresh values by semantic name, just as TensorRT and ONNX Runtime do at inference.
+    # The ONNX reference evaluator avoids coupling this mapping test to an ORT-supported IR version.
+    runtime_x = x + 3
+    runtime_residual = residual - 2
+    (actual,) = ReferenceEvaluator(onnx.load(output_path)).run(
+        None,
+        {
+            format_tensor_name("x", "input"): runtime_x.numpy(),
+            format_tensor_name("residual", "input"): runtime_residual.numpy(),
+        },
+    )
+    torch.testing.assert_close(torch.from_numpy(actual), model(runtime_x, runtime_residual))
 
 
 def test_onnx_exporter_init(tmp_path):
