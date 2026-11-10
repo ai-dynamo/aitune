@@ -276,7 +276,12 @@ def _values_equal(left: Any, right: Any) -> bool:
     """Compare arbitrary non-tensor leaves."""
     if left is right:
         return True
-    result = left == right
+    try:
+        result = left == right
+    except Exception:
+        # Leaf types may reject comparison, for example NumPy arrays with incompatible shapes.
+        # Record a replacement when equality cannot be established.
+        return False
     return result if isinstance(result, bool) else False
 
 
