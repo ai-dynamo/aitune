@@ -356,9 +356,7 @@ def test_graph_metadata_does_not_load_external_weights(tmp_path):
 
 
 def test_import_error_propagates(monkeypatch, tmp_path):
-    import aitune.torch.libs.onnx_model_info as module_under_test
-
-    monkeypatch.setattr(module_under_test.onnx, "load", MagicMock(side_effect=ImportError("no onnx")))
+    monkeypatch.setattr(onnx, "load", MagicMock(side_effect=ImportError("no onnx")))
     with pytest.raises(ImportError):
         ONNXModelInfo(tmp_path / "model.onnx")
 
