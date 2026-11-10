@@ -9,7 +9,7 @@ from aitune.torch.module.recording_module import RecordingModule
 from tests.toy_models import TOY_EXPORT_MODELS
 
 
-def test_prepare_moves_nested_tensor_leaves_to_device():
+def test_prepare_moves_nested_tensor_leaves_to_device(mocker):
     model = dict(TOY_EXPORT_MODELS)["complex"]().eval()
     sample = model.samples(batch_sizes=[2])[0]
     graph_spec = model.graph_spec(batch_sizes=[2])
@@ -20,6 +20,35 @@ def test_prepare_moves_nested_tensor_leaves_to_device():
     assert preparation.flat_inputs
     assert preparation.adapter.training is model.training
     assert all(tensor.device.type == "meta" for tensor in preparation.flat_inputs)
+
+    forward = mocker.spy(model, "forward")
+    preparation.adapter(*preparation.flat_inputs)
+
+    forward.assert_called_once()
+    args, kwargs = forward.call_args
+    assert len(args) == len(sample[0]) == 2
+    assert kwargs.keys() == sample[1].keys()
+    assert args[0].device.type == "meta"
+    assert args[1][0].device.type == "meta"
+    assert kwargs["options"]["residuals"][0].device.type == "meta"
+    assert kwargs["scale"].device.type == "meta"
+    assert args[1][1] is None
+    assert kwargs["options"]["residuals"][1] is None
+    assert kwargs["options"]["metadata"] == {"mode": "add"}
+
+
+def test_prepare_preserves_distributed_tensor_placement(mocker):
+    model = dict(TOY_EXPORT_MODELS)["simple"]().eval()
+    sample = model.samples(batch_sizes=[2])[0]
+    graph_spec = model.graph_spec(batch_sizes=[2])
+    tensor = sample[0][0]
+    mocker.patch("aitune.torch.utils.module.DTensor", torch.Tensor)
+
+    preparation = prepare_tensor_export(model, sample, graph_spec, device="meta")
+
+    prepared_tensor = preparation.flat_inputs[0]
+    assert prepared_tensor.device == tensor.device
+    assert prepared_tensor is not tensor
 
 
 def test_prepare_uses_recorded_graph_spec_without_calling_module(tmp_path):

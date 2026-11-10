@@ -12,11 +12,11 @@ import torch
 import wrapt
 
 from aitune.torch.libs.exporting import prepare_tensor_export
+from aitune.torch.libs.exporting.dynamic_shapes import prepare_export_sample
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.task.correctness import check_dynamic_shape_boundary_inference
-from aitune.torch.utils.shapes import prepare_export_sample
 from tests.utilities.helpers import make_graph_spec
 
 

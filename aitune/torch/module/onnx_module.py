@@ -9,8 +9,8 @@ import onnxruntime
 import torch
 from torch import nn
 
-from aitune.torch.libs.onnx.onnx_model_info import ONNXModelInfo
-from aitune.torch.libs.onnx.runtime import prepare_onnx_inputs, run_onnx
+from aitune.torch.libs.onnx_model_info import ONNXModelInfo
+from aitune.torch.libs.runtime import prepare_onnx_inputs, run_onnx
 from aitune.torch.module.graph_spec import GraphSpec
 
 

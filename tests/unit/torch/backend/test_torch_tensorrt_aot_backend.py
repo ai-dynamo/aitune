@@ -125,10 +125,19 @@ def test_save_compiled_model_uses_legacy_exporter_when_available(mocker, tmp_pat
 
 
 @pytest.mark.parametrize("with_kwargs", [False, True], ids=["flat-tensors", "non-tensor-keyword"])
-def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path: Path, with_kwargs):
+@pytest.mark.parametrize(
+    "direct_save_error",
+    [
+        SpecViolationError("direct save failed"),
+        RuntimeError("Only Tensors of floating point and complex dtype can require gradients"),
+    ],
+)
+def test_save_compiled_model_retraces_after_direct_save_failure(
+    mocker, tmp_path: Path, with_kwargs: bool, direct_save_error: Exception
+):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
-    mock_torch_tensorrt.save.side_effect = [SpecViolationError("direct save failed"), None]
+    mock_torch_tensorrt.save.side_effect = [direct_save_error, None]
     module = mocker.Mock(spec=nn.Module)
     sample = ((mocker.sentinel.input,), {"output_hidden_states": True} if with_kwargs else {})
     dynamic_shapes = {"x": {0: mocker.sentinel.batch}}
@@ -149,13 +158,16 @@ def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path
     ]
 
 
-def test_save_compiled_model_does_not_retrace_after_oserror(mocker, tmp_path: Path):
+@pytest.mark.parametrize("direct_save_error", [OSError("disk full"), RuntimeError("unrelated runtime failure")])
+def test_save_compiled_model_does_not_retrace_after_unrelated_error(
+    mocker, tmp_path: Path, direct_save_error: Exception
+):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
-    mock_torch_tensorrt.save.side_effect = OSError("disk full")
+    mock_torch_tensorrt.save.side_effect = direct_save_error
     module = mocker.Mock(spec=nn.Module)
 
-    with pytest.raises(OSError, match="disk full"):
+    with pytest.raises(type(direct_save_error), match=str(direct_save_error)):
         _save_compiled_model(module, tmp_path / "model.pt", sample=((), {}), dynamic_shapes=None, pickle_protocol=5)
 
     mock_torch_tensorrt.save.assert_called_once()

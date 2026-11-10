@@ -21,7 +21,7 @@ from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode, ModuleFormat
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.exporting import ONNXExporter
-from aitune.torch.libs.onnx.runtime import run_onnx
+from aitune.torch.libs.runtime import run_onnx
 from aitune.torch.module.forward_contract import TensorMutationPolicy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
