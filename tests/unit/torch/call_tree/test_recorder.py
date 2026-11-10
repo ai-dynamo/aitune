@@ -102,9 +102,9 @@ def test_result_is_a_snapshot_that_later_recording_does_not_change():
     def one_iteration():
         with recorder:
             recorder.begin_iteration()
-            frame = recorder.enter("root.forward", model, "forward", ())
+            frame = recorder.begin_call("root.forward", model, "forward", ())
             model(torch.randn(2, 2))
-            recorder.exit(frame)
+            recorder.end_call(frame)
             recorder.end_iteration()
 
     one_iteration()
@@ -273,9 +273,9 @@ def test_flush_resolves_pending_events_into_totals():
 
     with recorder:
         recorder.begin_iteration()
-        frame = recorder.enter("root.forward", model, "forward", ())
+        frame = recorder.begin_call("root.forward", model, "forward", ())
         model(torch.randn(2, 2, device="cuda"))
-        recorder.exit(frame)
+        recorder.end_call(frame)
         recorder.end_iteration()
 
     assert recorder._events
@@ -315,9 +315,9 @@ def test_end_event_is_recorded_on_the_start_device_when_the_call_changes_device(
 
     with recorder:
         recorder.begin_iteration()
-        frame = recorder.enter("root.forward", model, "forward", ())
+        frame = recorder.begin_call("root.forward", model, "forward", ())
         current_device.return_value = 1  # the call changed the current device
-        recorder.exit(frame)
+        recorder.end_call(frame)
         recorder.end_iteration()
 
     tree = recorder.result()
@@ -360,7 +360,7 @@ def test_flush_synchronizes_every_end_event(mocker):
     with recorder:
         recorder.begin_iteration()
         for _ in range(2):
-            recorder.exit(recorder.enter("root.forward", model, "forward", ()))
+            recorder.end_call(recorder.begin_call("root.forward", model, "forward", ()))
         recorder.end_iteration()
         recorder.flush()
 

@@ -407,11 +407,11 @@ class ModuleInspector:
                 if torch.compiler.is_compiling():
                     return original_forward(*args, **kwargs)
                 label = f"{_label_prefix(self._module_info[module].object_path)}.forward"
-                frame = recorder.enter(label, module, "forward", args, kwargs)
+                frame = recorder.begin_call(label, module, "forward", args, kwargs)
                 try:
                     return original_forward(*args, **kwargs)
                 finally:
-                    recorder.exit(frame)
+                    recorder.end_call(frame)
             return legacy_forward(*args, **kwargs)
 
         def legacy_forward(*args, **kwargs):
@@ -531,11 +531,11 @@ def _recording_wrapper(recorder: CallRecorder, obj: Any, name: str, label: str, 
     def wrapper(*args, **kwargs):
         if not recorder.active or torch.compiler.is_compiling():
             return original(*args, **kwargs)
-        frame = recorder.enter(label, obj, name, args, kwargs)
+        frame = recorder.begin_call(label, obj, name, args, kwargs)
         try:
             return original(*args, **kwargs)
         finally:
-            recorder.exit(frame)
+            recorder.end_call(frame)
 
     return wrapper
 

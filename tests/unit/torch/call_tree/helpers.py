@@ -21,11 +21,11 @@ def wrap_method(recorder: CallRecorder, obj, name: str, label: str, restore: lis
 
     @functools.wraps(original)
     def wrapper(*args, **kwargs):
-        frame = recorder.enter(label, obj, name, args, kwargs)
+        frame = recorder.begin_call(label, obj, name, args, kwargs)
         try:
             return original(*args, **kwargs)
         finally:
-            recorder.exit(frame)
+            recorder.end_call(frame)
 
     setattr(obj, name, wrapper)
     restore.append((obj, name, was_instance, original))

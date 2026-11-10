@@ -3,18 +3,20 @@
 """Mode-independent call recorder.
 
 The recorder builds a context-keyed call tree. It installs no hooks on modules: each inspection mode (an adapter)
-wraps the methods it finds and calls ``enter`` and ``exit`` around the original call::
+wraps the methods it finds and calls ``begin_call`` and ``end_call`` around the original call::
 
-    frame = recorder.enter(label, obj, name, args, kwargs)
+    frame = recorder.begin_call(label, obj, name, args, kwargs)
     try:
         return original(*args, **kwargs)
     finally:
-        recorder.exit(frame)
+        recorder.end_call(frame)
 
 The only hook the recorder owns is a process-wide probe on ``nn.Module._apply`` (``.to()``, ``.cuda()``, ...), active
 inside a ``with recorder:`` block. Timing uses CUDA events per call (no per-call synchronization) when CUDA is available and
 ``time.perf_counter`` otherwise; ``flush()`` resolves the pending events once per iteration.
 """
+
+from __future__ import annotations
 
 import time
 from collections.abc import Callable
@@ -30,37 +32,24 @@ from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_c
 from aitune.torch.call_tree.nodes import NodeKey
 
 
-@dataclass
-class _Frame:
-    """An open call: its node and the start of its timer.
-
-    The start is a CUDA event or a ``perf_counter`` value; ``device`` is the CUDA device the start event was
-    recorded on.
-    """
-
-    node: CallNode
-    start: Any
-    device: int | None = None
-
-
 class CallRecorder:
-    """Record a context-keyed call tree from enter/exit callbacks.
+    """Record a context-keyed call tree from begin_call/end_call callbacks.
 
     Example:
         >>> recorder = CallRecorder()
         >>> with recorder:
         ...     recorder.begin_iteration()
-        ...     outer = recorder.enter("root.forward", object(), "forward", ())
-        ...     inner = recorder.enter("root.head.forward", object(), "forward", ())
-        ...     recorder.exit(inner)
-        ...     recorder.exit(outer)
+        ...     outer = recorder.begin_call("root.forward", object(), "forward", ())
+        ...     inner = recorder.begin_call("root.head.forward", object(), "forward", ())
+        ...     recorder.end_call(inner)
+        ...     recorder.end_call(outer)
         ...     recorder.end_iteration()
         >>> sorted(recorder.result().nodes)
         [('root.forward',), ('root.forward', 'root.head.forward')]
     """
 
     # The recorder whose ``nn.Module._apply`` probe is installed; the probe is process-wide, so only one may record.
-    _recording_now: "CallRecorder | None" = None
+    _recording_now: CallRecorder | None = None
 
     def __init__(self) -> None:
         """Create an empty recorder."""
@@ -79,6 +68,26 @@ class CallRecorder:
         self._active = False
         self._use_cuda = torch.cuda.is_available()
 
+    def __enter__(self) -> Self:
+        """Start recording: install the ``nn.Module._apply`` probe; calls are recorded until ``__exit__``."""
+        if CallRecorder._recording_now is not None:
+            raise RuntimeError("Another CallRecorder is already recording; the nn.Module._apply probe is process-wide.")
+        self._original_apply = nn.Module._apply
+        CallRecorder._recording_now = self
+        nn.Module._apply = self._make_apply_probe(self._original_apply)
+        self._active = True
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        """Stop recording and restore ``nn.Module._apply``, also when the recorded code raised."""
+        self._active = False
+        self._stack.clear()
+        self._current_sequence = None
+        if self._original_apply is not None:
+            nn.Module._apply = self._original_apply
+            self._original_apply = None
+        CallRecorder._recording_now = None
+
     @property
     def active(self) -> bool:
         """Whether the recorder is inside its ``with`` block."""
@@ -95,7 +104,7 @@ class CallRecorder:
             self._registered.add(id(module))
             self._modules.append((label_prefix, module))
 
-    def enter(
+    def begin_call(
         self, label: str, obj: Any, method: str, args: tuple[Any, ...], kwargs: dict[str, Any] | None = None
     ) -> _Frame | None:
         """Record the start of a call.
@@ -108,7 +117,7 @@ class CallRecorder:
             kwargs: Keyword arguments of the call; a callable among them makes the call transparent as well.
 
         Returns:
-            A frame to pass to ``exit``, or None if the call is not recorded (not recording, exact torch container,
+            A frame to pass to ``end_call``, or None if the call is not recorded (not recording, exact torch container,
             or a helper that runs a callable argument).
         """
         if not self._active or is_transparent_container(obj) or is_transparent_call(args, kwargs):
@@ -136,8 +145,8 @@ class CallRecorder:
         start, device = self._start_timer()
         return _Frame(node=node, start=start, device=device)
 
-    def exit(self, frame: _Frame | None) -> None:
-        """Record the end of a call started with ``enter``."""
+    def end_call(self, frame: _Frame | None) -> None:
+        """Record the end of a call started with ``begin_call``."""
         if frame is None:
             return
         self._stop_timer(frame)
@@ -153,26 +162,6 @@ class CallRecorder:
         if self._current_sequence is not None:
             self._sequences.append(self._current_sequence)
         self._current_sequence = None
-
-    def __enter__(self) -> Self:
-        """Start recording: install the ``nn.Module._apply`` probe; calls are recorded until ``__exit__``."""
-        if CallRecorder._recording_now is not None:
-            raise RuntimeError("Another CallRecorder is already recording; the nn.Module._apply probe is process-wide.")
-        self._original_apply = nn.Module._apply
-        CallRecorder._recording_now = self
-        nn.Module._apply = self._make_apply_probe(self._original_apply)
-        self._active = True
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        """Stop recording and restore ``nn.Module._apply``, also when the recorded code raised."""
-        self._active = False
-        self._stack.clear()
-        self._current_sequence = None
-        if self._original_apply is not None:
-            nn.Module._apply = self._original_apply
-            self._original_apply = None
-        CallRecorder._recording_now = None
 
     def result(self) -> CallTree:
         """Return the recorded call tree, with times resolved to milliseconds.
@@ -265,3 +254,16 @@ class CallRecorder:
                 recorder._apply_depth -= 1
 
         return _apply
+
+
+@dataclass
+class _Frame:
+    """An open call: its node and the start of its timer.
+
+    The start is a CUDA event or a ``perf_counter`` value; ``device`` is the CUDA device the start event was
+    recorded on.
+    """
+
+    node: CallNode
+    start: Any
+    device: int | None = None
