@@ -38,6 +38,9 @@ from typing import Any
 
 import torch
 
+from aitune.torch.call_tree.methods import user_defined_methods
+from aitune.torch.call_tree.nodes import ROOT_LABEL
+from aitune.torch.call_tree.recorder import CallRecorder
 from aitune.torch.inspecting.module_info import (
     DictOfModulesInfo,
     ListOfModulesInfo,
@@ -111,14 +114,24 @@ class InspectContext:
 class ModuleInspector:
     """Class for inspecting PyTorch modules and tracking their execution."""
 
-    def __init__(self, min_depth: int = 0, max_depth: int = 5):
-        """Initialize the module inspector."""
+    def __init__(self, min_depth: int = 0, max_depth: int = 5, recorder: CallRecorder | None = None):
+        """Initialize the module inspector.
+
+        Args:
+            min_depth: Minimum depth of the modules returned by ``get_modules``.
+            max_depth: Maximum depth of the object walk.
+            recorder: Call recorder for the call tree. If set, the inspector also wraps user-defined methods of
+                modules and of plain objects outside modules, and reports every wrapped call to the recorder while
+                it is recording.
+        """
         self._module_info: dict[Any, ModuleInfo] = {}
         self._original_forward: dict[Any, Any] = {}
+        self._original_methods: list[tuple[Any, str, bool, Any]] = []
         self._inspected_objects: set = set()  # Track objects that have been inspected
         self._min_recursion_depth = min_depth
         self._max_recursion_depth = max_depth
         self._execution_parent_module: list[ModuleInfo] = []
+        self._recorder = recorder
         if _get_inspect_debug():
             self._debug_inspecting_functions()
 
@@ -136,6 +149,7 @@ class ModuleInspector:
         # Restore original forward methods
         for module, original_forward in self._original_forward.items():
             module.forward = original_forward
+        self._restore_methods()
 
         self._inspected_objects.clear()  # Clear the set when starting a new inspection
 
@@ -218,8 +232,19 @@ class ModuleInspector:
 
         # Handle objects
         if hasattr(obj, "__dict__"):
-            self._inspect_members(obj, members={}, context=context.clone(module_parent=context.create_module_info(obj)))
+            self._inspect_plain_object(obj, context=context)
             return
+
+    def _inspect_plain_object(self, obj: Any, *, context: InspectContext) -> None:
+        """Inspect the members of a plain object; for the call tree, also wrap its user-defined methods.
+
+        Args:
+            obj: The object to inspect
+            context: The context of the inspection
+        """
+        if self._recorder is not None and _outside_modules(context.module_parent, obj):
+            self._wrap_user_methods(obj, context.object_path)
+        self._inspect_members(obj, members={}, context=context.clone(module_parent=context.create_module_info(obj)))
 
     def _inspect_dict(self, obj: dict, *, context: InspectContext) -> None:
         """Inspect the values of a dictionary.
@@ -314,8 +339,46 @@ class ModuleInspector:
         self._module_info[module] = module_info
 
         self._wrap_forward_methods(module)
+        if self._recorder is not None:
+            self._recorder.register_module(_label_prefix(context.object_path), module)
+            self._wrap_user_methods(module, context.object_path)
 
         return module_info
+
+    def _wrap_user_methods(self, obj: Any, object_path: str) -> None:
+        """Wrap the user-defined methods of ``obj`` so that they report to the recorder while it records."""
+        recorder = self._recorder
+        if recorder is None:
+            return
+        prefix = _label_prefix(object_path)
+        for name in user_defined_methods(obj):
+            try:
+                original = getattr(obj, name)
+                was_instance = name in vars(obj)
+            except Exception as e:
+                self._debug_error("Failed to read method %s of %s", name, object_path, error=e)
+                continue
+            if not callable(original):
+                continue
+            wrapper = _recording_wrapper(recorder, obj, name, f"{prefix}.{name}", original)
+            try:
+                setattr(obj, name, wrapper)
+            except Exception as e:
+                self._debug_error("Failed to wrap method %s of %s", name, object_path, error=e)
+                continue
+            self._original_methods.append((obj, name, was_instance, original))
+
+    def _restore_methods(self) -> None:
+        """Restore the methods wrapped by ``_wrap_user_methods``."""
+        for obj, name, was_instance, original in reversed(self._original_methods):
+            try:
+                if was_instance:
+                    setattr(obj, name, original)
+                else:
+                    delattr(obj, name)
+            except Exception as e:
+                self._debug_error("Failed to restore method %s", name, error=e)
+        self._original_methods.clear()
 
     def _wrap_forward_methods(self, module) -> None:
         """Wrap forward methods of a module and its submodules.
@@ -333,8 +396,25 @@ class ModuleInspector:
             if _get_inspect_debug():
                 logger.debug("%-75s from %s", " " * depth * 2 + module_info.object_path + "()", exec_parent.object_path)
 
+        recorder = self._recorder
+
         @wraps(original_forward)
         def wrapped_forward(*args, **kwargs):
+            """Report the call to the recorder while it records; otherwise run the legacy inspection forward."""
+            # While the call-tree recorder records, report to it only: no per-call synchronization (it would
+            # distort the recorder's timing) and no ModuleInfo updates (the legacy pass keeps its numbers).
+            if recorder is not None and recorder.active:
+                if torch.compiler.is_compiling():
+                    return original_forward(*args, **kwargs)
+                label = f"{_label_prefix(self._module_info[module].object_path)}.forward"
+                frame = recorder.begin_call(label, module, "forward", args, kwargs)
+                try:
+                    return original_forward(*args, **kwargs)
+                finally:
+                    recorder.end_call(frame)
+            return legacy_forward(*args, **kwargs)
+
+        def legacy_forward(*args, **kwargs):
             module_info = self._module_info[module]
 
             execution_parent_module = ModuleInfo(name="root", module=None, object_path="root")
@@ -426,6 +506,38 @@ class ModuleInspector:
         self._inspect_members = self._wrap_debug_inspect(self._inspect_members)
         self._inspect_module = self._wrap_debug_inspect(self._inspect_module)
         self._register_module = self._wrap_debug_inspect(self._register_module)
+
+
+def _label_prefix(object_path: str | None) -> str:
+    """Recorder label of an object: ``root`` followed by its object path (``root.vlm.lm_head``)."""
+    return f"{ROOT_LABEL}{object_path or ''}"
+
+
+def _outside_modules(parent: ModuleInfo | None, obj: Any) -> bool:
+    """Whether a plain object is reached without passing through an ``nn.Module`` (pipeline level, not configs)."""
+    if isinstance(obj, torch.Tensor):
+        return False
+    while parent is not None:
+        if isinstance(parent.module, torch.nn.Module):
+            return False
+        parent = parent.parent
+    return True
+
+
+def _recording_wrapper(recorder: CallRecorder, obj: Any, name: str, label: str, original: Callable) -> Callable:
+    """Wrap a method so that its calls report to ``recorder`` while it records; otherwise call it unchanged."""
+
+    @wraps(original)
+    def wrapper(*args, **kwargs):
+        if not recorder.active or torch.compiler.is_compiling():
+            return original(*args, **kwargs)
+        frame = recorder.begin_call(label, obj, name, args, kwargs)
+        try:
+            return original(*args, **kwargs)
+        finally:
+            recorder.end_call(frame)
+
+    return wrapper
 
 
 def _get_inspect_debug() -> bool:

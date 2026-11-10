@@ -40,6 +40,7 @@ modules_info = ait.inspect(
     warmup_iterations=5,            # Warmup iterations
     min_depth=0,                    # Minimum depth for module search
     max_depth=5,                    # Maximum depth for module search
+    call_tree=False,                # Also record the call tree (modules_info.call_tree); recommended: True
 )
 ```
 
@@ -212,6 +213,44 @@ transformer_modules = [
     if "transformer" in m.name.lower()
 ]
 ```
+
+## Call tree
+
+`get_modules()` sums the calls of each module, so it does not say where a module was called from or which other
+calls ran inside it. With `call_tree=True`, `inspect` also records a call tree: every recorded module `forward` and
+model-defined method, keyed by the chain of calls that led to it, with its calls and time.
+
+```python
+modules_info = ait.inspect(model, input_data, inference_function=run_chunk, max_depth=8, call_tree=True)
+tree = modules_info.call_tree
+
+for node in tree.find("dit"):    # recorded calls whose label contains "dit"
+    print(node.path, node.calls, node.time_ms)
+# forward > dit_forward 10 ...
+# forward > dit_forward > dit.forward 10 ...
+```
+
+A node's **path** is its chain of callers, outermost first, joined by ` > `. Each part is an object path from the
+inspected object plus a method name: `forward > dit_forward` is `model.dit_forward` called from `model.forward`. The
+same module called from two places gives two nodes, for example an LLM used for prefill and for generation.
+
+What is recorded:
+
+- `forward` of every module the object walk reaches, and the model's own methods (`dit_forward`, `_forward_flow`),
+  on modules and on plain pipeline objects outside any module. Methods of library classes (`torch`,
+  `transformers`, `diffusers`, ...) are not recorded, but methods of your own subclasses of them are;
+- calls of `.to()`, `.cuda()` and similar that reach a module from code outside it, with the code that made them;
+- times from CUDA events without synchronizing after every call, or from `time.perf_counter` without CUDA.
+
+`call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. `get_modules()` and
+`describe()` are unchanged: they still come from the synchronized pass. The object walk has to reach the linear
+layers, so deep models need a larger `max_depth` (8 for BAGEL-sized pipelines).
+
+Limits: exact `nn.Sequential`, `nn.ModuleList` and
+`nn.ModuleDict` containers are skipped and their children attached to the caller; a call that takes a callable as an
+argument (a checkpoint helper) is skipped the same way; free functions are not recorded; calls inside parts compiled
+with `torch.compile` are not recorded. CUDA times come from events on the device that was current when a call
+started, so work that a call runs on other GPUs is not fully counted.
 
 ## Troubleshooting
 
