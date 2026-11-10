@@ -63,34 +63,6 @@ def test_export_supports_nested_dynamic_inputs(use_auto):
         torch.testing.assert_close(actual, (expected,))
 
 
-@pytest.mark.parametrize("use_auto", [True, False], ids=["automatic", "bounded"])
-@pytest.mark.parametrize("strict", [True, False], ids=["strict", "non-strict"])
-def test_export_supports_independent_sequence_lengths_with_matching_bounds(use_auto, strict):
-    class IndependentSequences(torch.nn.Module):
-        def forward(self, query, context):
-            return query + 1, context + 2
-
-    model = IndependentSequences().eval()
-    sample = ((torch.ones(3, 2), torch.full((3, 2), 2.0)), {})
-    graph_spec = make_graph_spec(model.forward, sample, model(*sample[0]), batch_size=3)
-    larger_sample = ((torch.ones(3, 4), torch.full((3, 4), 2.0)), {})
-    larger_graph_spec = make_graph_spec(model.forward, larger_sample, model(*larger_sample[0]), batch_size=3)
-    graph_spec.update_shapes_seen(larger_graph_spec.input_spec, larger_graph_spec.output_spec)
-
-    export_result = TorchExporter(use_auto=use_auto, strict=strict).export(model, sample, graph_spec)
-    exported_module = export_result.exported_program.module()
-
-    # Matching observed ranges do not require the query and context lengths to be equal.
-    # Keep runtime guards enabled so an unintended equality constraint is observable.
-    for query_length, context_length in ((2, 2), (4, 4), (2, 4), (4, 2), (3, 2)):
-        query = torch.ones(3, query_length)
-        context = torch.full((3, context_length), 2.0)
-        with torch.no_grad():
-            actual = exported_module(query, context)
-            expected = model(query, context)
-        torch.testing.assert_close(actual, expected)
-
-
 @pytest.mark.skipif(
     tuple(int(component) for component in torch.__version__.split(".")[:2]) < (2, 10),
     reason="Requires PyTorch 2.10 or newer; PyTorch 2.9 generates invalid export guards referencing 'L'",

@@ -65,18 +65,6 @@ class ONNXExporter:
         logger.info("Exporting PyTorch module to ONNX: %s", self.output_path)
 
         try:
-            args, kwargs = sample
-            # Input names follow normalized parameter order, but Dynamo captures keyword tensors in insertion order.
-            # Match those orders without converting keyword arguments to positional ones: decorated forwards may
-            # require keyword calls. Keep extra **kwargs in their original relative order.
-            parameters = graph_spec.forward_signature.parameters
-            keyword_order = {
-                parameter.name: index
-                for index, parameter in enumerate(parameters)
-                if parameter.kind in ("POSITIONAL_OR_KEYWORD", "KEYWORD_ONLY")
-            }
-            kwargs = dict(sorted(kwargs.items(), key=lambda item: keyword_order.get(item[0], len(parameters))))
-            sample = (args, kwargs)
             if self.use_dynamo:
                 logger.info("Using ONNX dynamo for exporting to ONNX")
                 self._export_dynamo(module, sample, graph_spec, self.output_path, verbose)
