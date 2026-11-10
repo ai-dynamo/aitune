@@ -30,20 +30,19 @@ def wrap(
     modules: list[ModuleInfo],
     strategy: StrategyOption | None = None,
     strategies: StrategyList | StrategyMap | None = None,
-    call_tree: CallTree | None = None,
 ) -> T | Module:
     """Wrap provided modules with inspection logic.
 
     Args:
         obj: Callable object to wrap.
-        modules: Dictionary of module names and their corresponding ModuleInfo objects.
+        modules: Modules to wrap, usually chosen from ``ait.inspect(...).get_modules()``. If that inspection
+            recorded a call tree (``call_tree=True``), weights of a wrapped module that code outside it reads,
+            checks the device of, or moves stay on the device when tuning offloads the module (see
+            ``aitune.torch.call_tree.shared_weights_of``), and each kept weight is logged. Wrapping a module again
+            replaces the weights it keeps; a weight stays kept while any wrapped module keeps it. A ``ModuleInfo``
+            without ``inspection``, such as one built by hand, keeps nothing.
         strategy: Strategy to use for patching.
         strategies: Strategies to use for patching.
-        call_tree: Call tree from ``ait.inspect(..., call_tree=True)``. With it, the weights of a wrapped module that
-            something outside the module still reads, looks up the device of, or moves
-            (``aitune.torch.call_tree.shared_weights_of``) stay on the device when tuning offloads the module,
-            and each kept weight is logged. Each wrapped module owns what it keeps: wrapping it again replaces its kept set, and a
-            tensor stays kept while any wrapped module keeps it.
 
     Returns:
         A `Module` proxy if the root module is selected, otherwise `obj` with its submodules wrapped in place.
@@ -55,6 +54,7 @@ def wrap(
         module = module_info.module if module_info.parent is not None else obj
         if isinstance(module, torch.nn.Module):
             release_kept_on_device(module)
+            call_tree = module_info.inspection.call_tree if module_info.inspection is not None else None
             if call_tree is not None:
                 _keep_shared_weights(
                     call_tree, module, module_info.object_path or module_info.name or type(module).__name__

@@ -143,7 +143,8 @@ def move_tensors_to_device(value: Any, device: str | torch.device) -> Any:
 
 
 # Weights that offloading must leave where they are, because something outside the offloaded module still uses or
-# moves them (``ait.wrap(..., call_tree=...)``). Weak, so the set does not keep models alive.
+# moves them (``ait.wrap`` on modules from ``ait.inspect(..., call_tree=True)``). Weak, so the set does not keep
+# models alive.
 # Keyed by ``id``: a WeakSet would compare tensors with ``==``, which is element-wise.
 # Each entry has owners (the ids of the wrapped modules that keep it, ``None`` for unowned): a tensor stays kept
 # while any owner keeps it, so releasing one wrapped module does not drop what another still needs.

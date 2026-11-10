@@ -422,7 +422,7 @@ def test_wrap_with_call_tree_keeps_weights_used_outside_the_module():
     assert head and dit
     embedding, dit_weight = model.llm.embed.weight, next(model.dit.parameters())
 
-    wrap(model, head + dit, call_tree=info.call_tree)
+    wrap(model, head + dit)
 
     assert is_kept_on_device(embedding)
     assert not is_kept_on_device(dit_weight)
@@ -455,7 +455,7 @@ def test_wrap_with_call_tree_logs_the_kept_weights(caplog):
     # ``wrap`` reconfigures the root logger, which would drop caplog's handler; attach it to the wrapping logger.
     logging.getLogger("aitune.torch.inspecting.wrapping").addHandler(caplog.handler)
     with caplog.at_level(logging.INFO, logger="aitune.torch.inspecting.wrapping"):
-        wrap(model, head + dit, call_tree=info.call_tree)
+        wrap(model, head + dit)
 
     keeping = [r for r in caplog.records if "Keeping" in r.message and r.levelno == logging.INFO]
     assert [r.message for r in keeping] == [
@@ -480,7 +480,7 @@ def _wrap_vla_head():
             max_depth=8,
             call_tree=True,
         )
-    wrap(model, [m for m in info.get_modules() if m.module is model.lm_head], call_tree=info.call_tree)
+    wrap(model, [m for m in info.get_modules() if m.module is model.lm_head])
     return model
 
 
@@ -538,13 +538,11 @@ def test_a_tensor_kept_by_one_wrapped_module_stays_kept_when_another_holder_is_w
 
     wrap(
         shared,
-        [ModuleInfo(name="head", module=shared.head, parent=ModuleInfo(name="", module=shared))],
-        call_tree=first.call_tree,
+        [ModuleInfo(name="head", module=shared.head, parent=ModuleInfo(name="", module=shared), inspection=first)],
     )
     wrap(
         shared,
-        [ModuleInfo(name="embed", module=shared.embed, parent=ModuleInfo(name="", module=shared))],
-        call_tree=second.call_tree,
+        [ModuleInfo(name="embed", module=shared.embed, parent=ModuleInfo(name="", module=shared), inspection=second)],
     )
 
     assert is_kept_on_device(shared.embed.weight)
@@ -579,8 +577,8 @@ def test_a_later_wrap_with_a_shared_pipeline_call_tree_keeps_the_earlier_models_
         )
 
     for name, model in (("a", pipe.a), ("b", pipe.b)):
-        head = ModuleInfo(name="head", module=model.head, parent=ModuleInfo(name=name, module=model))
-        wrap(pipe, [head], call_tree=info.call_tree)
+        head = ModuleInfo(name="head", module=model.head, parent=ModuleInfo(name=name, module=model), inspection=info)
+        wrap(pipe, [head])
 
     assert is_kept_on_device(pipe.a.embed.weight)
     assert is_kept_on_device(pipe.b.embed.weight)
@@ -616,7 +614,7 @@ def test_wrap_with_call_tree_keeps_buffers_of_a_module_moved_from_outside():
     selected = [m for m in info.get_modules() if m.module is model[0]]
     assert selected
 
-    wrap(model, selected, call_tree=info.call_tree)
+    wrap(model, selected)
 
     assert all(is_kept_on_device(b) for b in model[0].buffers())
     assert all(is_kept_on_device(p) for p in model[0].parameters())
@@ -652,6 +650,53 @@ def test_wrap_with_call_tree_checks_a_module_whose_forward_takes_a_callable(capl
     selected = [m for m in info.get_modules() if m.module is model.act]
     assert selected
 
-    wrap(model, selected, call_tree=info.call_tree)  # does not raise; nothing is shared
+    wrap(model, selected)  # does not raise; nothing is shared
 
     assert isinstance(model.act, Module)
+
+
+def test_inspect_links_modules_to_their_inspection():
+    from aitune.torch.inspecting import inspect
+    from tests.toy_models.call_tree_models import VlaToy, vla_inputs
+
+    model = VlaToy().eval()
+    tokens, image = vla_inputs()
+    with torch.no_grad():
+        info = inspect(
+            model,
+            [(tokens, image)],
+            inference_function=lambda t, i: model(t, i),
+            number_of_iterations=1,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+        )
+
+    modules = info.get_modules()
+    assert modules
+    assert all(m.inspection is info for m in modules)
+
+
+def test_wrap_after_inspect_without_call_tree_keeps_nothing():
+    from aitune.torch.inspecting import inspect
+    from aitune.torch.utils.module import is_kept_on_device
+    from tests.toy_models.call_tree_models import VlaToy, vla_inputs
+
+    model = VlaToy().eval()
+    tokens, image = vla_inputs()
+    with torch.no_grad():
+        info = inspect(
+            model,
+            [(tokens, image)],
+            inference_function=lambda t, i: model(t, i),
+            number_of_iterations=1,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+        )
+    head = [m for m in info.get_modules() if m.module is model.lm_head]
+    assert head
+
+    wrap(model, head)
+
+    assert not is_kept_on_device(model.llm.embed.weight)

@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""``ait.wrap(..., call_tree=...)`` keeps weights used outside a tuned module on the device after offloading.
+"""``ait.wrap`` keeps weights used outside a tuned module on the device after offloading.
+
+The modules come from ``ait.inspect(..., call_tree=True)``, so ``wrap`` finds the call tree through them.
 
 Each toy has the sharing pattern behind a real tuning failure (``tests/toy_models/call_tree_models.py``):
 
@@ -101,7 +103,7 @@ def _wrap_tune_and_run(toy: _Toy, case: BackendCase, device: torch.device, use_c
     target = toy.tuned(toy.model)
     selected = [m for m in info.get_modules() if m.module is target]
     assert selected, [m.object_path for m in info.get_modules()]
-    ait.wrap(toy.model, selected, strategy=pinned_strategy(case.factory()), call_tree=info.call_tree)
+    ait.wrap(toy.model, selected, strategy=pinned_strategy(case.factory()))
     wrapped = cast(ait.Module, toy.tuned(toy.model))
     with torch.no_grad():
         toy.call(*toy.args)  # record the tuned module's inputs
