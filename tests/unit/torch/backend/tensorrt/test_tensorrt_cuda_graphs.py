@@ -239,6 +239,7 @@ def test_inference_continues_without_recapturing_after_failure(trtre_backend_moc
     graph = mocker.patch("torch.cuda.CUDAGraph")
     mocker.patch("torch.cuda.graph")
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     backend._start_time = Mock()
     backend._end_time = Mock()
     backend._start_time.elapsed_time.return_value = 1.0
@@ -270,6 +271,7 @@ def test_static_inputs_live_until_synchronization(trtre_backend_mock, mocker, ca
     mocker.patch("torch.cuda.CUDAGraph")
     mocker.patch("torch.cuda.graph")
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     backend._start_time = Mock()
     backend._end_time = Mock()
     backend._start_time.elapsed_time.return_value = 1.0
@@ -409,6 +411,7 @@ def test_aliased_state_executes_once_per_request_without_capture(profile_backend
     state = torch.zeros(2, 3)
     backend._base_context.execute_async_v3.side_effect = lambda stream: state.add_(1) is state
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     mocker.patch.object(backend, "_prepare_inputs", return_value={"x": state})
     mocker.patch.object(backend, "_set_input_tensors")
     mocker.patch.object(backend, "_prepare_outputs_for_return", side_effect=lambda arguments: state)
@@ -481,6 +484,7 @@ def test_capture_failure_releases_cached_profiles_after_execution(profile_backen
     mocker.patch("torch.cuda.CUDAGraph")
     mocker.patch("torch.cuda.graph")
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     backend._start_time = Mock()
     backend._end_time = Mock()
     backend._start_time.elapsed_time.return_value = 1.0
@@ -759,6 +763,7 @@ def test_lfu_rejected_request_executes_normally_and_cached_graph_still_replays(l
     mocker.patch("torch.cuda.CUDAGraph", side_effect=lambda: Mock())
     mocker.patch("torch.cuda.graph")
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     mocker.patch.object(backend, "_set_input_tensors")
     mocker.patch.object(backend, "_prepare_outputs_for_return")
     inputs = mocker.patch.object(backend, "_prepare_inputs", return_value={"x": torch.empty(1, 3)})

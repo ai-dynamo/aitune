@@ -181,6 +181,26 @@ def test_prepare_export_sample_tolerates_runtime_structure_changes(runtime_tail)
     assert kwargs == {}
 
 
+@pytest.mark.parametrize(
+    ("min_batch_size", "max_batch_size", "expected_batch_size"),
+    [(1, 1, 1), (1, 8, 2), (4, 8, 4), (4, 4, 4), (4, 1024, 4)],
+    ids=["static-one", "dynamic-from-one", "minimum-above-two", "static-above-two", "large-maximum"],
+)
+def test_prepare_export_sample_uses_smallest_valid_batch(min_batch_size, max_batch_size, expected_batch_size):
+    # Start at the maximum so this also verifies that preparation reduces an oversized example.
+    tensor = torch.ones(max_batch_size, 3)
+    sample = ((), {"x": tensor})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=max_batch_size)
+    update_input_spec(graph_spec, ((), {"x": torch.ones(min_batch_size, 3)}), batch_size=min_batch_size)
+
+    args, kwargs = prepare_export_sample(sample, graph_spec)
+
+    assert args == ()
+    assert kwargs["x"].shape == (expected_batch_size, 3)
+    assert min_batch_size <= kwargs["x"].shape[0] <= max_batch_size
+    assert tensor.shape == (max_batch_size, 3)
+
+
 def test_prepare_export_sample_preserves_keyword_call_layout():
     first = torch.randn(1, 4)
     second = torch.randn(2, 4)

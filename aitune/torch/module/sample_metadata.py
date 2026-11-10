@@ -5,7 +5,7 @@
 import copy
 import pickle
 from collections.abc import Mapping
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import torch
 from tabulate import tabulate
@@ -232,7 +232,7 @@ class SampleMetadata:
         for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
             if not isinstance(tensor, torch.Tensor):
                 raise TypeError(f"Recorded tensor path {locator} resolved to {type(tensor).__name__}, not a tensor.")
-        return tensors
+        return cast(tuple[torch.Tensor, ...], tensors)
 
     def unflatten_tensors(
         self,
@@ -280,11 +280,11 @@ class SampleMetadata:
 
         If strict is True, then other data is also included.
         """
-        batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
+        effective_batch_size = cast(int | float, batch_size or global_context.get(BATCH_SIZE_KEY, float("nan")))
         tensor_data, other_data, cache_position = [], [], None
         for locator, value in Locator.find_leaves(inputs):
             if torch.is_tensor(value):
-                tensor_data.append((locator, TensorSpec.from_tensor(value, batch_size)))
+                tensor_data.append((locator, TensorSpec.from_tensor(value, effective_batch_size)))
             elif strict:
                 other_data.append((locator, value))
             if config.enable_transformers_integration and locator.root_name == "cache_position":
@@ -293,7 +293,7 @@ class SampleMetadata:
         if cache_position is None:
             llm_phase = None
         else:
-            llm_phase = "prefill" if cache_position[0].item() == 0 else "decode"
+            llm_phase = "prefill" if cast(Any, cache_position)[0].item() == 0 else "decode"
 
         return SampleMetadata(tuple(tensor_data), tuple(other_data), strict, llm_phase)
 
@@ -303,11 +303,11 @@ class SampleMetadata:
 
         If strict is True, then other data is also included.
         """
-        batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
+        effective_batch_size = cast(int | float, batch_size or global_context.get(BATCH_SIZE_KEY, float("nan")))
         tensor_data, other_data = [], []
         for locator, value in Locator.find_leaves(output, is_output=True):
             if torch.is_tensor(value):
-                tensor_data.append((locator, TensorSpec.from_tensor(value, batch_size)))
+                tensor_data.append((locator, TensorSpec.from_tensor(value, effective_batch_size)))
             elif strict:
                 other_data.append((locator, value))
         return SampleMetadata(tuple(tensor_data), tuple(other_data), strict, llm_phase=None)
@@ -420,7 +420,8 @@ class SampleMetadata:
         """
         inputs = copy.deepcopy(inputs)
         for locator, tensor_spec in self._tensor_data:
-            inputs = locator.set_value(inputs, batch_tensor(locator.get_value(inputs), tensor_spec, batch_size))
+            tensor = cast(torch.Tensor, locator.get_value(inputs))
+            inputs = cast(dict[str, Any], locator.set_value(inputs, batch_tensor(tensor, tensor_spec, batch_size)))
 
         return inputs
 

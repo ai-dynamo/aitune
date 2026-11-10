@@ -4,7 +4,7 @@
 
 import logging
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import torch
 
@@ -155,8 +155,10 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
     input_spec = graph_spec.input_spec
 
     if input_spec.has_batch_axis():
+        min_batch_size = graph_spec.get_min_batch_size() or 1
         max_batch_size = graph_spec.get_max_batch_size()
-        batch_size = min(max_batch_size, 2)
+        # Use the smallest allowed batch, avoiding size-one specialization when the range permits it.
+        batch_size = min(max_batch_size, max(min_batch_size, 2))
         args, kwargs = graph_spec.make_batch(*sample, batch_size=batch_size)
     else:
         args, kwargs = deepcopy(sample)
@@ -190,5 +192,5 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
                 tensor = torch.cat([tensor, tensor], dim=axis)
                 modified = True
         if modified:
-            forward_inputs.arguments = locator.set_value(forward_inputs.arguments, tensor)
+            forward_inputs.arguments = cast(dict[str, Any], locator.set_value(forward_inputs.arguments, tensor))
     return call_layout.restore(forward_inputs.arguments)

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch Inductor AOT backend."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from logging import getLogger
@@ -92,7 +92,7 @@ class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
         """
         super().__init__(config or TorchInductorAotBackendConfig())
         self._compiled_model_artifact: ArtifactPath | None = None
-        self._runner = None
+        self._runner: Callable[..., Any] | None = None
         self._graph_spec: GraphSpec | None = None
         self._pt2_call_contract: PT2CallContract | None = None
         self._pt2_call_contract_error: str | None = None
@@ -242,6 +242,8 @@ class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
         """
         graph_spec = cast(GraphSpec, self._graph_spec)
         with torch.no_grad():
+            if self._runner is None:
+                raise RuntimeError("AOT Inductor runner is not loaded. Call build() or deploy() first.")
             forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
             flat_inputs = graph_spec.input_spec.flatten_tensors(forward_inputs.arguments)
             flat_outputs = self._runner(*flat_inputs)

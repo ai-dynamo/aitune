@@ -51,6 +51,7 @@ def dry_run(tmp_path):
 def test_dynamic_strategy_dry_run_uses_recorded_contract(distributed, dry_run):
     module = DistributedModule() if distributed else torch.nn.Identity()
     strategy = materialize_strategy(resolve_strategy(), module)
+    assert isinstance(strategy, MaxThroughputStrategy)
 
     descriptions = dry_run(strategy, module)
 

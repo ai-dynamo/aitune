@@ -528,7 +528,7 @@ class Backend(ABC, Generic[ConfigType]):
             torch._dynamo.reset()
             torch.compiler.reset()
 
-    def validation_context(self):
+    def validation_context(self) -> contextlib.AbstractContextManager[None]:
         """Isolate temporary correctness calls from the backend's persistent state.
 
         Backends with mutable model buffers must preserve them or reload their

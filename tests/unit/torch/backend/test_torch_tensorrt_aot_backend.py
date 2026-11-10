@@ -7,8 +7,9 @@ import pytest
 import torch
 import torch.nn as nn
 from torch._export.verifier import SpecViolationError
+from torch.export.graph_signature import ConstantArgument, TensorArgument
 
-from aitune.torch.backend import ArtifactPath
+from aitune.torch.backend import ArtifactPath, torch_tensorrt_aot_backend
 from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
@@ -104,6 +105,28 @@ def test_stateful_save_compiled_model_uses_public_dynamo_export(mocker, tmp_path
         arg_inputs=inputs,
         dynamic_shapes=shapes,
         pickle_protocol=5,
+    )
+
+
+def test_save_compiled_model_uses_legacy_exporter_when_available(mocker, tmp_path: Path):
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    program = mocker.MagicMock()
+    exporter_flags = []
+
+    def export(gm: nn.Module, *, use_legacy_exporter: bool = False):  # Torch-TensorRT 2.11+ signature
+        exporter_flags.append(use_legacy_exporter)
+        return program
+
+    mock_torch_tensorrt.dynamo.export = export
+
+    _save_compiled_model(
+        mocker.Mock(spec=nn.Module), tmp_path / "model.pt", inputs=(), dynamic_shapes=None, pickle_protocol=5
+    )
+
+    assert exporter_flags == [True]
+    mock_torch_tensorrt.save.assert_called_once_with(
+        program, (tmp_path / "model.pt").as_posix(), output_format="exported_program", retrace=False, pickle_protocol=5
     )
 
 
@@ -210,9 +233,77 @@ def test_stateful_save_propagates_upstream_failure_without_retry(mocker, tmp_pat
     library.save.assert_called_once()
 
 
+def test_save_compiled_model_restores_constant_inputs_before_serialization(mocker, tmp_path: Path):
+    class ScaledModel(nn.Module):
+        def forward(self, x: torch.Tensor, scale: float, mask: torch.Tensor | None = None) -> torch.Tensor:
+            return x * scale if mask is None else x * scale * mask
+
+    program = torch.export.export(ScaledModel(), (torch.ones(2),), {"scale": 2.0, "mask": None})
+    # Torch-TensorRT declares every placeholder as a tensor input: https://github.com/pytorch/TensorRT/issues/4941
+    for spec in program.graph_signature.input_specs:
+        spec.arg = TensorArgument(name=spec.arg.name)
+    with pytest.raises(KeyError, match="scale"):
+        torch.export.save(program, tmp_path / "invalid.pt2")
+
+    library = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    library.logging.errors.return_value = mocker.MagicMock()
+    library.dynamo.export.return_value = program
+    library.save.side_effect = lambda exported, path, **_: torch.export.save(exported, path)
+
+    _save_compiled_model(ScaledModel(), tmp_path / "model.pt2", (torch.ones(2),), None, 5)
+
+    assert [spec.arg for spec in program.graph_signature.input_specs] == [
+        TensorArgument(name="x"),
+        ConstantArgument(name="scale", value=2.0),
+        ConstantArgument(name="mask", value=None),
+    ]
+    library.save.assert_called_once_with(
+        program,
+        (tmp_path / "model.pt2").as_posix(),
+        output_format="exported_program",
+        retrace=False,
+        pickle_protocol=5,
+    )
+    loaded = torch.export.load(tmp_path / "model.pt2").module()
+    assert torch.equal(loaded(torch.ones(2), scale=2.0, mask=None), torch.full((2,), 2.0))
+
+
+def test_save_compiled_model_retraces_non_tensor_inputs(mocker, tmp_path: Path):
+    class StructuredModel(nn.Module):
+        def forward(
+            self, x: torch.Tensor, extras: dict[str, torch.Tensor], scale: float, mask: torch.Tensor | None
+        ) -> torch.Tensor:
+            output = (x + extras["bias"]) * scale
+            return output if mask is None else output * mask
+
+    batch = torch.export.Dim("batch", min=1, max=8)
+    dynamic_shapes = ({0: batch}, {"bias": {0: batch}}, None, None)
+    sample = ((torch.ones(2, 4), {"bias": torch.ones(2, 4)}, 2.0, None), {})
+    module = torch.export.export(StructuredModel(), sample[0], dynamic_shapes=dynamic_shapes).module()
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.dynamo.export.side_effect = SpecViolationError("direct save failed")
+
+    def save(module, path, **kwargs):
+        # Exercise the arguments delegated to public re-export without requiring TensorRT.
+        program = torch.export.export(
+            module, tuple(kwargs["arg_inputs"]), dynamic_shapes=kwargs["dynamic_shapes"], strict=False
+        )
+        torch.export.save(program, path)
+
+    mock_torch_tensorrt.save.side_effect = save
+
+    _save_compiled_model(module, tmp_path / "model.pt2", sample[0], dynamic_shapes=dynamic_shapes, pickle_protocol=5)
+
+    loaded = torch.export.load(tmp_path / "model.pt2").module()
+    output = loaded(torch.ones(3, 4), {"bias": torch.ones(3, 4)}, 2.0, None)
+    assert torch.equal(output, torch.full((3, 4), 4.0))
+
+
 @pytest.fixture
 def mock_torch_tensorrt(mocker, model: SimpleModel):
     mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.dynamo.export.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
@@ -330,6 +421,7 @@ def test_mock_build(
     tmp_path: Path,
 ):
     export_mock = mocker.spy(torch.export, "export")
+    save_compiled = mocker.spy(torch_tensorrt_aot_backend, "_save_compiled_model")
 
     active_backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
@@ -357,6 +449,7 @@ def test_mock_build(
     # Pin the pipeline shape: the ExportedProgram from torch.export.export must be
     # forwarded as the first positional arg to torch_tensorrt.dynamo.compile.
     assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is export_mock.spy_return
+    assert save_compiled.call_args.args[2] is export_mock.spy_return.example_inputs[0]
 
 
 @pytest.mark.parametrize(
@@ -388,6 +481,7 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     if dynamic_shapes is not None:
         graph_spec.dynamic_shapes = dynamic_shapes
     mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.dynamo.export.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
@@ -418,7 +512,7 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     assert save_kwargs["retrace"] is True
     assert save_kwargs["output_format"] == "exported_program"
     compile_inputs = mock_torch_tensorrt.dynamo.compile.call_args.kwargs["inputs"]
-    assert save_kwargs["arg_inputs"] is compile_inputs
+    assert save_kwargs["arg_inputs"] is export_mock.spy_return.example_inputs[0]
     assert compile_inputs == [mock_torch_tensorrt.Input.return_value]
     dim = dynamic_shapes["flat_inputs"][0][0]
     assert dim is not torch.export.Dim.AUTO
@@ -436,8 +530,7 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     warning_context.__enter__.assert_called_once_with()
     warning_context.__exit__.assert_called_once()
 
-    # Check the positional shape specification with real Torch Export. GPU tests
-    # exercise Torch-TensorRT converting Input descriptors into example tensors.
+    # Check that the positional shape specification accepts the same example tensors passed to saving.
     example_args, _example_kwargs = export_mock.spy_return.example_inputs
     reexported = torch.export.export(
         export_mock.spy_return.module(),
@@ -458,6 +551,7 @@ def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
     sample_data = [((torch.randn(1, 10),), {})]
     graph_spec = _graph_spec_from_samples(model, sample_data)
     mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.dynamo.export.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile.return_value = model
@@ -492,6 +586,10 @@ def test_mock_infer(
     mocker.patch(
         "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.save",
         side_effect=_fake_torch_tensorrt_save,
+    )
+    mocker.patch(
+        "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.dynamo.export",
+        return_value=mocker.MagicMock(),
     )
     # Keep export validation real and bypass TRT compilation with the original model.
     mocker.patch(

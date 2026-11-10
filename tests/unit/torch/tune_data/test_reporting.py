@@ -74,7 +74,7 @@ def test_snapshot_config_declarative_mode(mocker):
     assert result["enable_diffusers_integration"] is True
     assert result["enable_transformers_integration"] is True
     assert result["device_after_tuning"] == "meta"
-    assert "cache_dir" in result
+    assert result["cache_dir"] == str(real_config.cache_dir)
     assert "tuning_data_output_path" in result
     assert result["tuning_data_output_path"] == str(real_config.tuning_data_output_path)
     assert not any(k.startswith("_") for k in result)

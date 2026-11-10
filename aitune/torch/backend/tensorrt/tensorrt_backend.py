@@ -46,7 +46,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import set_device as cuda_set_device
-from aitune.torch.utils.module import offload
+from aitune.torch.utils.module import move_module_to_device, offload
 from aitune.torch.utils.tensor import format_tensor_name
 from aitune.utils.monitoring import annotate
 
@@ -353,6 +353,9 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
                 raise AITuneUserInputError(
                     "Torch quantization requires a Torch module; use ONNX quantization for OnnxModule."
                 )
+        else:
+            # A previous graph or backend candidate may have offloaded this shared module to CPU.
+            move_module_to_device(module, self.device)
 
         quantization_config = self._config.quantization_config
         if isinstance(quantization_config, TorchQuantizationConfig):
@@ -668,9 +671,12 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
             try:
                 if self._context is None:
                     raise RuntimeError("Engine not loaded. Call build() first.")
+                graph_spec = self._graph_spec
+                if graph_spec is None:
+                    raise RuntimeError("Graph specification is not loaded. Call build() first.")
 
                 # Prepare inputs
-                arguments = self._graph_spec.forward_signature.normalize(args, kwargs).arguments
+                arguments = graph_spec.forward_signature.normalize(args, kwargs).arguments
                 inputs = self._prepare_inputs(arguments)
                 if not inputs:
                     raise ValueError("No input tensors provided for inference")
@@ -683,6 +689,8 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
 
                 # Run inference with timing
                 logger.debug("Executing TensorRT inference")
+                # The inference stream must not read inputs before the caller's stream has written them.
+                self._cuda_stream.wait_stream(torch.cuda.current_stream())
                 with torch.cuda.stream(self._cuda_stream):
                     self._start_time.record(stream=self._cuda_stream)
                     if self._use_cuda_graphs:
@@ -965,17 +973,20 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
 
     def _prepare_outputs_for_return(self, arguments: dict[str, Any]) -> Any:
         """Collect TensorRT outputs, restore input changes, and rebuild the module result."""
+        graph_spec = self._graph_spec
+        if graph_spec is None:
+            raise RuntimeError("Graph specification is not loaded. Call build() first.")
         # Get outputs from the allocator (already properly shaped by TensorRT)
         outputs = self._output_allocator.outputs
         outputs.update(self._aliased_outputs)
         # Cached graphs reuse output storage, including outputs that replace input state.
         user_output_names = tuple(
-            GraphSpec.tensor_name(locator, spec, "output") for locator, spec in self._graph_spec.output_spec.tensor_data
+            GraphSpec.tensor_name(locator, spec, "output") for locator, spec in graph_spec.output_spec.tensor_data
         )
-        state_output_names = self._graph_spec.output_names()[len(user_output_names) :]
+        state_output_names = graph_spec.output_names()[len(user_output_names) :]
         mutation_policies = {
             mutation.output_index: self.tensor_mutation_policy
-            for mutation in self._graph_spec.forward_contract.input_mutations
+            for mutation in graph_spec.forward_contract.input_mutations
             if mutation.output_index is not None
         }
         flat_outputs = []
@@ -986,7 +997,7 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
             if self._use_cuda_graphs:
                 tensor = tensor.clone()
             flat_outputs.append(tensor)
-        result = self._graph_spec.restore_outputs(
+        result = graph_spec.restore_outputs(
             flat_outputs,
             arguments,
             tensor_mutation_policies=mutation_policies,

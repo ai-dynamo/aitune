@@ -30,6 +30,26 @@ def test_jit_reset():
     assert len(Patcher._intercepted_classes) == 0
 
 
+def test_jit_reset_clears_tuned_devices():
+    PatchedModule.tuned_devices[torch.nn.Linear(2, 2)] = torch.device("cpu")
+
+    jit_reset()
+
+    assert PatchedModule.tuned_devices == {}
+
+
+def test_unpatch_torch_unpatches_every_module():
+    with prepare_for_jit_tuning():
+        modules = [torch.nn.Linear(2, 2) for _ in range(3)]
+    for module in modules:
+        PatchedModule.tuned_devices[module] = torch.device("cpu")
+
+    Patcher.unpatch_torch(unpatch_modules=True)
+
+    # _unpatch() drops each module's tuned device, so a skipped module would leave one behind
+    assert PatchedModule.tuned_devices == {}
+
+
 def test_eager_jit_tunes_when_ready(mocker):
     jit_config.mode = JITMode.TUNE_EAGER
     tune = mocker.patch.object(PatchedModule, "tune")

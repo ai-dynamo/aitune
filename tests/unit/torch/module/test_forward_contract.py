@@ -4,6 +4,7 @@
 
 from copy import deepcopy
 
+import numpy as np
 import torch
 
 from aitune.torch.module.forward_contract import (
@@ -14,6 +15,7 @@ from aitune.torch.module.forward_contract import (
     TensorMutationPolicy,
 )
 from aitune.torch.module.forward_signature import ForwardSignature
+from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
 
 
@@ -63,6 +65,30 @@ def test_capture_reuses_a_mutated_tensor_returned_as_output():
     assert mutation.output_index == 0
 
 
+def test_capture_and_restore_numpy_leaf_replacement_with_incompatible_shapes():
+    class ReplaceArray(torch.nn.Module):
+        def forward(self, x, state):
+            state[0] = np.ones(3)
+            return x + 1
+
+    contract = _capture(ReplaceArray(), (torch.zeros(2), [np.zeros(2)]))
+
+    assert len(contract.input_mutations) == 1
+    mutation = contract.input_mutations[0]
+    assert mutation.locator.path == ("state", 0)
+    assert mutation.kind == InputMutationKind.REPLACE_CONSTANT
+    np.testing.assert_array_equal(mutation.value, np.ones(3))
+
+    arguments = {"x": torch.zeros(2), "state": [np.zeros(2)]}
+    output = torch.ones(2)
+    output_spec = SampleMetadata.from_outputs(output)
+    result = contract.restore_outputs((output,), arguments, output_spec)
+
+    torch.testing.assert_close(result, output)
+    np.testing.assert_array_equal(arguments["state"][0], np.ones(3))
+    assert arguments["state"][0] is not mutation.value
+
+
 def test_capture_detects_inference_tensor_mutation_without_a_version_counter():
     class UpdateState(torch.nn.Module):
         def forward(self, x, state):
@@ -73,6 +99,82 @@ def test_capture_detects_inference_tensor_mutation_without_a_version_counter():
         contract = _capture(UpdateState(), (torch.ones(2), torch.zeros(2)))
 
     assert [mutation.kind for mutation in contract.input_mutations] == [InputMutationKind.COPY_TENSOR]
+
+
+def test_restore_reproduces_lazy_initialization_of_registered_input_state():
+    class CacheState:
+        def __init__(self):
+            # Declare fields created during initialization without adding them to the fresh object.
+            self.device: torch.device
+            self.dtype: torch.dtype
+            self.keys: torch.Tensor | None = None
+            self.is_initialized = False
+            self.label = "original"
+
+    recorded_state = CacheState()
+    arguments = {"state": recorded_state}
+    try:
+        Locator.register_user_type(CacheState, only_tensors=True, mutation_fields=("is_initialized", "device", "dtype"))
+        capture = ForwardContractCapture.before_call(arguments)
+        recorded_state.keys = torch.ones(2)
+        recorded_state.is_initialized = True
+        recorded_state.device = recorded_state.keys.device
+        recorded_state.dtype = recorded_state.keys.dtype
+        recorded_state.label = "changed"
+        output_spec = SampleMetadata.from_outputs(recorded_state.keys)
+        contract = capture.after_call(arguments, recorded_state.keys, output_spec)
+
+        mutations = {mutation.locator.path: mutation for mutation in contract.input_mutations}
+        assert set(mutations) == {
+            ("state", "keys"),
+            ("state", "is_initialized"),
+            ("state", "device"),
+            ("state", "dtype"),
+        }
+        assert mutations[("state", "keys")].kind == InputMutationKind.REPLACE_TENSOR
+        assert mutations[("state", "keys")].output_index == 0
+
+        runtime_state = CacheState()
+        runtime_keys = torch.full((2,), 7.0)
+        result = contract.restore_outputs((runtime_keys,), {"state": runtime_state}, output_spec)
+
+        assert result is runtime_keys
+        assert runtime_state.keys is runtime_keys
+        assert runtime_state.is_initialized is True
+        assert runtime_state.device == runtime_keys.device
+        assert runtime_state.dtype == runtime_keys.dtype
+        assert runtime_state.label == "original"
+    finally:
+        Locator.unregister_user_type(CacheState)
+
+
+def test_restore_clears_a_tensor_field_no_longer_visible_in_tensor_only_traversal():
+    class CacheState:
+        def __init__(self):
+            self.keys: torch.Tensor | None = torch.ones(2)
+
+    recorded_state = CacheState()
+    arguments = {"state": recorded_state}
+    try:
+        Locator.register_user_type(CacheState, only_tensors=True)
+        capture = ForwardContractCapture.before_call(arguments)
+        recorded_state.keys = None
+        output = torch.zeros(2)
+        output_spec = SampleMetadata.from_outputs(output)
+        contract = capture.after_call(arguments, output, output_spec)
+
+        assert len(contract.input_mutations) == 1
+        mutation = contract.input_mutations[0]
+        assert mutation.locator.path == ("state", "keys")
+        assert mutation.kind == InputMutationKind.REPLACE_CONSTANT
+        assert mutation.value is None
+
+        runtime_state = CacheState()
+        contract.restore_outputs((output,), {"state": runtime_state}, output_spec)
+
+        assert runtime_state.keys is None
+    finally:
+        Locator.unregister_user_type(CacheState)
 
 
 def test_restore_applies_input_mutations_and_rebuilds_output():

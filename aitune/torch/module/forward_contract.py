@@ -89,8 +89,9 @@ class ForwardContract:
             raise ValueError(f"Expected {expected_output_count} flat outputs, got {len(flat_outputs)}.")
 
         for mutation in self.input_mutations:
+            # Mutation paths are below the normalized argument dictionary, whose identity stays unchanged.
             if mutation.kind == InputMutationKind.REPLACE_CONSTANT:
-                arguments = mutation.locator.set_value(arguments, deepcopy(mutation.value))
+                mutation.locator.set_value(arguments, deepcopy(mutation.value))
                 continue
 
             if mutation.output_index is None:
@@ -112,7 +113,7 @@ class ForwardContract:
                         value = value.reshape_as(target)
                     target.copy_(value)
             else:
-                arguments = mutation.locator.set_value(arguments, value)
+                mutation.locator.set_value(arguments, value)
 
         return output_spec.unflatten_tensors(
             flat_outputs[:user_output_count],
@@ -129,7 +130,7 @@ class _TensorMetadata:
 
     shape: tuple[int, ...]
     stride: tuple[int, ...] | None
-    storage_offset: int | None
+    storage_offset: int | torch.SymInt | None
     layout: torch.layout
     dtype: torch.dtype
     device: torch.device
@@ -284,12 +285,14 @@ def _tensor_values_equal(left: torch.Tensor, right: torch.Tensor) -> bool:
 
 
 def _values_equal(left: Any, right: Any) -> bool:
-    """Compare arbitrary non-tensor leaves without leaking comparison errors."""
+    """Compare arbitrary non-tensor leaves."""
     if left is right:
         return True
     try:
         result = left == right
     except Exception:
+        # Leaf types may reject comparison, for example NumPy arrays with incompatible shapes.
+        # Record a replacement when equality cannot be established.
         return False
     return result if isinstance(result, bool) else False
 

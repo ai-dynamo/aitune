@@ -92,8 +92,7 @@ experimental:
 libraries:
   aitune:
     input:
-      git: https://github.com/ai-dynamo/aitune
-      subpath: aitune
+      path: ..
     output:
       path: ../docs/api
     lang: python

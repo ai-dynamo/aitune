@@ -6,6 +6,7 @@ import shutil
 from collections.abc import Callable
 from logging import getLogger
 from pathlib import Path
+from typing import Any, TypeVar, cast
 
 import torch
 
@@ -14,7 +15,8 @@ from aitune.global_context import BATCH_SIZE_KEY, MODULE_CONTEXT_KEY, global_con
 from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
 from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
-from aitune.torch.config import AITuneMode, aitune_cache_dir
+from aitune.torch.config import AITuneMode
+from aitune.torch.config import config as global_config
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, samples_generator
 from aitune.torch.distributed import coordinator, distributed_cache_dir
 from aitune.torch.module.tensor_spec import InfoLevel
@@ -125,14 +127,14 @@ def tune(
 
 
 def save(
-    module: torch.nn.Module,
+    module: torch.nn.Module | Module | Callable[..., Any],
     path: str | Path,
     storage: Storage | None = None,
 ) -> None:
     """Save the tuned module to a file.
 
     Args:
-        module: The module to save.
+        module: The module or pipeline to save.
         path: The path to save the module to.
         storage: The storage to use to save the module. If not provided, a local storage will be used.
 
@@ -163,17 +165,20 @@ def save(
     checkpoint.save(module, path)
 
 
+T = TypeVar("T", bound=torch.nn.Module | Module | Callable[..., Any])
+
+
 def load(
-    module: torch.nn.Module,
+    module: T,
     path: str | Path,
     storage: Storage | None = None,
     device_map: dict[str, torch.device] | None = None,
     disable_external_logging: bool = True,
-) -> torch.nn.Module | Module:
+) -> T | Module:
     """Load the tuned module from a file.
 
     Args:
-        module: The module to load.
+        module: The module or pipeline to load the checkpoint into.
         path: The path to load the module from.
         storage: The storage to use to load the module. If not provided, a local storage will be used.
         device_map: The device map to load modules to. Overrides the device of stored in state dict.
@@ -189,12 +194,12 @@ def load(
 
         # Measure loading time
         with Timer("Load checkpoint", silent=True) as timer:
-            module = checkpoint.load(module, path=path, device_map=device_map)
+            loaded = checkpoint.load(module, path=path, device_map=device_map)
             cuda_synchronize()
 
         logger.info("✅ Checkpoint loaded from: %s in %.2f seconds", path, timer.elapsed)
 
-        return module
+        return cast(T | Module, loaded)
 
 
 def _reject_already_tuned_modules() -> None:
@@ -246,7 +251,7 @@ def _describe_module(module: Module):
 
 def _clear_cache():
     """Clear the cache."""
-    cache_dir = distributed_cache_dir(aitune_cache_dir())
+    cache_dir = distributed_cache_dir(global_config.cache_dir)
     if cache_dir.exists():
         shutil.rmtree(cache_dir)
         logger.info("🧹 Cleared cache directory: %s", cache_dir)

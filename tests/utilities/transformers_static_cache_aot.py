@@ -57,7 +57,7 @@ def _make_cache(device: torch.device, batch_size: int = 1) -> StaticCache:
     return cache
 
 
-def _validate_cache_updates(module: nn.Module, device: torch.device) -> None:
+def _validate_cache_updates(module: Module, device: torch.device) -> None:
     """Interleave independent caches and compare their updates with eager execution."""
     eager_module = StaticCacheModule().eval().to(device)
     eager_caches = [_make_cache(device), _make_cache(device)]
@@ -73,8 +73,8 @@ def _validate_cache_updates(module: nn.Module, device: torch.device) -> None:
         original_copy = torch.Tensor.copy_
 
         def track_copy(
-            target,
-            source,
+            target: torch.Tensor,
+            source: torch.Tensor,
             *args,
             _runtime_layer=runtime_layer,
             _full_cache_copies=full_cache_copies,
@@ -155,6 +155,3 @@ def run_static_cache_aot_test(backend: Backend) -> None:
         del loaded_module, model, dataset
         gc.collect()
         torch.cuda.empty_cache()
-
-
-__all__ = ["run_static_cache_aot_test"]

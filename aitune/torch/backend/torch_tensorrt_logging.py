@@ -27,7 +27,9 @@ def torch_tensorrt_warnings(torch_tensorrt_module: Any) -> Generator[None, None,
 @contextmanager
 def torch_tensorrt_errors(torch_tensorrt_module: Any) -> Generator[None, None, None]:
     """Hide very large Torch-TensorRT logs while saving or loading an artifact."""
-    logger_names = ("torch_tensorrt", "torch._library.fake_class_registry")
+    # Some PyTorch serializer versions log a successful weights-only fallback with mismatched format arguments.
+    # Suppress that warning during artifact I/O so formatting cannot abort an otherwise successful load.
+    logger_names = ("torch_tensorrt", "torch._library.fake_class_registry", "torch._export.serde.serialize")
     original_levels = {name: logging.getLogger(name).level for name in logger_names}
     for name in logger_names:
         logging.getLogger(name).setLevel(logging.ERROR)
