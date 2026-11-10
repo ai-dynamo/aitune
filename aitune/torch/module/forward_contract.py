@@ -267,13 +267,10 @@ def _tensor_values_equal(left: torch.Tensor, right: torch.Tensor) -> bool:
 
 
 def _values_equal(left: Any, right: Any) -> bool:
-    """Compare arbitrary non-tensor leaves without leaking comparison errors."""
+    """Compare arbitrary non-tensor leaves."""
     if left is right:
         return True
-    try:
-        result = left == right
-    except Exception:
-        return False
+    result = left == right
     return result if isinstance(result, bool) else False
 
 
