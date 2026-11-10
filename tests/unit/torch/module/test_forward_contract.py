@@ -4,6 +4,7 @@
 
 from copy import deepcopy
 
+import numpy as np
 import torch
 
 from aitune.torch.module.forward_contract import (
@@ -61,6 +62,30 @@ def test_capture_reuses_a_mutated_tensor_returned_as_output():
     mutation = contract.input_mutations[0]
     assert mutation.kind == InputMutationKind.COPY_TENSOR
     assert mutation.output_index == 0
+
+
+def test_capture_and_restore_numpy_leaf_replacement_with_incompatible_shapes():
+    class ReplaceArray(torch.nn.Module):
+        def forward(self, x, state):
+            state[0] = np.ones(3)
+            return x + 1
+
+    contract = _capture(ReplaceArray(), (torch.zeros(2), [np.zeros(2)]))
+
+    assert len(contract.input_mutations) == 1
+    mutation = contract.input_mutations[0]
+    assert mutation.locator.path == ("state", 0)
+    assert mutation.kind == InputMutationKind.REPLACE_CONSTANT
+    np.testing.assert_array_equal(mutation.value, np.ones(3))
+
+    arguments = {"x": torch.zeros(2), "state": [np.zeros(2)]}
+    output = torch.ones(2)
+    output_spec = SampleMetadata.from_outputs(output)
+    result = contract.restore_outputs((output,), arguments, output_spec)
+
+    torch.testing.assert_close(result, output)
+    np.testing.assert_array_equal(arguments["state"][0], np.ones(3))
+    assert arguments["state"][0] is not mutation.value
 
 
 def test_capture_detects_inference_tensor_mutation_without_a_version_counter():
