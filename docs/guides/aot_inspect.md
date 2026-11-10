@@ -40,7 +40,7 @@ modules_info = ait.inspect(
     warmup_iterations=5,            # Warmup iterations
     min_depth=0,                    # Minimum depth for module search
     max_depth=5,                    # Maximum depth for module search
-    call_tree=False,                # Also record the call tree (modules_info.call_tree)
+    call_tree=False,                # Also record the call tree (modules_info.call_tree); recommended: True
 )
 ```
 
