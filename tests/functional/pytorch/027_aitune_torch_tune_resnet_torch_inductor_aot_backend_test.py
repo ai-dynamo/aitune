@@ -73,7 +73,9 @@ def do_test(backend: TorchInductorAotBackend):
         with torch.no_grad():
             for batch_size in (1, 2):
                 inputs = data.unsqueeze(0).repeat(batch_size, 1, 1, 1)
-                torch.testing.assert_close(runner(inputs), expected_output.repeat(batch_size, 1), rtol=1e-3, atol=1e-4)
+                torch.testing.assert_close(
+                    runner(inputs), (expected_output.repeat(batch_size, 1),), rtol=1e-3, atol=1e-4
+                )
         del runner
 
 
