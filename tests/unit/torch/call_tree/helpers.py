@@ -5,6 +5,7 @@
 import functools
 from contextlib import contextmanager
 
+import torch
 from torch import nn
 
 from aitune.torch.call_tree.call_tree import CallTree
@@ -39,6 +40,11 @@ def restore_methods(restore: list):
         else:
             delattr(obj, name)
     restore.clear()
+
+
+def invisible_to_recorder():
+    """The recorder does not see torch ops run inside this, like an extension kernel or a raw storage swap."""
+    return torch._C.DisableTorchFunction()
 
 
 @contextmanager
