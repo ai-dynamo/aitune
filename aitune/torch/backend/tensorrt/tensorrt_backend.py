@@ -667,9 +667,12 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
             try:
                 if self._context is None:
                     raise RuntimeError("Engine not loaded. Call build() first.")
+                graph_spec = self._graph_spec
+                if graph_spec is None:
+                    raise RuntimeError("Graph specification is not loaded. Call build() first.")
 
                 # Prepare inputs
-                arguments = self._graph_spec.forward_signature.normalize(args, kwargs).arguments
+                arguments = graph_spec.forward_signature.normalize(args, kwargs).arguments
                 inputs = self._prepare_inputs(arguments)
                 if not inputs:
                     raise ValueError("No input tensors provided for inference")
@@ -966,24 +969,27 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
 
     def _prepare_outputs_for_return(self, arguments: dict[str, Any]) -> Any:
         """Collect TensorRT outputs, restore input changes, and rebuild the module result."""
+        graph_spec = self._graph_spec
+        if graph_spec is None:
+            raise RuntimeError("Graph specification is not loaded. Call build() first.")
         # Get outputs from the allocator (already properly shaped by TensorRT)
         outputs = self._output_allocator.outputs
         outputs.update(self._aliased_outputs)
         # Cached graphs reuse output storage, including outputs that replace input state.
         user_output_names = tuple(
-            GraphSpec.tensor_name(locator, spec, "output") for locator, spec in self._graph_spec.output_spec.tensor_data
+            GraphSpec.tensor_name(locator, spec, "output") for locator, spec in graph_spec.output_spec.tensor_data
         )
-        state_output_names = self._graph_spec.output_names()[len(user_output_names) :]
+        state_output_names = graph_spec.output_names()[len(user_output_names) :]
         flat_outputs = tuple(
             outputs.pop(name) if not self._use_cuda_graphs else cast(torch.Tensor, outputs.pop(name)).clone()
             for name in user_output_names + state_output_names
         )
         mutation_policies = {
             mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
-            for mutation in self._graph_spec.forward_contract.input_mutations
+            for mutation in graph_spec.forward_contract.input_mutations
             if mutation.output_index is not None
         }
-        result = self._graph_spec.restore_outputs(
+        result = graph_spec.restore_outputs(
             flat_outputs,
             arguments,
             tensor_mutation_policies=mutation_policies,

@@ -80,8 +80,9 @@ class ForwardContract:
             raise ValueError(f"Expected {expected_output_count} flat outputs, got {len(flat_outputs)}.")
 
         for mutation in self.input_mutations:
+            # Mutation paths are below the normalized argument dictionary, whose identity stays unchanged.
             if mutation.kind == InputMutationKind.REPLACE_CONSTANT:
-                arguments = mutation.locator.set_value(arguments, deepcopy(mutation.value))
+                mutation.locator.set_value(arguments, deepcopy(mutation.value))
                 continue
 
             if mutation.output_index is None:
@@ -100,7 +101,7 @@ class ForwardContract:
                 if target is not value:
                     target.copy_(value)
             else:
-                arguments = mutation.locator.set_value(arguments, value)
+                mutation.locator.set_value(arguments, value)
 
         return output_spec.unflatten_tensors(
             flat_outputs[:user_output_count],
@@ -117,7 +118,7 @@ class _TensorMetadata:
 
     shape: tuple[int, ...]
     stride: tuple[int, ...] | None
-    storage_offset: int | None
+    storage_offset: int | torch.SymInt | None
     layout: torch.layout
     dtype: torch.dtype
     device: torch.device

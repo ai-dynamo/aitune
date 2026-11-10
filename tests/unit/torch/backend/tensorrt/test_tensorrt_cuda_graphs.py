@@ -411,6 +411,7 @@ def test_aliased_state_executes_once_per_request_without_capture(profile_backend
     state = torch.zeros(2, 3)
     backend._base_context.execute_async_v3.side_effect = lambda stream: state.add_(1) is state
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     mocker.patch.object(backend, "_prepare_inputs", return_value={"x": state})
     mocker.patch.object(backend, "_set_input_tensors")
     mocker.patch.object(backend, "_prepare_outputs_for_return", side_effect=lambda arguments: state)

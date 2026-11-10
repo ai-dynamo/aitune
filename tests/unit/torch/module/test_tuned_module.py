@@ -13,7 +13,6 @@ from aitune.torch.backend.torch_inductor_aot_backend import TorchInductorAotBack
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import AITuneConfig
 from aitune.torch.module.forward_signature import ForwardSignature
-from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.tuned_module import TunedModule
@@ -174,12 +173,6 @@ def test_deserialize_aot_preserves_distributed_module_placement(mocker):
     metadata = SampleMetadata.from_inputs(signature.normalize((torch.randn(2),), {}).arguments, strict=True)
     backend = TorchInductorAotBackend()
     backend._compiled_model_artifact = Mock()
-    backend._graph_spec = GraphSpec(
-        name="test",
-        input_spec=metadata,
-        output_spec=SampleMetadata.from_outputs(torch.randn(2), strict=True),
-        forward_signature=signature,
-    )
     backend._device = torch.device("cuda:0")
     sample = ((torch.randn(2),), {})
     backend._graph_spec = make_graph_spec(lambda x: x, sample, sample[0][0], strict=True)

@@ -11,7 +11,7 @@ from torch import nn
 
 import aitune.torch as ait
 from aitune.torch.dynamic_shapes import DynamicShapes
-from aitune.torch.libs.torch import torch_exporter
+from aitune.torch.libs.exporting import torch_exporter
 from tests.functional_ci.backends import BACKENDS, BackendCase, with_backends
 from tests.functional_ci.lifecycle import TENSORRT_FP32, assert_matches_eager, pinned_strategy, selected_backend
 from tests.functional_ci.models import IN_FEATURES, make_image_model, make_input, make_mlp, seeded
