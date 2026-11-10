@@ -325,11 +325,11 @@ If capture fails, the backend logs a warning, releases the graph cache after exe
 and subsequent calls without CUDA graphs. It does not retry capture on shape changes after a failure.
 Normal TensorRT execution errors still propagate. A newly loaded backend attempts capture again.
 
-Set `use_cuda_graphs=False` to disable capture explicitly:
-
 Results are copied out of reusable CUDA graph buffers, including outputs used to update
 mutable input state. This keeps independent caches isolated when they use the same backend,
 at the cost of copying those state outputs on each call.
+
+Set `use_cuda_graphs=False` to disable capture explicitly:
 
 ```python
 config = TensorRTBackendConfig(

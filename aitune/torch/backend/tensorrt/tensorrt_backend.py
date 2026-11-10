@@ -200,7 +200,6 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
     _build_mode = BuildMode.AHEAD_OF_TIME
     _supported_modules = frozenset({ModuleFormat.TORCH, ModuleFormat.ONNX})
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
-    tensor_mutation_policy = TensorMutationPolicy.REPLACE_INPUT
 
     # State dictionary keys
     STATE_TYPE = "type"
@@ -984,19 +983,15 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
             GraphSpec.tensor_name(locator, spec, "output") for locator, spec in graph_spec.output_spec.tensor_data
         )
         state_output_names = graph_spec.output_names()[len(user_output_names) :]
+        flat_outputs = tuple(
+            outputs.pop(name) if not self._use_cuda_graphs else cast(torch.Tensor, outputs.pop(name)).clone()
+            for name in user_output_names + state_output_names
+        )
         mutation_policies = {
-            mutation.output_index: self.tensor_mutation_policy
+            mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
             for mutation in graph_spec.forward_contract.input_mutations
             if mutation.output_index is not None
         }
-        flat_outputs = []
-        for name in user_output_names + state_output_names:
-            tensor = cast(torch.Tensor, outputs.pop(name))
-            # Every CUDA graph result needs independent storage, including state:
-            # a later call may use a different cache on the same backend.
-            if self._use_cuda_graphs:
-                tensor = tensor.clone()
-            flat_outputs.append(tensor)
         result = graph_spec.restore_outputs(
             flat_outputs,
             arguments,

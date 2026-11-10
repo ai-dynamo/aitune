@@ -17,10 +17,6 @@ from aitune.torch.libs.exporting.dynamic_shapes import (
     log_dynamic_shapes,
 )
 from aitune.torch.libs.exporting.preparation import prepare_tensor_export
-from aitune.torch.libs.exporting.torch_export_compat import (
-    TorchExportContractError as TorchExportContractError,
-)
-from aitune.torch.libs.exporting.torch_export_compat import validate_exported_module
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
 
@@ -102,7 +98,6 @@ class TorchExporter:
                     logger.warning("Strict Torch Export failed; retrying with non-strict tracing: %s", error)
                     break
                 else:
-                    validate_exported_module(exported_program)
                     return TorchExportResult(exported_program=exported_program, dynamic_shapes=attempt_shapes)
 
         raise AssertionError("Torch Export tracing modes must not be empty")

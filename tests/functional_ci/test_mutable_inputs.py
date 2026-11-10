@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Caller-visible input state changes through tuning and checkpoint reload."""
 
+from functools import partial
+
 import pytest
 import torch
 from torch import nn
@@ -9,6 +11,7 @@ from torch import nn
 import aitune.torch as ait
 from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.lifecycle import pinned_strategy, selected_backend
+from tests.toy_models.stateful import update_tensor
 
 FEATURES = 4
 
@@ -66,13 +69,14 @@ def _check_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_
     tuned = ait.Module(model_factory(device), "mutable-inputs", strategy=pinned_strategy(backend))
 
     def pipeline(value: torch.Tensor):
-        # Each recording call starts with fresh state; inference below must carry updates between calls.
-        state = {"cache": torch.zeros_like(value)}
+        # Nonzero state and inputs expose every operation, including multiplication and zeroing.
+        # Each recording call starts fresh; inference below must retain updates between calls.
+        state = {"cache": torch.full_like(value, 0.25)}
         return tuned(value, state)
 
     ait.tune(
         pipeline,
-        list(torch.ones(8, FEATURES, device=device).unbind(0)),
+        list(torch.full((8, FEATURES), 2.0, device=device).unbind(0)),
         batch_sizes=[2],
         device=device,
         ignore_failing_modules=False,
@@ -80,16 +84,19 @@ def _check_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_
 
     def check_state_updates(model):
         selected_backend(model, type(backend))
-        # Scalar increments isolate state propagation from matrix multiplication and quantization accuracy.
-        # Start with nonzero state so a reset or a missing update fails the accumulation check.
-        state = {"cache": torch.full((2, FEATURES), 0.25, device=device)}
+        eager = model_factory(device).eval()
+        # Interleave independent callers. A later inference must not overwrite another cache.
+        states = [{"cache": torch.full((2, FEATURES), initial, device=device)} for initial in (0.25, 1.5)]
+        eager_states = [{"cache": state["cache"].clone()} for state in states]
         with torch.no_grad():
-            for step in (1, 2, 3):
-                value = torch.full((2, FEATURES), float(step), device=device)
+            for cache_index, scale in ((0, 1.0), (1, 7.0), (0, 3.0)):
+                state = states[cache_index]
+                value = torch.arange(2 * FEATURES, device=device).reshape(2, FEATURES).float() / 8 + scale
+                expected = eager(value, eager_states[cache_index])
                 actual = model(value, state)
-                expected_cache = torch.full_like(value, 0.25 + step)
-                case.tolerance.assert_close(state["cache"], expected_cache)
-                case.tolerance.assert_close(actual["value"], value + expected_cache)
+                case.tolerance.assert_close(actual["value"], expected["value"])
+                for actual_state, expected_state in zip(states, eager_states, strict=True):
+                    case.tolerance.assert_close(actual_state["cache"], expected_state["cache"])
                 # Backends may install their own result tensors; container identity is the shared contract.
                 if returns_state:
                     assert actual["state"] is state
@@ -102,3 +109,29 @@ def _check_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_
     restored = ait.load(model_factory(device, seed=1), checkpoint)
     assert isinstance(restored, ait.Module)
     check_state_updates(restored)
+
+
+class TensorMutationModel(nn.Module):
+    """Exercise indexed writes and arithmetic updates without returning the cache."""
+
+    def __init__(self, device: torch.device, seed: int = 0, *, operation: str):
+        super().__init__()
+        self.operation = operation
+        self.register_buffer("scale", torch.tensor(float(seed + 1), device=device))
+
+    def forward(self, x: torch.Tensor, state: dict[str, torch.Tensor]):
+        index = torch.arange(x.shape[0], device=x.device).flip(0)
+        if self.operation == "scatter_":
+            index = index[:, None].expand_as(x)
+        update_tensor(state["cache"], x * self.scale, index, self.operation)
+        return {"value": x + state["cache"]}
+
+
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.parametrize("operation", ["mul_", "index_copy_", "scatter_", "zero_"])
+@with_backends("base")
+def test_tensor_mutation_lifecycle(case: BackendCase, device: torch.device, tmp_path, operation):
+    """Numerical input updates survive repeated calls, interleaved caches, and checkpoint reload."""
+    _check_mutable_input_lifecycle(
+        case, device, tmp_path, partial(TensorMutationModel, operation=operation), returns_state=False
+    )

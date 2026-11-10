@@ -90,19 +90,6 @@ Collecting more samples improves shape coverage, but does not create a separate 
 only by tensor contents or hidden state. To separate such behavior into different graphs, use inputs that graph
 detection can distinguish. Otherwise, execute that behavior through a different model path.
 
-### What Stateful Validation Checks
-
-When correctness checking is enabled and a graph has recorded input mutations, tuning compares repeated backend
-calls with recorded eager execution. Each sample starts a new sequence that reuses its input state; the default
-sequence has three calls. The comparison checks tensor shapes, dtypes, layouts, devices, leaf types, object
-identity, and shared storage. Backend policies can allow replacement of input tensors while retaining checks
-on post-call aliases.
-
-These are structural checks. Tensor contents and non-tensor values are not compared with eager results, and
-passing validation covers only the sampled sequences. Separate output validity checks detect NaN/inf, but
-numerical equivalence and model accuracy require their own evaluation. Hidden Python attributes inside the
-module are outside the structural comparison.
-
 ## What This Guide Covers
 
 This guide explores the technical details of execution graphs through the lens of `SampleMetadata`, the core class responsible for:

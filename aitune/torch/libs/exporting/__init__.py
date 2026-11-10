@@ -5,14 +5,13 @@
 from aitune.torch.libs.exporting.onnx_exporter import ONNXExporter
 from aitune.torch.libs.exporting.preparation import TensorExportPreparation, prepare_tensor_export
 from aitune.torch.libs.exporting.tensor_export_adapter import TensorExportAdapter
-from aitune.torch.libs.exporting.torch_exporter import TorchExportContractError, TorchExporter, TorchExportResult
+from aitune.torch.libs.exporting.torch_exporter import TorchExporter, TorchExportResult
 
 __all__ = [
     "ONNXExporter",
     "TensorExportAdapter",
     "TensorExportPreparation",
     "TorchExporter",
-    "TorchExportContractError",
     "TorchExportResult",
     "prepare_tensor_export",
 ]

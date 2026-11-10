@@ -50,7 +50,6 @@ ait.load(model, "model.ait")
 class TorchTensorRTAotBackendConfig(BackendConfig):
     compile_config: TorchTensorRTConfig
     pickle_protocol: int = 5
-    use_legacy_exporter: bool | None = None
 ```
 
 ### compile_config
@@ -88,49 +87,18 @@ config = TorchTensorRTAotBackendConfig(
 )
 ```
 
-### Serialization exporter
+### Export profiles and serialization
 
-For stateless models, AITune first saves with `retrace=False`, then retries with
-`retrace=True` on export specification errors or the known integer-parameter gradient error.
-Unrelated failures are propagated without retrying.
+Before compilation, AITune checks that the requested TensorRT optimization profiles fit
+within the Torch Export shape constraints. Incompatible profiles fail the candidate;
+AITune does not silently narrow the requested ranges.
 
-Models with input/buffer mutations or output/input aliases use `retrace=True` directly.
-An explicit `use_legacy_exporter` setting also uses `retrace=True` directly, passing the
-requested exporter when the installed save API supports it. All paths save
-`output_format="exported_program"`. Re-export receives the same `torch_tensorrt.Input`
-descriptors used for compilation, including min/opt/max shapes, together with explicit
-dynamic-shape constraints. Torch-TensorRT prepares the example tensors for saving.
-Here, `retrace=True` selects the Torch Export save path; it does not use `torch.jit.trace`
-or produce TorchScript. AITune reloads the persisted artifact before accepting the backend,
-including stateful validation when configured.
-The tuning strategy owns the validation session and checks the loaded backend after build.
-There is no separate stateful check before saving. Compilation or saving errors fail the
-candidate during build; a failed check after reload also rejects the candidate.
-Stateful validation checks input/output structure, tensor shapes, dtypes, devices, and aliases
-across repeated calls. It does not compare tensor contents or establish model accuracy;
-numerical quality requires a separate evaluation appropriate to the model and task.
-Validation preserves registered model buffers so temporary checks do not advance the state
-stored in the artifact or leave the loaded model changed.
-
-By default, `use_legacy_exporter=None` leaves exporter selection to the installed
-Torch-TensorRT version. On versions that expose the public `save(use_legacy_exporter=...)`
-parameter, request the standard Torch Export implementation explicitly:
-
-```python
-config = TorchTensorRTAotBackendConfig(use_legacy_exporter=False)
-```
-
-If the installed save API lacks this parameter, AITune omits it and uses the installed
-version's default exporter.
-Older releases may choose a legacy exporter for dynamic graphs even with `retrace=True`;
-use an upstream version supporting the explicit override to control that choice.
-
-AITune does not repair Torch-TensorRT graph metadata or rewrite mutation operators during
-serialization. Upstream export failures fail the backend candidate; they do not trigger a
-TorchScript or JIT fallback. Changing the exporter can address serialization failures, but
-does not establish operator coverage, correctness, or a performance improvement.
-
-See the [Torch-TensorRT save API](https://docs.pytorch.org/TensorRT/py_api/torch_tensorrt.html#torch_tensorrt.save).
+Serialization first exports the compiled graph directly. It preserves scalar and `None`
+input metadata so those constants remain serializable. Export specification errors and
+the known integer-parameter gradient error trigger a non-strict Torch Export retry;
+unrelated errors propagate. That retry uses the captured flat example tensors and
+positional dynamic-shape constraints, rather than TensorRT profile descriptors.
+AITune reloads the saved artifact before accepting the backend.
 
 ## AOT vs JIT Comparison
 

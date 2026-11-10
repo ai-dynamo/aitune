@@ -78,7 +78,7 @@ def validate_forward_input_path(path: object) -> None:
             len(path) >= 2
             and isinstance(path[0], str)
             and path[0]
-            and all(isinstance(component, str | int) and not isinstance(component, bool) for component in path[1:])
+            and all(isinstance(component, (str, int)) and not isinstance(component, bool) for component in path[1:])
         ):
             return
     raise AITuneUserInputError(
@@ -93,24 +93,19 @@ class ForwardParameter:
     name: str
     kind: str
     has_default: bool
-    default: Any = None
-    default_is_known: bool = False
 
     @staticmethod
     def from_parameter(parameter: inspect.Parameter) -> "ForwardParameter":
         """Create a description from an inspected parameter."""
-        default_is_known = type(parameter.default) in (type(None), bool, int, float, str)
         return ForwardParameter(
             name=parameter.name,
             kind=parameter.kind.name,
             has_default=parameter.default is not inspect.Parameter.empty,
-            default=parameter.default if default_is_known else None,
-            default_is_known=default_is_known,
         )
 
     def to_parameter(self) -> inspect.Parameter:
         """Create an inspect parameter suitable for call binding."""
-        default = self.default if self.has_default else inspect.Parameter.empty
+        default = None if self.has_default else inspect.Parameter.empty
         return inspect.Parameter(self.name, _PARAMETER_KINDS[self.kind], default=default)
 
 
@@ -167,32 +162,14 @@ class ForwardSignature:
         """Convert the signature to a serializable dictionary."""
         return {
             "parameters": [
-                {
-                    "name": parameter.name,
-                    "kind": parameter.kind,
-                    "has_default": parameter.has_default,
-                    "default": parameter.default,
-                    "default_is_known": parameter.default_is_known,
-                }
+                {"name": parameter.name, "kind": parameter.kind, "has_default": parameter.has_default}
                 for parameter in self.parameters
             ]
         }
 
     def normalize(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> inspect.BoundArguments:
-        """Match arguments to parameters and fill in known immutable defaults.
-
-        Legacy checkpoints only recorded whether a default existed. Do not infer its value.
-        Mutable, tensor, and custom defaults are deliberately left to the original callable.
-        """
-        bound = self._signature.bind(*args, **kwargs)
-        arguments = {}
-        for parameter in self.parameters:
-            if parameter.name in bound.arguments:
-                arguments[parameter.name] = bound.arguments[parameter.name]
-            elif parameter.default_is_known:
-                arguments[parameter.name] = parameter.default
-        bound.arguments = arguments
-        return bound
+        """Match args and kwargs to forward parameters in a consistent layout."""
+        return self._signature.bind(*args, **kwargs)
 
     def capture_call_layout(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> ForwardCallLayout:
         """Capture how a valid call supplied each normalized argument."""

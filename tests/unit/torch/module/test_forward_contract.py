@@ -5,6 +5,7 @@
 from copy import deepcopy
 
 import numpy as np
+import pytest
 import torch
 
 from aitune.torch.module.forward_contract import (
@@ -229,41 +230,6 @@ def test_restore_can_replace_a_tensor_normally_copied_into_the_input():
     assert arguments["state"][0] is not original
 
 
-def test_restore_reshapes_a_copy_mutation_to_the_input_contract():
-    target = torch.tensor(0)
-    arguments = {"state": target}
-    locator = SampleMetadata.from_inputs(arguments).tensor_data[0][0]
-    output_spec = SampleMetadata.from_outputs(torch.zeros(1))
-    contract = ForwardContract(
-        output_template=None,
-        input_mutations=(InputMutation(locator, InputMutationKind.COPY_TENSOR, output_index=1),),
-    )
-
-    result = contract.restore_outputs((torch.ones(1), torch.tensor([7])), arguments, output_spec)
-
-    assert result.shape == (1,)
-    assert arguments["state"] is target
-    assert target.shape == ()
-    assert target.item() == 7
-
-
-def test_restore_does_not_reshape_a_replaced_tensor():
-    original = torch.tensor(0)
-    replacement = torch.tensor([7])
-    arguments = {"state": original}
-    locator = SampleMetadata.from_inputs(arguments).tensor_data[0][0]
-    output_spec = SampleMetadata.from_outputs(torch.zeros(1))
-    contract = ForwardContract(
-        output_template=None,
-        input_mutations=(InputMutation(locator, InputMutationKind.REPLACE_TENSOR, output_index=1),),
-    )
-
-    contract.restore_outputs((torch.ones(1), replacement), arguments, output_spec)
-
-    assert arguments["state"] is replacement
-    assert arguments["state"].shape == (1,)
-
-
 def test_restore_preserves_an_input_container_returned_in_mixed_outputs():
     class ReturnState(torch.nn.Module):
         def forward(self, x, state):
@@ -302,3 +268,28 @@ def test_restore_preserves_a_tensor_returned_directly_from_inputs():
     result = contract.restore_outputs((torch.full((2,), 7.0),), {"x": input_tensor}, output_spec)
 
     assert result is input_tensor
+
+
+@pytest.mark.parametrize("container", [lambda tensor: tensor, lambda tensor: (tensor,), lambda tensor: ((tensor,),)])
+def test_replacement_policy_copies_mutations_back_through_immutable_arguments(container):
+    target = torch.zeros(2)
+    arguments = {"state": container(target)}
+    locator = SampleMetadata.from_inputs(arguments).tensor_data[0][0]
+    output_spec = SampleMetadata.from_outputs(torch.ones(2))
+    contract = ForwardContract(
+        output_template=None,
+        input_mutations=(InputMutation(locator, InputMutationKind.COPY_TENSOR, output_index=1),),
+    )
+
+    for increment in (1.0, 3.0):
+        replacement = target + increment
+        contract.restore_outputs(
+            (torch.ones(2), replacement),
+            arguments,
+            output_spec,
+            tensor_mutation_policies={1: TensorMutationPolicy.REPLACE_INPUT},
+        )
+        assert locator.get_value(arguments) is target
+        torch.testing.assert_close(target, replacement)
+
+    torch.testing.assert_close(target, torch.full((2,), 4.0))

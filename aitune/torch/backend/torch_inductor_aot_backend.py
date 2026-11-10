@@ -3,7 +3,6 @@
 """Torch Inductor AOT backend."""
 
 from collections.abc import Callable, Sequence
-from contextlib import contextmanager
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
@@ -145,17 +144,6 @@ class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
 
         self._activate()
         return self
-
-    @contextmanager
-    def validation_context(self):
-        """Reload the package around validation because runner buffers are opaque."""
-        self._deactivate()
-        self._activate()
-        try:
-            yield
-        finally:
-            self._deactivate()
-            self._activate()
 
     def _capture_call_contract(self, module: nn.Module, sample: Sample) -> None:
         """Capture PT2 tensor ordering without changing backend build success."""

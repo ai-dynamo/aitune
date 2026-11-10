@@ -25,7 +25,7 @@ def none_at_tensors(obj: Any) -> Any:
         return None
     if isinstance(obj, dict):
         return {k: none_at_tensors(v) for k, v in obj.items()}
-    if isinstance(obj, list | tuple):
+    if isinstance(obj, (list, tuple)):
         inner = [none_at_tensors(v) for v in obj]
         return type(obj)(inner)
     return obj

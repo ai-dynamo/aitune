@@ -5,10 +5,8 @@
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from contextlib import nullcontext
 from copy import deepcopy
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any
 
 import torch
@@ -28,7 +26,6 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
     ThroughputSaturatedProfilingStopStrategy,
 )
-from aitune.torch.task.stateful_validation import StatefulValidation, preserve_buffers
 from aitune.torch.utils.module import count_parameters, move_module_to_device
 from aitune.utils.logging import control_output, log, log_to_file
 from aitune.utils.timer import Timer
@@ -107,7 +104,7 @@ class TuneStrategy(ABC):
             return backend
 
     def check_correctness(self, backend: Backend, name: str, graph_spec: GraphSpec, samples: SampleStore):
-        """Check output validity and input/output contracts without comparing tensor values to eager.
+        """Check outputs for NaN/inf.
 
         Args:
             backend: The backend to check.
@@ -116,7 +113,7 @@ class TuneStrategy(ABC):
             samples: Recorded samples to check.
 
         Note:
-            Call this method from _tune to check the backend.
+            This method is should be called by the _tune method to check the correctness of the backend.
 
             You can disable correctness check by calling `enable_correctness_check(False)`.
 
@@ -221,29 +218,21 @@ class TuneStrategy(ABC):
         failure_phase: str | None = None
         built_backend = backend
 
-        stateful_validation = None
-        with TemporaryDirectory(prefix="aitune-validation-") as validation_dir, Timer(sink=self._sink, depth=2):
+        with Timer(sink=self._sink, depth=2):
             log("🤖 backend: %s", description, sink=self._sink)
             log("🔄 in progress...please wait", depth=2, sink=self._sink)
             try:
                 with coordinator.raise_if_any_rank_fails(f"Building backend {description}"):
                     with control_output(log_file=log_file):
                         built_backend = deepcopy(backend)
-                        if self._enable_correctness_check and graph_spec.forward_contract.input_mutations:
-                            move_module_to_device(module, device)
-                            stateful_validation = StatefulValidation(Path(validation_dir), graph_spec)
-                            stateful_validation.record(module, samples.iter_samples(device))
-                        # Compilation and JIT warmup may execute the original module.
-                        context = preserve_buffers(module) if stateful_validation is not None else nullcontext()
-                        with context:
-                            built_backend = built_backend.build(
-                                module,
-                                graph_spec,
-                                samples,
-                                device,
-                                backend_cache_dir,
-                                log_file=log_file,
-                            )
+                        built_backend = built_backend.build(
+                            module,
+                            graph_spec,
+                            samples,
+                            device,
+                            backend_cache_dir,
+                            log_file=log_file,
+                        )
             except Exception as e:
                 local_error = e
                 failure_phase = "build"
@@ -251,19 +240,7 @@ class TuneStrategy(ABC):
                 log("✅ backend built", depth=2, sink=self._sink)
                 try:
                     with control_output(log_file=log_file):
-                        context = (
-                            built_backend.validation_context() if stateful_validation is not None else nullcontext()
-                        )
-                        with context:
-                            # Validate the loaded backend before other checks advance its buffers.
-                            if stateful_validation is not None:
-                                stateful_validation.check(
-                                    built_backend.infer,
-                                    built_backend.device,
-                                    name=f"{name}.{graph_spec.name}.{built_backend.describe()}",
-                                    tensor_mutation_policy=built_backend.tensor_mutation_policy,
-                                )
-                            self.check_correctness(built_backend, name, graph_spec, samples)
+                        self.check_correctness(built_backend, name, graph_spec, samples)
                 except Exception as e:
                     local_error = e
                     failure_phase = "validation"

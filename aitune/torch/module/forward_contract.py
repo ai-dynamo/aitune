@@ -132,8 +132,6 @@ class ForwardContract:
                         f"Tensor mutation target {mutation.locator} resolved to {type(target).__name__}, not a tensor."
                     )
                 if target is not value:
-                    if value.shape != target.shape and value.numel() == target.numel():
-                        value = value.reshape_as(target)
                     target.copy_(value)
             else:
                 mutation.locator.set_value(arguments, value)

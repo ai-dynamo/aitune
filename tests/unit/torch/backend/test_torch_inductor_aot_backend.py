@@ -547,24 +547,3 @@ def test_inductor_aot_config_from_dict_round_trip():
     original = TorchInductorAotBackendConfig(inductor_configs={"coordinate_descent_tuning": True})
     restored = TorchInductorAotBackendConfig.from_dict(original.to_dict())
     assert restored == original
-
-
-def test_validation_reloads_opaque_runner_state_after_failure(mocker, tmp_path):
-    class Runner:
-        def __init__(self):
-            self.calls = 0
-
-        def __call__(self):
-            self.calls += 1
-            return self.calls
-
-    mocker.patch.object(torch._inductor, "aoti_load_package", side_effect=lambda *args, **kwargs: Runner())
-    backend = TorchInductorAotBackend()
-    backend._device = torch.device("cpu")
-    backend._compiled_model_artifact = ArtifactPath(tmp_path, "model.pt2")
-    backend._activate()
-    backend._runner()
-    with pytest.raises(RuntimeError, match="validation failed"), backend.validation_context():
-        assert backend._runner() == 1
-        raise RuntimeError("validation failed")
-    assert backend._runner() == 1

@@ -16,7 +16,6 @@ import torch
 import torch.nn as nn
 
 from aitune.records import DeploymentArtifact
-from aitune.torch.module.forward_contract import TensorMutationPolicy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
@@ -194,8 +193,6 @@ class Backend(ABC, Generic[ConfigType]):
     _devices: ClassVar[list[str]] = ["cpu", "cuda"]
     _execution_modes: ClassVar[frozenset[ExecutionMode]]
     _build_mode: ClassVar[BuildMode]
-    # Shared by output restoration and stateful validation.
-    tensor_mutation_policy: ClassVar[TensorMutationPolicy] = TensorMutationPolicy.PRESERVE_INPUT
     _supported_modules: ClassVar[frozenset[ModuleFormat]] = frozenset({ModuleFormat.TORCH})
 
     def __init_subclass__(cls, **kwargs) -> None:
@@ -527,14 +524,6 @@ class Backend(ABC, Generic[ConfigType]):
         with release_transient_memory():
             torch._dynamo.reset()
             torch.compiler.reset()
-
-    def validation_context(self) -> contextlib.AbstractContextManager[None]:
-        """Isolate temporary correctness calls from the backend's persistent state.
-
-        Backends with mutable model buffers must preserve them or reload their
-        artifact. Backends whose state is supplied entirely as inputs need no reset.
-        """
-        return contextlib.nullcontext()
 
 
 class DummyBackend(Backend):

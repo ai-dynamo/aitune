@@ -21,7 +21,7 @@ from aitune.torch.task.correctness import (
 )
 from aitune.torch.tune_strategy import TuneStrategy
 from tests.toy_models.torch_models import ToyTorchModel
-from tests.utilities.helpers import make_input_metadata, make_recorded_graph_spec, make_sample_store
+from tests.utilities.helpers import make_input_metadata, make_sample_store
 
 
 def _forward(x=None, *, cache=None):
@@ -150,58 +150,6 @@ def test_correctness_loads_samples_on_backend_device(mocker, tmp_path):
     TuneStrategyTestCorrectness().check_correctness(MockBackend(), "test_model", graph_spec, samples)  # type: ignore
 
     assert iter_samples.call_args_list == [mocker.call(torch.device("cuda:1")), mocker.call(torch.device("cuda:1"))]
-
-
-@pytest.mark.parametrize("enabled", [True, False])
-@pytest.mark.parametrize("reject", [True, False])
-def test_stateful_validation_checks_built_backend(mocker, tmp_path, enabled, reject):
-    backend, module, strategy, samples, graph_spec = _mock_backend_validation_context(mocker, tmp_path)
-    backend.device = torch.device("cpu")
-    graph_spec.forward_contract = mocker.Mock(input_mutations=(mocker.sentinel.mutation,))
-    session = mocker.patch("aitune.torch.tune_strategy.tune_strategy.StatefulValidation").return_value
-    mocker.patch("aitune.torch.tune_strategy.tune_strategy.move_module_to_device")
-    mocker.patch("aitune.torch.tune_strategy.tune_strategy.preserve_buffers", return_value=mocker.MagicMock())
-    ordinary_checks = mocker.patch.object(strategy, "check_correctness")
-    events = []
-
-    def build(*args, **kwargs):
-        events.append("build")
-        return backend
-
-    def validate(*args, **kwargs):
-        events.append("validate")
-        if reject:
-            raise ValueError("state check failed")
-
-    backend.build.side_effect = build
-    session.check.side_effect = validate
-    strategy.enable_correctness_check(enabled)
-
-    result = strategy._build_and_validate_backend(
-        backend, module, "module", graph_spec, samples, backend.device, tmp_path
-    )
-
-    assert events == (["build", "validate"] if enabled else ["build"])
-    assert "stateful_validation" not in vars(backend)
-    if enabled:
-        session.record.assert_called_once()
-        session.check.assert_called_once_with(
-            backend.infer,
-            backend.device,
-            name=f"module.{graph_spec.name}.mock_backend",
-            tensor_mutation_policy=backend.tensor_mutation_policy,
-        )
-        backend.validation_context.return_value.__exit__.assert_called_once()
-    else:
-        session.record.assert_not_called()
-        session.check.assert_not_called()
-    if enabled and reject:
-        assert result is None
-        ordinary_checks.assert_not_called()
-        assert strategy.backend_results[-1]["success"] is False
-    else:
-        assert result is backend
-        ordinary_checks.assert_called_once_with(backend, "module", graph_spec, samples)
 
 
 def test_correctness_requires_at_least_one_sample(tmp_path):
@@ -483,36 +431,3 @@ def test_status_remains_on_console_when_backend_output_is_disabled(mocker, capfd
     assert "correctness details" not in console_text
     assert "backend details" in log_text
     assert "correctness details" in log_text
-
-
-def test_build_and_validation_preserve_eager_buffers(tmp_path):
-    class Model(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.register_buffer("calls", torch.tensor(0))
-
-        def forward(self, value, state):
-            self.calls.add_(1)
-            state.add_(value)
-            return state + self.calls
-
-    model = Model()
-    sample = ((torch.ones(2), torch.zeros(2)), {})
-    graph_spec = make_recorded_graph_spec(model, sample, strict=True)
-    initial = model.calls.clone()
-    samples = make_sample_store([sample, sample], tmp_path)
-    strategy = TuneStrategyTestCorrectness()
-    strategy.backend_results = []
-    backend = strategy._build_and_validate_backend(
-        TorchEagerBackend(),
-        model,
-        "buffered",
-        graph_spec,
-        samples,
-        torch.device("cpu"),
-        tmp_path,
-        raise_on_failure=True,
-    )
-    assert backend is not None
-    torch.testing.assert_close(model.calls, initial)
-    backend.deactivate()

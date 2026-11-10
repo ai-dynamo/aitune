@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check TensorRT optimization profiles against Torch Export shape constraints."""
 
+from typing import cast
+
 import torch
+from sympy import Expr
 from torch.export.graph_signature import InputKind
 from torch.utils._sympy.value_ranges import bound_sympy
 
@@ -25,7 +28,7 @@ def validate_export_profiles(exported: torch.export.ExportedProgram, graph_spec:
             raise ValueError(f"Export/profile rank mismatch for {locator}")
         for axis, dimension in enumerate(value.shape):
             if isinstance(dimension, torch.SymInt):
-                bounds = bound_sympy(dimension.node.expr, exported.range_constraints)
+                bounds = bound_sympy(cast(Expr, dimension.node.expr), exported.range_constraints)
                 lower, upper = bounds.lower, bounds.upper
             else:
                 lower = upper = int(dimension)
