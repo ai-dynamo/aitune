@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import dataclasses
-from collections import UserDict
+from collections import UserDict, namedtuple
+from typing import cast
 
 import torch
 
@@ -138,7 +139,7 @@ def test_find_leaves_nested_dict():
 def test_find_leaves_nested_dataclass():
     """Test traversal of nested dataclasses."""
     obj = NestedDataClass()
-    results = sorted(Locator.find_leaves(obj), key=lambda x: x[1])
+    results = sorted(Locator.find_leaves(obj), key=lambda x: cast(int, x[1]))
 
     expected = [(1, ".inner.a"), (2, ".inner.b[0]"), (3, ".inner.b[1]"), (4, '.inner.c["d"]'), (5, ".value")]
 
@@ -257,6 +258,26 @@ def test_set_value_nested_list():
     third_locator, _ = results[2]
     new_obj = third_locator.set_value(new_obj, -3)
     assert new_obj == [-1, [-2, -3]]
+
+
+def test_set_values_replaces_multiple_values_below_the_same_tuple():
+    obj = {"values": (1, {"nested": (2, 3)})}
+    replacements = tuple((locator, -cast(int, value)) for locator, value in Locator.find_leaves(obj))
+
+    result = Locator.set_values(obj, replacements)
+
+    assert result == {"values": (-1, {"nested": (-2, -3)})}
+
+
+def test_set_values_preserves_namedtuple_type():
+    Pair = namedtuple("Pair", ("first", "second"))
+    original = Pair(1, 2)
+    replacements = tuple((locator, -cast(int, value)) for locator, value in Locator.find_leaves(original))
+
+    result = Locator.set_values(original, replacements)
+
+    assert result == Pair(-1, -2)
+    assert isinstance(result, Pair)
 
 
 def test_set_value_tuple():
@@ -424,8 +445,8 @@ def test_find_leaves_user_dict_non_strict():
     locators = {str(loc): val for loc, val in results}
     assert "input_ids" in locators
     assert "attention_mask" in locators
-    assert torch.equal(locators["input_ids"], t1)
-    assert torch.equal(locators["attention_mask"], t2)
+    assert torch.equal(cast(torch.Tensor, locators["input_ids"]), t1)
+    assert torch.equal(cast(torch.Tensor, locators["attention_mask"]), t2)
 
 
 def test_find_leaves_user_dict_all_leaves():
@@ -439,7 +460,7 @@ def test_find_leaves_user_dict_all_leaves():
     locators = {str(loc): val for loc, val in results}
     assert "input_ids" in locators
     assert "meta" in locators
-    assert torch.equal(locators["input_ids"], t)
+    assert torch.equal(cast(torch.Tensor, locators["input_ids"]), t)
     assert locators["meta"] == "some_string"
 
 
@@ -454,7 +475,7 @@ def test_find_leaves_user_dict_nested_inside_dict():
     locators = {str(loc): val for loc, val in results}
     assert 'outer["input_ids"]' in locators
     assert 'outer["flag"]' in locators
-    assert torch.equal(locators['outer["input_ids"]'], t)
+    assert torch.equal(cast(torch.Tensor, locators['outer["input_ids"]']), t)
     assert locators['outer["flag"]'] is True
 
 
@@ -466,5 +487,5 @@ def test_find_leaves_user_dict_locator_get_value():
     results = list(Locator.find_leaves(obj, only_tensors=False))
     assert len(results) == 1
     locator, _ = results[0]
-    assert torch.equal(locator.get_value(obj), t)
+    assert torch.equal(cast(torch.Tensor, locator.get_value(obj)), t)
     assert str(locator) == "input_ids"

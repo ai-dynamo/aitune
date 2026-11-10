@@ -252,8 +252,9 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
     ``torch.export.export`` specialises any axis whose hint is 0 or 1 as a
     compile-time constant, breaking inference at other sizes. Three cases:
 
-    - **batch* axes**: delegate to ``input_spec.make_batch(batch_size=min(max_batch_size, 2))``
-      which scales all batch tensors consistently. When ``max_batch_size == 1``, the batch
+    - **batch* axes**: use the smallest allowed batch size above 1 when the range permits it,
+      scaling all batch tensors consistently. This keeps the sample within the batch bounds without
+      expanding it to a potentially large maximum. When ``max_batch_size == 1``, the batch
       dimension is static (``min == max``), so no expansion is needed.  ``make_batch``
       internally deepcopies the sample, so no separate copy is needed for this path.
     - **dim* axes** (JIT mode, where batch is mislabelled): for each axis that is
@@ -266,12 +267,15 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
     input_spec = graph_spec.input_spec
 
     if input_spec.has_batch_axis():
+        min_batch_size = graph_spec.get_min_batch_size() or 1
         max_batch_size = graph_spec.get_max_batch_size()
-        batch_size = min(max_batch_size, 2)
+        # Use the smallest allowed batch, avoiding size-one specialization when the range permits it.
+        batch_size = min(max_batch_size, max(min_batch_size, 2))
         args, kwargs = graph_spec.make_batch(*sample, batch_size=batch_size)
     else:
         args, kwargs = deepcopy(sample)
 
+    call_layout = graph_spec.forward_signature.capture_call_layout(args, kwargs)
     forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
     for locator, tensor_spec in input_spec.tensor_data:
         try:
@@ -301,7 +305,7 @@ def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
                 modified = True
         if modified:
             forward_inputs.arguments = locator.set_value(forward_inputs.arguments, tensor)
-    return forward_inputs.args, forward_inputs.kwargs
+    return call_layout.restore(forward_inputs.arguments)
 
 
 def _create_nested_structure(locator: Locator, root: Any = None, last: Any = None) -> Any:

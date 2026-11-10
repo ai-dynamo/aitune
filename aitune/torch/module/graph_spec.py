@@ -59,11 +59,16 @@ class GraphSpec:
                 self.post_input_spec.update_shapes_seen(post_inputs_metadata)
         self.output_spec.update_shapes_seen(outputs_metadata)
 
+    def output_names(self) -> tuple[str, ...]:
+        """Return names for flat module outputs in their recorded order."""
+        return tuple(format_tensor_name(locator.path, "output") for locator, _ in self.output_spec.tensor_data)
+
     def make_batch(self, args: tuple, kwargs: dict[str, Any], batch_size: int) -> tuple[tuple, dict[str, Any]]:
-        """Return a normalized call resized to the specified batch size."""
+        """Return a call resized to the specified batch size while preserving its argument layout."""
+        call_layout = self.forward_signature.capture_call_layout(args, kwargs)
         forward_inputs = self.forward_signature.normalize(args, kwargs)
         forward_inputs.arguments = self.input_spec.make_batch(forward_inputs.arguments, batch_size)
-        return forward_inputs.args, forward_inputs.kwargs
+        return call_layout.restore(forward_inputs.arguments)
 
     def update_max_batch_size(self, max_batch_size: int) -> None:
         """Extend input and output batch bounds to include the discovered batch size.

@@ -5,7 +5,7 @@
 import functools
 import inspect
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from aitune.exceptions import AITuneUserInputError
 
@@ -21,6 +21,17 @@ _PARAMETER_KINDS = {
 }
 
 ForwardInputPath = str | tuple[str | int, ...]
+
+
+def _resolve_argument_path(arguments: dict[str, Any], path: ForwardInputPath) -> Any:
+    """Resolve a normalized argument value from a call-layout path."""
+    if isinstance(path, str):
+        return arguments[path]
+    # Normalized input paths always start with a forward parameter name.
+    value = arguments[cast(str, path[0])]
+    for component in path[1:]:
+        value = value[component]
+    return value
 
 
 def _is_partial(obj: Any) -> bool:
@@ -99,6 +110,20 @@ class ForwardParameter:
 
 
 @dataclass(frozen=True, slots=True)
+class ForwardCallLayout:
+    """Original positional and keyword layout of one valid forward call."""
+
+    positional_paths: tuple[ForwardInputPath, ...]
+    keyword_paths: tuple[tuple[str, ForwardInputPath], ...]
+
+    def restore(self, arguments: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        """Restore the captured call layout from normalized arguments."""
+        args = tuple(_resolve_argument_path(arguments, path) for path in self.positional_paths)
+        kwargs = {name: _resolve_argument_path(arguments, path) for name, path in self.keyword_paths}
+        return args, kwargs
+
+
+@dataclass(frozen=True, slots=True)
 class ForwardSignature:
     """Serializable forward signature used to normalize module calls.
 
@@ -145,3 +170,34 @@ class ForwardSignature:
     def normalize(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> inspect.BoundArguments:
         """Match args and kwargs to forward parameters in a consistent layout."""
         return self._signature.bind(*args, **kwargs)
+
+    def capture_call_layout(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> ForwardCallLayout:
+        """Capture how a valid call supplied each normalized argument."""
+        self._signature.bind(*args, **kwargs)
+
+        positional_paths: list[ForwardInputPath] = []
+        remaining_positional = len(args)
+        for parameter in self.parameters:
+            if parameter.kind in ("POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"):
+                if remaining_positional:
+                    positional_paths.append(parameter.name)
+                    remaining_positional -= 1
+            elif parameter.kind == "VAR_POSITIONAL":
+                positional_paths.extend((parameter.name, index) for index in range(remaining_positional))
+                remaining_positional = 0
+
+        parameter_kinds = {parameter.name: parameter.kind for parameter in self.parameters}
+        var_keyword_name = next(
+            (parameter.name for parameter in self.parameters if parameter.kind == "VAR_KEYWORD"),
+            None,
+        )
+        keyword_paths = []
+        for name in kwargs:
+            if parameter_kinds.get(name) in ("POSITIONAL_OR_KEYWORD", "KEYWORD_ONLY"):
+                path: ForwardInputPath = name
+            else:
+                assert var_keyword_name is not None
+                path = (var_keyword_name, name)
+            keyword_paths.append((name, path))
+
+        return ForwardCallLayout(tuple(positional_paths), tuple(keyword_paths))

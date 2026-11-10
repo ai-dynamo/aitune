@@ -107,7 +107,7 @@ def test_graph_spec_allows_missing_post_call_metadata():
     assert graph_spec.post_input_spec is None
 
 
-def test_make_batch_normalizes_call_and_resizes_inputs():
+def test_make_batch_preserves_call_layout_and_resizes_inputs():
     graph_spec = _batching_graph_spec()
 
     args, kwargs = graph_spec.make_batch(
@@ -116,7 +116,8 @@ def test_make_batch_normalizes_call_and_resizes_inputs():
         batch_size=5,
     )
 
-    assert args[0].shape == (5, 3)
+    assert args == ()
+    assert kwargs["x"].shape == (5, 3)
     assert kwargs["mask"].shape == (10, 5)
 
 
