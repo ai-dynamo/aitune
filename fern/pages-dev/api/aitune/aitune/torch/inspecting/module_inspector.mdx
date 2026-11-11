@@ -44,8 +44,13 @@ Environment variables that could be used:
 
 | Name | Description |
 |------|-------------|
+| [`_debug_run`](#aitune-torch-inspecting-module_inspector-_debug_run) | - |
+| [`_direct_submodules`](#aitune-torch-inspecting-module_inspector-_direct_submodules) | The submodules ``module`` can call directly: its children, and the children of containers such as ModuleList. |
 | [`_get_inspect_debug`](#aitune-torch-inspecting-module_inspector-_get_inspect_debug) | - |
 | [`_get_inspect_debug_raise`](#aitune-torch-inspecting-module_inspector-_get_inspect_debug_raise) | - |
+| [`_label_prefix`](#aitune-torch-inspecting-module_inspector-_label_prefix) | Recorder label of an object: ``root`` followed by its object path (``root.vlm.lm_head``). |
+| [`_outside_modules`](#aitune-torch-inspecting-module_inspector-_outside_modules) | Whether a plain object is reached without passing through an ``nn.Module`` (pipeline level, not configs). |
+| [`_recording_wrapper`](#aitune-torch-inspecting-module_inspector-_recording_wrapper) | Wrap a method so that its calls report to ``recorder`` while it records; otherwise call it unchanged. |
 
 ### Data
 
@@ -155,12 +160,13 @@ Get the next inspect context - increment depth and add name to object path.
 
 <Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.call_tree.recorder.CallRecorder":"../call_tree/recorder.mdx#aitune-torch-call_tree-recorder-CallRecorder"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.inspecting.module_inspector.ModuleInspector(
     min_depth: int = 0,
-    max_depth: int = 5
+    max_depth: int = 5,
+    recorder: aitune.torch.call_tree.recorder.CallRecorder | None = None
 )
 ```
 
@@ -181,7 +187,16 @@ Class for inspecting PyTorch modules and tracking their execution.
 <ParamField path="_module_info" type="dict[Any, ModuleInfo] = &#123;&#125;">
 </ParamField>
 
+<ParamField path="_original_compiled_call" type="dict[Any, Any] = &#123;&#125;">
+</ParamField>
+
 <ParamField path="_original_forward" type="dict[Any, Any] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_original_methods" type="list[tuple[Any, str, bool, Any]] = []">
+</ParamField>
+
+<ParamField path="_timed_by_compiled_call" type="set[int] = set()">
 </ParamField>
 <Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_debug_error">
 
@@ -376,6 +391,55 @@ The object to inspect
 
 
 </Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_inspect_plain_object">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._inspect_plain_object(
+    obj: typing.Any,
+    context: aitune.torch.inspecting.module_inspector.InspectContext
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Inspect the members of a plain object; for the call tree, also wrap its user-defined methods.
+
+**Parameters:**
+
+<ParamField path="obj" type="Any">
+The object to inspect
+</ParamField>
+
+<ParamField path="context" type="InspectContext">
+[`InspectContext`](#aitune-torch-inspecting-module_inspector-InspectContext) — The context of the inspection
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_is_compiled">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._is_compiled(
+    module: typing.Any
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Whether ``module`` is compiled with ``torch.compile`` or ``nn.Module.compile()``.
+
+
+</Indent>
 <Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_register_module">
 
 <CodeBlock links={{"aitune.torch.inspecting.module_inspector.InspectContext":"#aitune-torch-inspecting-module_inspector-InspectContext","aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
@@ -410,6 +474,23 @@ The parent module info if any
 
 
 </Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_restore_methods">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._restore_methods() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Restore the methods wrapped by ``_wrap_user_methods``.
+
+
+</Indent>
 <Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_should_skip_member">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -427,6 +508,79 @@ aitune.torch.inspecting.module_inspector.ModuleInspector._should_skip_member(
 <Indent>
 
 Check if a member should be skipped.
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_time_call">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._time_call(
+    module: torch.nn.Module,
+    call: collections.abc.Callable,
+    args: tuple,
+    kwargs: dict
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Count one call of ``module``, run ``call`` with the arguments, and add its time to the module's info.
+
+**Parameters:**
+
+<ParamField path="module" type="torch.nn.Module">
+The inspected module the call belongs to
+</ParamField>
+
+<ParamField path="call" type="Callable">
+What to run: the module's original ``forward``, or its original compiled call for a module
+compiled with ``nn.Module.compile()``
+</ParamField>
+
+<ParamField path="args" type="tuple">
+The positional arguments to call with
+</ParamField>
+
+<ParamField path="kwargs" type="dict">
+The keyword arguments to call with
+</ParamField>
+
+**Returns:** `Any`
+
+The output of ``call``
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_wrap_compiled_call">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._wrap_compiled_call(
+    module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Time a module compiled with ``nn.Module.compile()`` from outside its compiled call.
+
+``nn.Module.compile()`` compiles the whole call, the ``forward`` wrapper included, so that wrapper only calls
+through. Wrapping the compiled call instead counts and times the module as one call.
+
+**Parameters:**
+
+<ParamField path="module">
+The module, wrapped by ``_wrap_forward_methods``
+</ParamField>
 
 
 </Indent>
@@ -472,6 +626,26 @@ Wrap forward methods of a module and its submodules.
 <ParamField path="module">
 The module whose forward method to wrap
 </ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-_wrap_user_methods">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector._wrap_user_methods(
+    obj: typing.Any,
+    object_path: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wrap the user-defined methods of ``obj`` so that they report to the recorder while it records.
 
 
 </Indent>
@@ -561,6 +735,68 @@ Reset the inspector state.
 
 
 </Indent>
+<Anchor id="aitune-torch-inspecting-module_inspector-ModuleInspector-warn_about_compiled_modules">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector.ModuleInspector.warn_about_compiled_modules() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Warn about compiled modules whose submodules were not inspected.
+
+A compiled module is reported if it ran but none of the submodules it calls directly were counted. This
+happens when Dynamo traces the compiled code, because the submodule wrappers then call through without
+counting. Deeper submodules are not checked: those below a ``torch.compiler.disable`` call run eagerly and
+are counted even when Dynamo traced the compiled code.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_inspector-_debug_run">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector._debug_run(
+    module_info: aitune.torch.inspecting.module_info.ModuleInfo,
+    exec_parent: aitune.torch.inspecting.module_info.ModuleInfo,
+    depth: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_inspector-_direct_submodules">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector._direct_submodules(
+    module: torch.nn.Module
+) -> collections.abc.Iterator[torch.nn.Module]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The submodules ``module`` can call directly: its children, and the children of containers such as ModuleList.
+
+
 </Indent>
 
 <Anchor id="aitune-torch-inspecting-module_inspector-_get_inspect_debug">
@@ -591,6 +827,71 @@ aitune.torch.inspecting.module_inspector._get_inspect_debug_raise() -> bool
 </Anchor>
 
 <Indent>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_inspector-_label_prefix">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector._label_prefix(
+    object_path: str | None
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Recorder label of an object: ``root`` followed by its object path (``root.vlm.lm_head``).
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_inspector-_outside_modules">
+
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector._outside_modules(
+    parent: aitune.torch.inspecting.module_info.ModuleInfo | None,
+    obj: typing.Any
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Whether a plain object is reached without passing through an ``nn.Module`` (pipeline level, not configs).
+
+
+</Indent>
+
+<Anchor id="aitune-torch-inspecting-module_inspector-_recording_wrapper">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder.CallRecorder":"../call_tree/recorder.mdx#aitune-torch-call_tree-recorder-CallRecorder"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.module_inspector._recording_wrapper(
+    recorder: aitune.torch.call_tree.recorder.CallRecorder,
+    obj: typing.Any,
+    name: str,
+    label: str,
+    original: collections.abc.Callable
+) -> collections.abc.Callable
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Wrap a method so that its calls report to ``recorder`` while it records; otherwise call it unchanged.
 
 
 </Indent>

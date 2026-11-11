@@ -32,12 +32,13 @@ Module for inspecting PyTorch models and tracking their execution.
 
 <Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"../call_tree/call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.inspecting.InspectedModulesInfo(
     total_execution_time: float,
-    number_of_batches: int
+    number_of_batches: int,
+    call_tree: aitune.torch.call_tree.call_tree.CallTree | None = None
 )
 ```
 
@@ -50,6 +51,10 @@ Information about inspected modules.
 
 
 <ParamField path="_modules" type="dict[str, ModuleInfo] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="call_tree" type="CallTree | None">
+Call tree recorded with ``inspect(..., call_tree=True)``, or None.
 </ParamField>
 <Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo-add_module">
 
@@ -66,7 +71,7 @@ aitune.torch.inspecting.InspectedModulesInfo.add_module(
 
 <Indent>
 
-Add a module to the specification.
+Add a module to the specification and link it back to this inspection run.
 
 **Parameters:**
 
@@ -141,7 +146,8 @@ aitune.torch.inspect(
     number_of_iterations: int = DEFAULT_INSPECT_ITERATIONS,
     warmup_iterations: int = DEFAULT_WARMUP_ITERATIONS,
     min_depth: int = 0,
-    max_depth: int = 5
+    max_depth: int = 5,
+    call_tree: bool = False
 ) -> aitune.torch.inspecting.module_info.InspectedModulesInfo
 ```
 
@@ -151,9 +157,6 @@ aitune.torch.inspect(
 <Indent>
 
 Inspect provided callable object searching for nn.Module members executed as part of forward pass.
-
-Returns:
-    InspectedModulesInfo object.
 
 **Parameters:**
 
@@ -184,6 +187,20 @@ Minimum depth of the modules to inspect, if root level modules is not working, t
 <ParamField path="max_depth" type="int" default="5">
 Maximum depth of the modules to inspect
 </ParamField>
+
+<ParamField path="call_tree" type="bool" default="False">
+Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran inside
+which, keyed by their chain of callers, plus the reads and device lookups code outside a module
+makes on its weights. This runs one more pass of ``number_of_iterations`` without per-module
+synchronization, so inspection takes longer. Parts compiled with ``torch.compile`` run compiled in
+the per-module pass, so calls inside them are not measured there; in the call-tree pass they run
+eagerly, so their calls and weight reads are recorded but their times are eager times. For deep
+models the walk must reach the linear layers, for example ``max_depth=8``.
+</ParamField>
+
+**Returns:** [`InspectedModulesInfo`](./module_info.mdx#aitune-torch-inspecting-module_info-InspectedModulesInfo)
+
+InspectedModulesInfo object.
 
 <Note>
 
@@ -222,7 +239,12 @@ Wrap provided modules with inspection logic.
 </ParamField>
 
 <ParamField path="modules" type="list[ModuleInfo]">
-`list[` [`ModuleInfo`](./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo) `]` — Dictionary of module names and their corresponding ModuleInfo objects.
+`list[` [`ModuleInfo`](./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo) `]` — Modules to wrap, usually chosen from ``ait.inspect(...).get_modules()``. If that inspection
+recorded a call tree (``call_tree=True``), weights of a wrapped module that code outside it reads,
+checks the device of, or moves stay on the device when tuning offloads the module (see
+``aitune.torch.call_tree.shared_weights_of``), and each kept weight is logged. Wrapping a module again
+replaces the weights it keeps; a weight stays kept while any wrapped module keeps it. A ``ModuleInfo``
+without ``inspection``, such as one built by hand, keeps nothing.
 </ParamField>
 
 <ParamField path="strategy" type="StrategyOption | None" default="None">

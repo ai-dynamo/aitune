@@ -12,6 +12,7 @@ Inspecting and patching modules.
 
 | Name | Description |
 |------|-------------|
+| [`_keep_shared_weights`](#aitune-torch-inspecting-wrapping-_keep_shared_weights) | Keep the weights of ``module`` that something outside it still uses or moves on the device; log them. |
 | [`wrap`](#aitune-torch-inspecting-wrapping-wrap) | Wrap provided modules with inspection logic. |
 
 ### Data
@@ -23,6 +24,28 @@ Inspecting and patching modules.
 [`logger`](#aitune-torch-inspecting-wrapping-logger)
 
 ### API
+
+<Anchor id="aitune-torch-inspecting-wrapping-_keep_shared_weights">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"../call_tree/call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.wrapping._keep_shared_weights(
+    call_tree: aitune.torch.call_tree.call_tree.CallTree,
+    module: torch.nn.Module,
+    name: str
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Keep the weights of ``module`` that something outside it still uses or moves on the device; log them.
+
+
+</Indent>
 
 <Anchor id="aitune-torch-inspecting-wrapping-wrap">
 
@@ -51,7 +74,12 @@ Wrap provided modules with inspection logic.
 </ParamField>
 
 <ParamField path="modules" type="list[ModuleInfo]">
-`list[` [`ModuleInfo`](./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo) `]` — Dictionary of module names and their corresponding ModuleInfo objects.
+`list[` [`ModuleInfo`](./module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo) `]` — Modules to wrap, usually chosen from ``ait.inspect(...).get_modules()``. If that inspection
+recorded a call tree (``call_tree=True``), weights of a wrapped module that code outside it reads,
+checks the device of, or moves stay on the device when tuning offloads the module (see
+``aitune.torch.call_tree.shared_weights_of``), and each kept weight is logged. Wrapping a module again
+replaces the weights it keeps; a weight stays kept while any wrapped module keeps it. A ``ModuleInfo``
+without ``inspection``, such as one built by hand, keeps nothing.
 </ParamField>
 
 <ParamField path="strategy" type="StrategyOption | None" default="None">

@@ -1,0 +1,134 @@
+---
+layout: overview
+slug: aitune/aitune/torch/call_tree/call_tree
+title: aitune.torch.call_tree.call_tree
+---
+
+The context-keyed call tree recorded by the call recorder.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`CallTree`](#aitune-torch-call_tree-call_tree-CallTree) | Call tree of one recording. |
+
+### API
+
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"./nodes.mdx#aitune-torch-call_tree-nodes-NodeKey","aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode","aitune.torch.call_tree.weights.accesses.WeightAccess":"./weights/accesses.mdx#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.CallTree(
+    nodes: dict[aitune.torch.call_tree.nodes.NodeKey, aitune.torch.call_tree.nodes.CallNode] = dict(),
+    iterations: int = 0,
+    sequences: list[list[aitune.torch.call_tree.nodes.NodeKey]] = list(),
+    weight_accesses: dict[str, set[aitune.torch.call_tree.weights.accesses.WeightAccess]] = dict(),
+    modules: list[tuple[str, torch.nn.Module]] = list()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Call tree of one recording.
+
+**Example**
+
+&gt;&gt;&gt; outer = CallNode(
+...     key=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
+... )
+&gt;&gt;&gt; dit = CallNode(
+...     key=("root.forward", "root.dit.forward"),
+...     label="root.dit.forward",
+...     owner_class="Dit",
+...     method="forward",
+...     calls=10,
+...     time_ms=25.0,
+...     first_seen=1,
+... )
+&gt;&gt;&gt; outer.children.append(dit.key)
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, dit)&#125;, iterations=2)
+&gt;&gt;&gt; [n.path for n in tree.roots], tree.total_ms
+(['forward'], 30.0)
+&gt;&gt;&gt; [n.path for n in tree.descendants(outer)]
+['forward &gt; dit.forward']
+&gt;&gt;&gt; [(n.path, n.calls) for n in tree.find("dit")]
+[('forward &gt; dit.forward', 10)]
+
+
+<ParamField path="iterations" type="int = 0">
+Number of recorded iterations.
+</ParamField>
+
+<ParamField path="modules" type="list[tuple[str, Module]] = field(default_factory=list)">
+Label prefix and module for every instrumented module, used for parameter names and sizes.
+</ParamField>
+
+<ParamField path="nodes" type="dict[NodeKey, CallNode] = field(default_factory=dict)">
+All nodes by key.
+</ParamField>
+
+<ParamField path="roots" type="list[CallNode]">
+Outermost nodes in first-call order.
+</ParamField>
+
+<ParamField path="sequences" type="list[list[NodeKey]] = field(default_factory=list)">
+Per iteration, the keys of the entered nodes in call order.
+</ParamField>
+
+<ParamField path="total_ms" type="float">
+Time of all outermost calls over all recorded iterations.
+</ParamField>
+
+<ParamField path="weight_accesses" type="dict[str, set[WeightAccess]] = field(default_factory=dict)">
+For each parameter or buffer (by weight name: its object path, e.g.
+``vlm.lm_head.weight``; a tied weight appears under each of its names), the ``WeightAccess`` records of
+accesses to it: reads, device checks and moves. Names stay valid when ``.to()`` or casts replace the
+tensors.
+</ParamField>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-descendants">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.descendants(
+    node: aitune.torch.call_tree.nodes.CallNode
+) -> list[aitune.torch.call_tree.nodes.CallNode]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+All nodes below ``node``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-find">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.find(
+    text: str
+) -> list[aitune.torch.call_tree.nodes.CallNode]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Nodes whose label contains ``text``, in first-call order.
+
+
+</Indent>
+</Indent>

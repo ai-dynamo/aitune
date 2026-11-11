@@ -1,0 +1,201 @@
+---
+layout: overview
+slug: aitune/aitune/torch/call_tree/nodes
+title: aitune.torch.call_tree.nodes
+---
+
+Node keys and nodes of the context-keyed call tree.
+
+A node is identified by its calling context: the chain of call labels that led to it, outermost first. The same
+module called from two places therefore gives two nodes (for example an LLM used for prefill and for generation).
+Labels come from the adapter that installed the wrappers: object paths in AOT mode.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`CallNode`](#aitune-torch-call_tree-nodes-CallNode) | One node of the call tree. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`key_path`](#aitune-torch-call_tree-nodes-key_path) | The written form of a node key: its labels without ``root.``, outermost first, joined by `` &gt; ``. |
+| [`short_label`](#aitune-torch-call_tree-nodes-short_label) | Label without the leading ``root.`` of the adapter. |
+
+### Data
+
+[`NodeKey`](#aitune-torch-call_tree-nodes-NodeKey)
+
+[`PATH_SEPARATOR`](#aitune-torch-call_tree-nodes-PATH_SEPARATOR)
+
+[`ROOT_LABEL`](#aitune-torch-call_tree-nodes-ROOT_LABEL)
+
+### API
+
+<Anchor id="aitune-torch-call_tree-nodes-CallNode">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"#aitune-torch-call_tree-nodes-NodeKey"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.CallNode(
+    key: aitune.torch.call_tree.nodes.NodeKey,
+    label: str,
+    owner_class: str,
+    method: str,
+    module: torch.nn.Module | None = None,
+    calls: int = 0,
+    time_ms: float = 0.0,
+    children: list[aitune.torch.call_tree.nodes.NodeKey] = list(),
+    first_seen: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+One node of the call tree.
+
+**Example**
+
+&gt;&gt;&gt; node = CallNode(
+...     key=("root.forward", "root.dit_forward"), label="root.dit_forward", owner_class="Vla", method="dit_forward"
+... )
+&gt;&gt;&gt; node.path, node.parent_key
+('forward &gt; dit_forward', ('root.forward',))
+
+
+<ParamField path="calls" type="int = 0">
+Number of calls over all recorded iterations.
+</ParamField>
+
+<ParamField path="children" type="list[NodeKey] = field(default_factory=list)">
+Keys of the called nodes in first-call order.
+</ParamField>
+
+<ParamField path="first_seen" type="int = 0">
+Position of the node's first call among all nodes.
+</ParamField>
+
+<ParamField path="key" type="NodeKey">
+Labels of the calling chain, outermost first. Identifies the node.
+</ParamField>
+
+<ParamField path="label" type="str">
+Adapter name of this call, for example ``root.vlm.model.visual.forward``.
+</ParamField>
+
+<ParamField path="method" type="str">
+Name of the called method (``forward`` for module calls).
+</ParamField>
+
+<ParamField path="module" type="Module | None = None">
+Module the method belongs to, or None for methods of plain objects.
+</ParamField>
+
+<ParamField path="owner_class" type="str">
+Class name of the object the method belongs to.
+</ParamField>
+
+<ParamField path="parent_key" type="NodeKey">
+Key of the calling node; empty for outermost calls.
+</ParamField>
+
+<ParamField path="path" type="str">
+The node key in written form (``forward &gt; dit_forward``): its call labels, outermost first.
+</ParamField>
+
+<ParamField path="time_ms" type="float = 0.0">
+Time in milliseconds over all recorded iterations.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-nodes-key_path">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"#aitune-torch-call_tree-nodes-NodeKey"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.nodes.key_path(
+    key: aitune.torch.call_tree.nodes.NodeKey
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The written form of a node key: its labels without ``root.``, outermost first, joined by `` &gt; ``.
+
+Example:
+    &gt;&gt;&gt; key_path(("root.forward", "root.vlm.forward", "root.vlm.lm_head.forward"))
+    'forward &gt; vlm.forward &gt; vlm.lm_head.forward'
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-nodes-short_label">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.nodes.short_label(
+    label: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Label without the leading ``root.`` of the adapter.
+
+Example:
+    &gt;&gt;&gt; short_label("root.vlm.lm_head.forward"), short_label("root.forward")
+    ('vlm.lm_head.forward', 'forward')
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-nodes-NodeKey">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.nodes.NodeKey = tuple[str, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-call_tree-nodes-PATH_SEPARATOR">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.nodes.PATH_SEPARATOR = ' > '
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-call_tree-nodes-ROOT_LABEL">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.nodes.ROOT_LABEL = 'root'
+```
+
+</CodeBlock>
+</Anchor>
+

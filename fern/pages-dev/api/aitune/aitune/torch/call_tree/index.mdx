@@ -1,0 +1,727 @@
+---
+layout: overview
+slug: aitune/aitune/torch/call_tree
+title: aitune.torch.call_tree
+---
+
+Call tree: which recorded calls ran inside which, keyed by their chain of callers.
+
+## Subpackages
+
+- **[`aitune.torch.call_tree.weights`](./weights/index.mdx)**
+
+## Submodules
+
+- **[`aitune.torch.call_tree.call_tree`](./call_tree.mdx)**
+- **[`aitune.torch.call_tree.callers`](./callers.mdx)**
+- **[`aitune.torch.call_tree.methods`](./methods.mdx)**
+- **[`aitune.torch.call_tree.nodes`](./nodes.mdx)**
+- **[`aitune.torch.call_tree.recorder`](./recorder.mdx)**
+- **[`aitune.torch.call_tree.sync`](./sync.mdx)**
+- **[`aitune.torch.call_tree.units`](./units.mdx)**
+
+## Package Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`CallNode`](#aitune-torch-call_tree-nodes-CallNode) | One node of the call tree. |
+| [`CallRecorder`](#aitune-torch-call_tree-recorder-CallRecorder) | Record a context-keyed call tree from begin_call/end_call callbacks. |
+| [`CallTree`](#aitune-torch-call_tree-call_tree-CallTree) | Call tree of one recording. |
+| [`SharedWeight`](#aitune-torch-call_tree-weights-sharing-SharedWeight) | A parameter or buffer a unit holds that code outside the unit still reads, looks up the device of, or moves. |
+| [`WeightAccess`](#aitune-torch-call_tree-weights-accesses-WeightAccess) | One access to a weight: which call or code did it, and how. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`shared_weights_of`](#aitune-torch-call_tree-weights-sharing-shared_weights_of) | The weights ``unit`` holds that something outside it still uses or moves. |
+
+### API
+
+<Anchor id="aitune-torch-call_tree-nodes-CallNode">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"#aitune-torch-call_tree-nodes-NodeKey"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.CallNode(
+    key: aitune.torch.call_tree.nodes.NodeKey,
+    label: str,
+    owner_class: str,
+    method: str,
+    module: torch.nn.Module | None = None,
+    calls: int = 0,
+    time_ms: float = 0.0,
+    children: list[aitune.torch.call_tree.nodes.NodeKey] = list(),
+    first_seen: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+One node of the call tree.
+
+**Example**
+
+&gt;&gt;&gt; node = CallNode(
+...     key=("root.forward", "root.dit_forward"), label="root.dit_forward", owner_class="Vla", method="dit_forward"
+... )
+&gt;&gt;&gt; node.path, node.parent_key
+('forward &gt; dit_forward', ('root.forward',))
+
+
+<ParamField path="calls" type="int = 0">
+Number of calls over all recorded iterations.
+</ParamField>
+
+<ParamField path="children" type="list[NodeKey] = field(default_factory=list)">
+Keys of the called nodes in first-call order.
+</ParamField>
+
+<ParamField path="first_seen" type="int = 0">
+Position of the node's first call among all nodes.
+</ParamField>
+
+<ParamField path="key" type="NodeKey">
+Labels of the calling chain, outermost first. Identifies the node.
+</ParamField>
+
+<ParamField path="label" type="str">
+Adapter name of this call, for example ``root.vlm.model.visual.forward``.
+</ParamField>
+
+<ParamField path="method" type="str">
+Name of the called method (``forward`` for module calls).
+</ParamField>
+
+<ParamField path="module" type="Module | None = None">
+Module the method belongs to, or None for methods of plain objects.
+</ParamField>
+
+<ParamField path="owner_class" type="str">
+Class name of the object the method belongs to.
+</ParamField>
+
+<ParamField path="parent_key" type="NodeKey">
+Key of the calling node; empty for outermost calls.
+</ParamField>
+
+<ParamField path="path" type="str">
+The node key in written form (``forward &gt; dit_forward``): its call labels, outermost first.
+</ParamField>
+
+<ParamField path="time_ms" type="float = 0.0">
+Time in milliseconds over all recorded iterations.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.call_tree.CallRecorder()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Record a context-keyed call tree from begin_call/end_call callbacks.
+
+Example:
+    &gt;&gt;&gt; recorder = CallRecorder()
+    &gt;&gt;&gt; with recorder:
+    ...     recorder.begin_iteration()
+    ...     outer = recorder.begin_call("root.forward", object(), "forward", ())
+    ...     inner = recorder.begin_call("root.head.forward", object(), "forward", ())
+    ...     recorder.end_call(inner)
+    ...     recorder.end_call(outer)
+    ...     recorder.end_iteration()
+    &gt;&gt;&gt; sorted(recorder.result().nodes)
+    [('root.forward',), ('root.forward', 'root.head.forward')]
+
+
+<ParamField path="_apply_depth" type="= 0">
+</ParamField>
+
+<ParamField path="_current_sequence" type="list[NodeKey] | None = None">
+</ParamField>
+
+<ParamField path="_events" type="dict[NodeKey, list[tuple[Any, Any]]] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_modules" type="list[tuple[str, Module]] = []">
+</ParamField>
+
+<ParamField path="_ms" type="dict[NodeKey, float] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_nodes" type="dict[NodeKey, CallNode] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_order" type="= 0">
+</ParamField>
+
+<ParamField path="_original_apply" type="Callable[..., Any] | None = None">
+</ParamField>
+
+<ParamField path="_paths" type="dict[NodeKey, str] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_recording_now" type="CallRecorder | None = None">
+</ParamField>
+
+<ParamField path="_registered" type="set[int] = set()">
+</ParamField>
+
+<ParamField path="_sequences" type="list[list[NodeKey]] = []">
+</ParamField>
+
+<ParamField path="_stack" type="list[NodeKey] = []">
+</ParamField>
+
+<ParamField path="_use_cuda" type="= torch.cuda.is_available()">
+</ParamField>
+
+<ParamField path="_weight_access_log" type="= WeightAccessLog()">
+</ParamField>
+
+<ParamField path="_weight_access_mode" type="WeightAccessMode | None = None">
+</ParamField>
+
+<ParamField path="active" type="bool">
+Whether the recorder is inside its ``with`` block.
+</ParamField>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-__enter__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.__enter__() -> typing.Self
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Start recording: install the ``nn.Module._apply`` probe; calls are recorded until ``__exit__``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.__exit__(
+    exc_info: object = ()
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Stop recording and restore ``nn.Module._apply``, also when the recorded code raised.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_make_apply_probe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._make_apply_probe(
+    original_apply: collections.abc.Callable
+) -> collections.abc.Callable
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the replacement for ``nn.Module._apply`` that ``__enter__`` installs.
+
+``nn.Module._apply`` is the method that ``.to()``, ``.cuda()``, ``.half()`` and similar calls use to convert a
+module's parameters and buffers. The replacement runs ``original_apply`` unchanged. While the recorder is
+recording, it first records a ``"move"`` access on every tracked weight of the module and, unless
+``recurse=False``, of all its submodules: the innermost recorded call's key, or the code found by
+``unrecorded_caller`` if no recorded call is running. Only the outermost ``_apply`` of a conversion records,
+because ``_apply`` calls itself on each child. Recording goes through the storage map before
+``original_apply`` runs, so a tied alias outside the moved subtree is moved as well, and the storage reads
+themselves do not count as accesses.
+
+**Parameters:**
+
+<ParamField path="original_apply" type="Callable">
+The ``nn.Module._apply`` to call; restored by ``__exit__``.
+</ParamField>
+
+**Returns:** `Callable`
+
+A function with the signature of ``nn.Module._apply``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_start_timer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._start_timer() -> tuple[typing.Any, int | None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Start timing a call: record a CUDA event, or read ``time.perf_counter`` without CUDA.
+
+**Returns:** `tuple[Any, int | None]`
+
+The start of the timer and the CUDA device the start event was recorded on (``None`` without CUDA).
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_stop_timer">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder._Frame":"#aitune-torch-call_tree-recorder-_Frame"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._stop_timer(
+    frame: aitune.torch.call_tree.recorder._Frame
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Stop timing a call: queue the CUDA event pair for ``flush``, or add the CPU time to the node's total.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-begin_call">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder._Frame":"#aitune-torch-call_tree-recorder-_Frame"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.begin_call(
+    label: str,
+    obj: typing.Any,
+    method: str,
+    args: tuple[typing.Any, ...],
+    kwargs: dict[str, typing.Any] | None = None
+) -> aitune.torch.call_tree.recorder._Frame | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Record the start of a call.
+
+**Parameters:**
+
+<ParamField path="label" type="str">
+The adapter's label of the call.
+</ParamField>
+
+<ParamField path="obj" type="Any">
+The object the method belongs to.
+</ParamField>
+
+<ParamField path="method" type="str">
+Method name.
+</ParamField>
+
+<ParamField path="args" type="tuple[Any, ...]">
+Positional arguments of the call.
+</ParamField>
+
+<ParamField path="kwargs" type="dict[str, Any] | None" default="None">
+Keyword arguments of the call; a callable among them makes the call transparent as well.
+</ParamField>
+
+**Returns:** `_Frame | None`
+
+A frame to pass to ``end_call``, or None if the call is not recorded (not recording, exact torch container,
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-begin_iteration">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.begin_iteration() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Mark the start of one iteration (for example one call of the inference function).
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-end_call">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder._Frame":"#aitune-torch-call_tree-recorder-_Frame"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.end_call(
+    frame: aitune.torch.call_tree.recorder._Frame | None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Record the end of a call started with ``begin_call``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-end_iteration">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.end_iteration() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Mark the end of the current iteration.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-flush">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.flush() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve pending CUDA event pairs into the accumulated totals so they are not held until the end.
+
+Adapters call it once per iteration; pending events stay bounded by one iteration. Each end event is
+synchronized on its own, so pairs recorded on any device resolve without a device-wide synchronization.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-register_module">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.register_module(
+    label_prefix: str,
+    module: torch.nn.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Register an instrumented module for parameter names and sizes.
+
+**Parameters:**
+
+<ParamField path="label_prefix" type="str">
+The adapter's label for the module without the method, e.g. ``root.vlm.lm_head``.
+</ParamField>
+
+<ParamField path="module" type="nn.Module">
+The module.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-result">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.result() -> aitune.torch.call_tree.call_tree.CallTree
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the recorded call tree, with times resolved to milliseconds.
+
+Idempotent: resolved event times accumulate into a per-key total, so calling ``result`` again returns the
+same times, and recording more calls afterwards keeps accumulating. The returned tree is a snapshot: its nodes
+are copies, so later recording does not change it.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"./nodes.mdx#aitune-torch-call_tree-nodes-NodeKey","aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode","aitune.torch.call_tree.weights.accesses.WeightAccess":"./weights/accesses.mdx#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.CallTree(
+    nodes: dict[aitune.torch.call_tree.nodes.NodeKey, aitune.torch.call_tree.nodes.CallNode] = dict(),
+    iterations: int = 0,
+    sequences: list[list[aitune.torch.call_tree.nodes.NodeKey]] = list(),
+    weight_accesses: dict[str, set[aitune.torch.call_tree.weights.accesses.WeightAccess]] = dict(),
+    modules: list[tuple[str, torch.nn.Module]] = list()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Call tree of one recording.
+
+**Example**
+
+&gt;&gt;&gt; outer = CallNode(
+...     key=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
+... )
+&gt;&gt;&gt; dit = CallNode(
+...     key=("root.forward", "root.dit.forward"),
+...     label="root.dit.forward",
+...     owner_class="Dit",
+...     method="forward",
+...     calls=10,
+...     time_ms=25.0,
+...     first_seen=1,
+... )
+&gt;&gt;&gt; outer.children.append(dit.key)
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, dit)&#125;, iterations=2)
+&gt;&gt;&gt; [n.path for n in tree.roots], tree.total_ms
+(['forward'], 30.0)
+&gt;&gt;&gt; [n.path for n in tree.descendants(outer)]
+['forward &gt; dit.forward']
+&gt;&gt;&gt; [(n.path, n.calls) for n in tree.find("dit")]
+[('forward &gt; dit.forward', 10)]
+
+
+<ParamField path="iterations" type="int = 0">
+Number of recorded iterations.
+</ParamField>
+
+<ParamField path="modules" type="list[tuple[str, Module]] = field(default_factory=list)">
+Label prefix and module for every instrumented module, used for parameter names and sizes.
+</ParamField>
+
+<ParamField path="nodes" type="dict[NodeKey, CallNode] = field(default_factory=dict)">
+All nodes by key.
+</ParamField>
+
+<ParamField path="roots" type="list[CallNode]">
+Outermost nodes in first-call order.
+</ParamField>
+
+<ParamField path="sequences" type="list[list[NodeKey]] = field(default_factory=list)">
+Per iteration, the keys of the entered nodes in call order.
+</ParamField>
+
+<ParamField path="total_ms" type="float">
+Time of all outermost calls over all recorded iterations.
+</ParamField>
+
+<ParamField path="weight_accesses" type="dict[str, set[WeightAccess]] = field(default_factory=dict)">
+For each parameter or buffer (by weight name: its object path, e.g.
+``vlm.lm_head.weight``; a tied weight appears under each of its names), the ``WeightAccess`` records of
+accesses to it: reads, device checks and moves. Names stay valid when ``.to()`` or casts replace the
+tensors.
+</ParamField>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-descendants">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.descendants(
+    node: aitune.torch.call_tree.nodes.CallNode
+) -> list[aitune.torch.call_tree.nodes.CallNode]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+All nodes below ``node``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-find">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.find(
+    text: str
+) -> list[aitune.torch.call_tree.nodes.CallNode]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Nodes whose label contains ``text``, in first-call order.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-sharing-SharedWeight">
+
+<CodeBlock links={{"aitune.torch.call_tree.weights.accesses.WeightAccess":"./weights/accesses.mdx#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.SharedWeight(
+    name: str,
+    aliases: list[str] = list(),
+    bytes: int = 0,
+    accesses: list[aitune.torch.call_tree.weights.accesses.WeightAccess] = list()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+A parameter or buffer a unit holds that code outside the unit still reads, looks up the device of, or moves.
+
+
+<ParamField path="accesses" type="list[WeightAccess] = field(default_factory=list)">
+The accesses from outside the unit, sorted by ``(by, kind)``: reads, device lookups and moves.
+Unrecorded code is reported by its qualified name (``SentenceTransformer.encode``).
+</ParamField>
+
+<ParamField path="aliases" type="list[str] = field(default_factory=list)">
+Its other names, sorted (a tied ``lm_head.weight``); empty if it has one name.
+</ParamField>
+
+<ParamField path="bytes" type="int = 0">
+``numel * element_size``. Views of one storage are each counted in full.
+</ParamField>
+
+<ParamField path="name" type="str">
+The weight's name from the root, e.g. ``llm.embed.weight``; a tied weight is named by its first name.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccess">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.WeightAccess()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `NamedTuple`
+
+One access to a weight: which call or code did it, and how.
+
+
+<ParamField path="by" type="str">
+The path of the recorded call it ran in (``forward &gt; llm.embed.forward``, see ``CallNode.path``); outside
+any recorded call, the code found by ``unrecorded_caller()`` (``&lt;unrecorded: Pipe.encode&gt;``) or
+``&lt;outside any call&gt;``. ``shared_weights_of`` reports unrecorded code by its qualified name
+(``Pipe.encode``).
+</ParamField>
+
+<ParamField path="kind" type="Literal['read', 'device', 'move']">
+``"read"`` (an op uses its data), ``"device"`` (its device is checked: ``.device``, ``is_cuda``,
+``get_device()``), or ``"move"`` (``nn.Module._apply``: ``.to()``, ``.cuda()``, casts, reached it).
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-sharing-shared_weights_of">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree","aitune.torch.call_tree.units.UnitSpec":"./units.mdx#aitune-torch-call_tree-units-UnitSpec","aitune.torch.call_tree.weights.sharing.SharedWeight":"#aitune-torch-call_tree-weights-sharing-SharedWeight"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.shared_weights_of(
+    tree: aitune.torch.call_tree.call_tree.CallTree,
+    unit: aitune.torch.call_tree.units.UnitSpec
+) -> list[aitune.torch.call_tree.weights.sharing.SharedWeight]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The weights ``unit`` holds that something outside it still uses or moves.
+
+This is what tuning ``unit`` alone and offloading its weights would break: code outside it that reads one of its
+weights (a tied head, ``F.linear(x, unit.weight)`` in a caller's forward), code that looks up a weight's device,
+or code outside it that moves its modules with ``.to()`` or ``.cuda()``. Reads and device lookups come from the
+ops recorded by ``WeightAccessMode`` during the call-tree pass; moves are recorded by the recorder's
+``nn.Module._apply`` probe.
+
+**Parameters:**
+
+<ParamField path="tree" type="CallTree">
+[`CallTree`](./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree) — The call tree from ``ait.inspect(..., call_tree=True)``.
+</ParamField>
+
+<ParamField path="unit" type="UnitSpec">
+[`UnitSpec`](./units.mdx#aitune-torch-call_tree-units-UnitSpec) — A node path (``"forward &gt; dit_forward"``, see ``CallNode.path``), a module (all its recorded
+``forward`` calls), or a list of them as one unit.
+</ParamField>
+
+**Returns:** `list[` [`SharedWeight`](#aitune-torch-call_tree-weights-sharing-SharedWeight) `]`
+
+One entry per weight, sorted by name; empty if the unit can be tuned and offloaded on its own.
+
+**Raises:**
+
+- `ValueError`: If ``unit`` is empty, names a path with no recorded call, or is a module that is not part of
+the recorded model.
+- `TypeError`: If ``unit`` is neither a node path nor a module, nor a list of them.
+
+
+</Indent>

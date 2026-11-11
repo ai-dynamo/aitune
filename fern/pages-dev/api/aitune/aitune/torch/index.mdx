@@ -9,6 +9,7 @@ Torch tuning module.
 ## Subpackages
 
 - **[`aitune.torch.backend`](./backend/index.mdx)**
+- **[`aitune.torch.call_tree`](./call_tree/index.mdx)**
 - **[`aitune.torch.checkpoint`](./checkpoint/index.mdx)**
 - **[`aitune.torch.inspecting`](./inspecting/index.mdx)**
 - **[`aitune.torch.integrations`](./integrations/index.mdx)**
@@ -37,6 +38,8 @@ Torch tuning module.
 | Name | Description |
 |------|-------------|
 | [`BatchDim`](#aitune-torch-dynamic_shapes-BatchDim) | Dynamic dimension representing the module's logical batch size. |
+| [`CallNode`](#aitune-torch-call_tree-nodes-CallNode) | One node of the call tree. |
+| [`CallTree`](#aitune-torch-call_tree-call_tree-CallTree) | Call tree of one recording. |
 | [`Constraint`](#aitune-torch-tune_strategy-resolver-Constraint) | Describe one requirement that a tuning candidate must satisfy. |
 | [`DataLoaderFactory`](#aitune-torch-dataloader-DataLoaderFactory) | Factory for the torch DataLoader. |
 | [`DynamicDim`](#aitune-torch-dynamic_shapes-DynamicDim) | Named dynamic dimension with inclusive bounds. |
@@ -51,7 +54,9 @@ Torch tuning module.
 | [`PatchedModule`](#aitune-torch-jit-patched_module-PatchedModule) | Patched module. |
 | [`PerformanceProfile`](#aitune-torch-performance-profile-PerformanceProfile) | In-memory performance profile produced by `profile`. |
 | [`PerformanceValidationMode`](#aitune-torch-tune_strategy-performance_validation-PerformanceValidationMode) | Controls eager-baseline profiling and its effect on backend selection. |
+| [`SharedWeight`](#aitune-torch-call_tree-weights-sharing-SharedWeight) | A parameter or buffer a unit holds that code outside the unit still reads, looks up the device of, or moves. |
 | [`TuneStrategy`](#aitune-torch-tune_strategy-tune_strategy-TuneStrategy) | Base class for tune strategy. |
+| [`WeightAccess`](#aitune-torch-call_tree-weights-accesses-WeightAccess) | One access to a weight: which call or code did it, and how. |
 
 ### Functions
 
@@ -97,6 +102,204 @@ class aitune.torch.BatchDim(
 Dynamic dimension representing the module's logical batch size.
 
 
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-nodes-CallNode">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"#aitune-torch-call_tree-nodes-NodeKey"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.CallNode(
+    key: aitune.torch.call_tree.nodes.NodeKey,
+    label: str,
+    owner_class: str,
+    method: str,
+    module: torch.nn.Module | None = None,
+    calls: int = 0,
+    time_ms: float = 0.0,
+    children: list[aitune.torch.call_tree.nodes.NodeKey] = list(),
+    first_seen: int = 0
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+One node of the call tree.
+
+**Example**
+
+&gt;&gt;&gt; node = CallNode(
+...     key=("root.forward", "root.dit_forward"), label="root.dit_forward", owner_class="Vla", method="dit_forward"
+... )
+&gt;&gt;&gt; node.path, node.parent_key
+('forward &gt; dit_forward', ('root.forward',))
+
+
+<ParamField path="calls" type="int = 0">
+Number of calls over all recorded iterations.
+</ParamField>
+
+<ParamField path="children" type="list[NodeKey] = field(default_factory=list)">
+Keys of the called nodes in first-call order.
+</ParamField>
+
+<ParamField path="first_seen" type="int = 0">
+Position of the node's first call among all nodes.
+</ParamField>
+
+<ParamField path="key" type="NodeKey">
+Labels of the calling chain, outermost first. Identifies the node.
+</ParamField>
+
+<ParamField path="label" type="str">
+Adapter name of this call, for example ``root.vlm.model.visual.forward``.
+</ParamField>
+
+<ParamField path="method" type="str">
+Name of the called method (``forward`` for module calls).
+</ParamField>
+
+<ParamField path="module" type="Module | None = None">
+Module the method belongs to, or None for methods of plain objects.
+</ParamField>
+
+<ParamField path="owner_class" type="str">
+Class name of the object the method belongs to.
+</ParamField>
+
+<ParamField path="parent_key" type="NodeKey">
+Key of the calling node; empty for outermost calls.
+</ParamField>
+
+<ParamField path="path" type="str">
+The node key in written form (``forward &gt; dit_forward``): its call labels, outermost first.
+</ParamField>
+
+<ParamField path="time_ms" type="float = 0.0">
+Time in milliseconds over all recorded iterations.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-NodeKey","aitune.torch.call_tree.nodes.CallNode":"./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-CallNode","aitune.torch.call_tree.weights.accesses.WeightAccess":"./call_tree/weights/accesses.mdx#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.CallTree(
+    nodes: dict[aitune.torch.call_tree.nodes.NodeKey, aitune.torch.call_tree.nodes.CallNode] = dict(),
+    iterations: int = 0,
+    sequences: list[list[aitune.torch.call_tree.nodes.NodeKey]] = list(),
+    weight_accesses: dict[str, set[aitune.torch.call_tree.weights.accesses.WeightAccess]] = dict(),
+    modules: list[tuple[str, torch.nn.Module]] = list()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Call tree of one recording.
+
+**Example**
+
+&gt;&gt;&gt; outer = CallNode(
+...     key=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
+... )
+&gt;&gt;&gt; dit = CallNode(
+...     key=("root.forward", "root.dit.forward"),
+...     label="root.dit.forward",
+...     owner_class="Dit",
+...     method="forward",
+...     calls=10,
+...     time_ms=25.0,
+...     first_seen=1,
+... )
+&gt;&gt;&gt; outer.children.append(dit.key)
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, dit)&#125;, iterations=2)
+&gt;&gt;&gt; [n.path for n in tree.roots], tree.total_ms
+(['forward'], 30.0)
+&gt;&gt;&gt; [n.path for n in tree.descendants(outer)]
+['forward &gt; dit.forward']
+&gt;&gt;&gt; [(n.path, n.calls) for n in tree.find("dit")]
+[('forward &gt; dit.forward', 10)]
+
+
+<ParamField path="iterations" type="int = 0">
+Number of recorded iterations.
+</ParamField>
+
+<ParamField path="modules" type="list[tuple[str, Module]] = field(default_factory=list)">
+Label prefix and module for every instrumented module, used for parameter names and sizes.
+</ParamField>
+
+<ParamField path="nodes" type="dict[NodeKey, CallNode] = field(default_factory=dict)">
+All nodes by key.
+</ParamField>
+
+<ParamField path="roots" type="list[CallNode]">
+Outermost nodes in first-call order.
+</ParamField>
+
+<ParamField path="sequences" type="list[list[NodeKey]] = field(default_factory=list)">
+Per iteration, the keys of the entered nodes in call order.
+</ParamField>
+
+<ParamField path="total_ms" type="float">
+Time of all outermost calls over all recorded iterations.
+</ParamField>
+
+<ParamField path="weight_accesses" type="dict[str, set[WeightAccess]] = field(default_factory=dict)">
+For each parameter or buffer (by weight name: its object path, e.g.
+``vlm.lm_head.weight``; a tied weight appears under each of its names), the ``WeightAccess`` records of
+accesses to it: reads, device checks and moves. Names stay valid when ``.to()`` or casts replace the
+tensors.
+</ParamField>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-descendants">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallNode":"./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.descendants(
+    node: aitune.torch.call_tree.nodes.CallNode
+) -> list[aitune.torch.call_tree.nodes.CallNode]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+All nodes below ``node``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-find">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallNode":"./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.find(
+    text: str
+) -> list[aitune.torch.call_tree.nodes.CallNode]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Nodes whose label contains ``text``, in first-call order.
+
+
+</Indent>
 </Indent>
 
 <Anchor id="aitune-torch-tune_strategy-resolver-Constraint">
@@ -861,6 +1064,9 @@ Example:
 
 
 <ParamField path="DYNAMIC_SHAPES_KEY" type="= 'dynamic_shapes'">
+</ParamField>
+
+<ParamField path="KEPT_ON_DEVICE_KEY" type="= 'kept_on_device'">
 </ParamField>
 
 <ParamField path="NAME_KEY" type="= 'name'">
@@ -2802,6 +3008,47 @@ Controls eager-baseline profiling and its effect on backend selection.
 
 </Indent>
 
+<Anchor id="aitune-torch-call_tree-weights-sharing-SharedWeight">
+
+<CodeBlock links={{"aitune.torch.call_tree.weights.accesses.WeightAccess":"./call_tree/weights/accesses.mdx#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.SharedWeight(
+    name: str,
+    aliases: list[str] = list(),
+    bytes: int = 0,
+    accesses: list[aitune.torch.call_tree.weights.accesses.WeightAccess] = list()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+A parameter or buffer a unit holds that code outside the unit still reads, looks up the device of, or moves.
+
+
+<ParamField path="accesses" type="list[WeightAccess] = field(default_factory=list)">
+The accesses from outside the unit, sorted by ``(by, kind)``: reads, device lookups and moves.
+Unrecorded code is reported by its qualified name (``SentenceTransformer.encode``).
+</ParamField>
+
+<ParamField path="aliases" type="list[str] = field(default_factory=list)">
+Its other names, sorted (a tied ``lm_head.weight``); empty if it has one name.
+</ParamField>
+
+<ParamField path="bytes" type="int = 0">
+``numel * element_size``. Views of one storage are each counted in full.
+</ParamField>
+
+<ParamField path="name" type="str">
+The weight's name from the root, e.g. ``llm.embed.weight``; a tied weight is named by its first name.
+</ParamField>
+</Indent>
+
 <Anchor id="aitune-torch-tune_strategy-tune_strategy-TuneStrategy">
 
 <CodeBlock links={{"aitune.torch.task.profiling.ProfilingConfig":"./task/profiling/config.mdx#aitune-torch-task-profiling-config-ProfilingConfig"}} showLineNumbers={false} wordWrap={true}>
@@ -3328,6 +3575,37 @@ Performs tune dry run.
 </Indent>
 </Indent>
 
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccess">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.WeightAccess()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `NamedTuple`
+
+One access to a weight: which call or code did it, and how.
+
+
+<ParamField path="by" type="str">
+The path of the recorded call it ran in (``forward &gt; llm.embed.forward``, see ``CallNode.path``); outside
+any recorded call, the code found by ``unrecorded_caller()`` (``&lt;unrecorded: Pipe.encode&gt;``) or
+``&lt;outside any call&gt;``. ``shared_weights_of`` reports unrecorded code by its qualified name
+(``Pipe.encode``).
+</ParamField>
+
+<ParamField path="kind" type="Literal['read', 'device', 'move']">
+``"read"`` (an op uses its data), ``"device"`` (its device is checked: ``.device``, ``is_cuda``,
+``get_device()``), or ``"move"`` (``nn.Module._apply``: ``.to()``, ``.cuda()``, casts, reached it).
+</ParamField>
+</Indent>
+
 <Anchor id="aitune-torch-config-aitune_cache_dir">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -3362,7 +3640,8 @@ aitune.torch.inspect(
     number_of_iterations: int = DEFAULT_INSPECT_ITERATIONS,
     warmup_iterations: int = DEFAULT_WARMUP_ITERATIONS,
     min_depth: int = 0,
-    max_depth: int = 5
+    max_depth: int = 5,
+    call_tree: bool = False
 ) -> aitune.torch.inspecting.module_info.InspectedModulesInfo
 ```
 
@@ -3372,9 +3651,6 @@ aitune.torch.inspect(
 <Indent>
 
 Inspect provided callable object searching for nn.Module members executed as part of forward pass.
-
-Returns:
-    InspectedModulesInfo object.
 
 **Parameters:**
 
@@ -3405,6 +3681,20 @@ Minimum depth of the modules to inspect, if root level modules is not working, t
 <ParamField path="max_depth" type="int" default="5">
 Maximum depth of the modules to inspect
 </ParamField>
+
+<ParamField path="call_tree" type="bool" default="False">
+Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran inside
+which, keyed by their chain of callers, plus the reads and device lookups code outside a module
+makes on its weights. This runs one more pass of ``number_of_iterations`` without per-module
+synchronization, so inspection takes longer. Parts compiled with ``torch.compile`` run compiled in
+the per-module pass, so calls inside them are not measured there; in the call-tree pass they run
+eagerly, so their calls and weight reads are recorded but their times are eager times. For deep
+models the walk must reach the linear layers, for example ``max_depth=8``.
+</ParamField>
+
+**Returns:** [`InspectedModulesInfo`](./inspecting/module_info.mdx#aitune-torch-inspecting-module_info-InspectedModulesInfo)
+
+InspectedModulesInfo object.
 
 <Note>
 
@@ -3705,7 +3995,12 @@ Wrap provided modules with inspection logic.
 </ParamField>
 
 <ParamField path="modules" type="list[ModuleInfo]">
-`list[` [`ModuleInfo`](./inspecting/module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo) `]` — Dictionary of module names and their corresponding ModuleInfo objects.
+`list[` [`ModuleInfo`](./inspecting/module_info.mdx#aitune-torch-inspecting-module_info-ModuleInfo) `]` — Modules to wrap, usually chosen from ``ait.inspect(...).get_modules()``. If that inspection
+recorded a call tree (``call_tree=True``), weights of a wrapped module that code outside it reads,
+checks the device of, or moves stay on the device when tuning offloads the module (see
+``aitune.torch.call_tree.shared_weights_of``), and each kept weight is logged. Wrapping a module again
+replaces the weights it keeps; a weight stays kept while any wrapped module keeps it. A ``ModuleInfo``
+without ``inspection``, such as one built by hand, keeps nothing.
 </ParamField>
 
 <ParamField path="strategy" type="StrategyOption | None" default="None">

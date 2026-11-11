@@ -63,12 +63,13 @@ Set the wrapped module in a dict under name as key.
 
 <Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"../call_tree/call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.inspecting.InspectedModulesInfo(
     total_execution_time: float,
-    number_of_batches: int
+    number_of_batches: int,
+    call_tree: aitune.torch.call_tree.call_tree.CallTree | None = None
 )
 ```
 
@@ -81,6 +82,10 @@ Information about inspected modules.
 
 
 <ParamField path="_modules" type="dict[str, ModuleInfo] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="call_tree" type="CallTree | None">
+Call tree recorded with ``inspect(..., call_tree=True)``, or None.
 </ParamField>
 <Anchor id="aitune-torch-inspecting-module_info-InspectedModulesInfo-add_module">
 
@@ -97,7 +102,7 @@ aitune.torch.inspecting.InspectedModulesInfo.add_module(
 
 <Indent>
 
-Add a module to the specification.
+Add a module to the specification and link it back to this inspection run.
 
 **Parameters:**
 
@@ -202,20 +207,21 @@ Set the wrapped module in a list under name as index.
 
 <Anchor id="aitune-torch-inspecting-module_info-ModuleInfo">
 
-<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.inspecting.module_info.InspectedModulesInfo":"#aitune-torch-inspecting-module_info-InspectedModulesInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.inspecting.module_info.ModuleInfo(
     module: torch.nn.Module,
     name: str = '',
-    parent: typing.Optional[aitune.torch.inspecting.module_info.ModuleInfo] = None,
+    parent: aitune.torch.inspecting.module_info.ModuleInfo | None = None,
     forward_called: bool = False,
     execution_count: int = 0,
     total_execution_time: float = 0.0,
     input_types: list[dict[str, typing.Any]] = list(),
     output_types: list[dict[str, typing.Any]] = list(),
     object_path: str | None = None,
-    depth: int = 0
+    depth: int = 0,
+    inspection: aitune.torch.inspecting.module_info.InspectedModulesInfo | None = None
 )
 ```
 
@@ -245,6 +251,9 @@ Get average execution time of the forward function.
 <ParamField path="input_types" type="list[dict[str, Any]] = field(default_factory=list)">
 </ParamField>
 
+<ParamField path="inspection" type="InspectedModulesInfo | None = field(default=None, repr=False, compare=False)">
+</ParamField>
+
 <ParamField path="module" type="Module">
 </ParamField>
 
@@ -269,7 +278,7 @@ Get the number of parameters in the module.
 <ParamField path="output_types" type="list[dict[str, Any]] = field(default_factory=list)">
 </ParamField>
 
-<ParamField path="parent" type="Optional[ModuleInfo] = None">
+<ParamField path="parent" type="ModuleInfo | None = None">
 </ParamField>
 
 <ParamField path="precisions" type="set">
@@ -342,20 +351,21 @@ Set the wrapped module.
 
 <Anchor id="aitune-torch-inspecting-module_info-OnnxModuleInfo">
 
-<CodeBlock links={{"aitune.torch.module.onnx_module.OnnxModule":"../module/onnx_module.mdx#aitune-torch-module-onnx_module-OnnxModule","aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.onnx_module.OnnxModule":"../module/onnx_module.mdx#aitune-torch-module-onnx_module-OnnxModule","aitune.torch.inspecting.module_info.ModuleInfo":"#aitune-torch-inspecting-module_info-ModuleInfo","aitune.torch.inspecting.module_info.InspectedModulesInfo":"#aitune-torch-inspecting-module_info-InspectedModulesInfo"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.inspecting.module_info.OnnxModuleInfo(
     module: aitune.torch.module.onnx_module.OnnxModule,
     name: str = '',
-    parent: typing.Optional[aitune.torch.inspecting.module_info.ModuleInfo] = None,
+    parent: aitune.torch.inspecting.module_info.ModuleInfo | None = None,
     forward_called: bool = False,
     execution_count: int = 0,
     total_execution_time: float = 0.0,
     input_types: list[dict[str, typing.Any]] = list(),
     output_types: list[dict[str, typing.Any]] = list(),
     object_path: str | None = None,
-    depth: int = 0
+    depth: int = 0,
+    inspection: aitune.torch.inspecting.module_info.InspectedModulesInfo | None = None
 )
 ```
 

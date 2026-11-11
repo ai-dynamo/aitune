@@ -276,6 +276,86 @@
               slug: aitune/aitune/torch/backend/torchao_backend
               pageId: aitune/aitune/torch/backend/torchao_backend.mdx
     - type: section
+      title: call_tree
+      slug: aitune/aitune/torch/call_tree
+      children:
+        - type: section
+          title: call_tree
+          slug: aitune/aitune/torch/call_tree/call_tree
+          children:
+            - type: page
+              title: call_tree
+              slug: aitune/aitune/torch/call_tree/call_tree
+              pageId: aitune/aitune/torch/call_tree/call_tree.mdx
+        - type: section
+          title: callers
+          slug: aitune/aitune/torch/call_tree/callers
+          children:
+            - type: page
+              title: callers
+              slug: aitune/aitune/torch/call_tree/callers
+              pageId: aitune/aitune/torch/call_tree/callers.mdx
+        - type: section
+          title: methods
+          slug: aitune/aitune/torch/call_tree/methods
+          children:
+            - type: page
+              title: methods
+              slug: aitune/aitune/torch/call_tree/methods
+              pageId: aitune/aitune/torch/call_tree/methods.mdx
+        - type: section
+          title: nodes
+          slug: aitune/aitune/torch/call_tree/nodes
+          children:
+            - type: page
+              title: nodes
+              slug: aitune/aitune/torch/call_tree/nodes
+              pageId: aitune/aitune/torch/call_tree/nodes.mdx
+        - type: section
+          title: recorder
+          slug: aitune/aitune/torch/call_tree/recorder
+          children:
+            - type: page
+              title: recorder
+              slug: aitune/aitune/torch/call_tree/recorder
+              pageId: aitune/aitune/torch/call_tree/recorder.mdx
+        - type: section
+          title: sync
+          slug: aitune/aitune/torch/call_tree/sync
+          children:
+            - type: page
+              title: sync
+              slug: aitune/aitune/torch/call_tree/sync
+              pageId: aitune/aitune/torch/call_tree/sync.mdx
+        - type: section
+          title: units
+          slug: aitune/aitune/torch/call_tree/units
+          children:
+            - type: page
+              title: units
+              slug: aitune/aitune/torch/call_tree/units
+              pageId: aitune/aitune/torch/call_tree/units.mdx
+        - type: section
+          title: weights
+          slug: aitune/aitune/torch/call_tree/weights
+          children:
+            - type: section
+              title: accesses
+              slug: aitune/aitune/torch/call_tree/weights/accesses
+              children:
+                - type: page
+                  title: accesses
+                  slug: aitune/aitune/torch/call_tree/weights/accesses
+                  pageId: aitune/aitune/torch/call_tree/weights/accesses.mdx
+            - type: section
+              title: sharing
+              slug: aitune/aitune/torch/call_tree/weights/sharing
+              children:
+                - type: page
+                  title: sharing
+                  slug: aitune/aitune/torch/call_tree/weights/sharing
+                  pageId: aitune/aitune/torch/call_tree/weights/sharing.mdx
+    - type: section
       title: checkpoint
       slug: aitune/aitune/torch/checkpoint
       children:

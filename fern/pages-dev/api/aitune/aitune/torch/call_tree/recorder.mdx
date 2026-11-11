@@ -1,0 +1,437 @@
+---
+layout: overview
+slug: aitune/aitune/torch/call_tree/recorder
+title: aitune.torch.call_tree.recorder
+---
+
+Mode-independent call recorder.
+
+The recorder builds a context-keyed call tree. It installs no hooks on modules: each inspection mode (an adapter)
+wraps the methods it finds and calls ``begin_call`` and ``end_call`` around the original call:
+
+<CodeBlock showLineNumbers={false}>
+
+```python
+frame = recorder.begin_call(label, obj, name, args, kwargs)
+try:
+    return original(*args, **kwargs)
+finally:
+    recorder.end_call(frame)
+```
+
+</CodeBlock>
+
+The only hook the recorder owns is a process-wide probe on ``nn.Module._apply`` (``.to()``, ``.cuda()``, ...), active
+inside a ``with recorder:`` block. Timing uses CUDA events per call (no per-call synchronization) when CUDA is
+available and ``time.perf_counter`` otherwise; ``flush()`` resolves the pending events once per iteration.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`CallRecorder`](#aitune-torch-call_tree-recorder-CallRecorder) | Record a context-keyed call tree from begin_call/end_call callbacks. |
+| [`_Frame`](#aitune-torch-call_tree-recorder-_Frame) | An open call: its node and the start of its timer. |
+
+### API
+
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.call_tree.CallRecorder()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Record a context-keyed call tree from begin_call/end_call callbacks.
+
+Example:
+    &gt;&gt;&gt; recorder = CallRecorder()
+    &gt;&gt;&gt; with recorder:
+    ...     recorder.begin_iteration()
+    ...     outer = recorder.begin_call("root.forward", object(), "forward", ())
+    ...     inner = recorder.begin_call("root.head.forward", object(), "forward", ())
+    ...     recorder.end_call(inner)
+    ...     recorder.end_call(outer)
+    ...     recorder.end_iteration()
+    &gt;&gt;&gt; sorted(recorder.result().nodes)
+    [('root.forward',), ('root.forward', 'root.head.forward')]
+
+
+<ParamField path="_apply_depth" type="= 0">
+</ParamField>
+
+<ParamField path="_current_sequence" type="list[NodeKey] | None = None">
+</ParamField>
+
+<ParamField path="_events" type="dict[NodeKey, list[tuple[Any, Any]]] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_modules" type="list[tuple[str, Module]] = []">
+</ParamField>
+
+<ParamField path="_ms" type="dict[NodeKey, float] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_nodes" type="dict[NodeKey, CallNode] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_order" type="= 0">
+</ParamField>
+
+<ParamField path="_original_apply" type="Callable[..., Any] | None = None">
+</ParamField>
+
+<ParamField path="_paths" type="dict[NodeKey, str] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_recording_now" type="CallRecorder | None = None">
+</ParamField>
+
+<ParamField path="_registered" type="set[int] = set()">
+</ParamField>
+
+<ParamField path="_sequences" type="list[list[NodeKey]] = []">
+</ParamField>
+
+<ParamField path="_stack" type="list[NodeKey] = []">
+</ParamField>
+
+<ParamField path="_use_cuda" type="= torch.cuda.is_available()">
+</ParamField>
+
+<ParamField path="_weight_access_log" type="= WeightAccessLog()">
+</ParamField>
+
+<ParamField path="_weight_access_mode" type="WeightAccessMode | None = None">
+</ParamField>
+
+<ParamField path="active" type="bool">
+Whether the recorder is inside its ``with`` block.
+</ParamField>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-__enter__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.__enter__() -> typing.Self
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Start recording: install the ``nn.Module._apply`` probe; calls are recorded until ``__exit__``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-__exit__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.__exit__(
+    exc_info: object = ()
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Stop recording and restore ``nn.Module._apply``, also when the recorded code raised.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_make_apply_probe">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._make_apply_probe(
+    original_apply: collections.abc.Callable
+) -> collections.abc.Callable
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Build the replacement for ``nn.Module._apply`` that ``__enter__`` installs.
+
+``nn.Module._apply`` is the method that ``.to()``, ``.cuda()``, ``.half()`` and similar calls use to convert a
+module's parameters and buffers. The replacement runs ``original_apply`` unchanged. While the recorder is
+recording, it first records a ``"move"`` access on every tracked weight of the module and, unless
+``recurse=False``, of all its submodules: the innermost recorded call's key, or the code found by
+``unrecorded_caller`` if no recorded call is running. Only the outermost ``_apply`` of a conversion records,
+because ``_apply`` calls itself on each child. Recording goes through the storage map before
+``original_apply`` runs, so a tied alias outside the moved subtree is moved as well, and the storage reads
+themselves do not count as accesses.
+
+**Parameters:**
+
+<ParamField path="original_apply" type="Callable">
+The ``nn.Module._apply`` to call; restored by ``__exit__``.
+</ParamField>
+
+**Returns:** `Callable`
+
+A function with the signature of ``nn.Module._apply``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_start_timer">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._start_timer() -> tuple[typing.Any, int | None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Start timing a call: record a CUDA event, or read ``time.perf_counter`` without CUDA.
+
+**Returns:** `tuple[Any, int | None]`
+
+The start of the timer and the CUDA device the start event was recorded on (``None`` without CUDA).
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_stop_timer">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder._Frame":"#aitune-torch-call_tree-recorder-_Frame"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._stop_timer(
+    frame: aitune.torch.call_tree.recorder._Frame
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Stop timing a call: queue the CUDA event pair for ``flush``, or add the CPU time to the node's total.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-begin_call">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder._Frame":"#aitune-torch-call_tree-recorder-_Frame"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.begin_call(
+    label: str,
+    obj: typing.Any,
+    method: str,
+    args: tuple[typing.Any, ...],
+    kwargs: dict[str, typing.Any] | None = None
+) -> aitune.torch.call_tree.recorder._Frame | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Record the start of a call.
+
+**Parameters:**
+
+<ParamField path="label" type="str">
+The adapter's label of the call.
+</ParamField>
+
+<ParamField path="obj" type="Any">
+The object the method belongs to.
+</ParamField>
+
+<ParamField path="method" type="str">
+Method name.
+</ParamField>
+
+<ParamField path="args" type="tuple[Any, ...]">
+Positional arguments of the call.
+</ParamField>
+
+<ParamField path="kwargs" type="dict[str, Any] | None" default="None">
+Keyword arguments of the call; a callable among them makes the call transparent as well.
+</ParamField>
+
+**Returns:** `_Frame | None`
+
+A frame to pass to ``end_call``, or None if the call is not recorded (not recording, exact torch container,
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-begin_iteration">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.begin_iteration() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Mark the start of one iteration (for example one call of the inference function).
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-end_call">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder._Frame":"#aitune-torch-call_tree-recorder-_Frame"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.end_call(
+    frame: aitune.torch.call_tree.recorder._Frame | None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Record the end of a call started with ``begin_call``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-end_iteration">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.end_iteration() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Mark the end of the current iteration.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-flush">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.flush() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Resolve pending CUDA event pairs into the accumulated totals so they are not held until the end.
+
+Adapters call it once per iteration; pending events stay bounded by one iteration. Each end event is
+synchronized on its own, so pairs recorded on any device resolve without a device-wide synchronization.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-register_module">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.register_module(
+    label_prefix: str,
+    module: torch.nn.Module
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Register an instrumented module for parameter names and sizes.
+
+**Parameters:**
+
+<ParamField path="label_prefix" type="str">
+The adapter's label for the module without the method, e.g. ``root.vlm.lm_head``.
+</ParamField>
+
+<ParamField path="module" type="nn.Module">
+The module.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-result">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder.result() -> aitune.torch.call_tree.call_tree.CallTree
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the recorded call tree, with times resolved to milliseconds.
+
+Idempotent: resolved event times accumulate into a per-key total, so calling ``result`` again returns the
+same times, and recording more calls afterwards keeps accumulating. The returned tree is a snapshot: its nodes
+are copies, so later recording does not change it.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_Frame">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.call_tree.recorder._Frame(
+    node: aitune.torch.call_tree.call_tree.CallNode,
+    start: typing.Any,
+    device: int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+An open call: its node and the start of its timer.
+
+The start is a CUDA event or a ``perf_counter`` value; ``device`` is the CUDA device the start event was
+recorded on.
+
+
+<ParamField path="device" type="int | None = None">
+</ParamField>
+
+<ParamField path="node" type="CallNode">
+</ParamField>
+</Indent>

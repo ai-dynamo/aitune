@@ -1,0 +1,602 @@
+---
+layout: overview
+slug: aitune/aitune/torch/call_tree/weights/accesses
+title: aitune.torch.call_tree.weights.accesses
+---
+
+Weight accesses: which code reads each weight, checks its device, or moves it during call-tree recording.
+
+A weight is a parameter or a buffer. While a ``CallRecorder`` records (``with recorder:``), ``WeightAccessMode`` (a
+``TorchFunctionMode``) sees every torch op. Each op whose arguments touch a weight's storage is recorded as an access
+by the innermost recorded call, or by the calling code if no recorded call is running.
+
+Ops are classified by name:
+
+- Metadata that an offloaded ``meta`` weight still answers, such as ``shape``, ``dtype`` and ``stride``, is ignored.
+- Device lookups (``.device``, ``is_cuda``, ``get_device()``) are ``"device"`` accesses.
+- Every other op, including ops with unknown names, is a ``"read"``. A wrong guess therefore only keeps a weight on the
+  device that could have been offloaded; it never lets a weight that is read be offloaded.
+
+Moves are recorded separately. ``.to()`` and casts run their ops inside ``nn.Module._apply``, where the mode is paused,
+so those ops are not reads. Instead, the recorder's ``_apply`` probe records one ``"move"`` access for each weight it
+reaches.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`WeightAccess`](#aitune-torch-call_tree-weights-accesses-WeightAccess) | One access to a weight: which call or code did it, and how. |
+| [`WeightAccessLog`](#aitune-torch-call_tree-weights-accesses-WeightAccessLog) | Weight accesses recorded by ``WeightAccessMode``, kept by weight name and accumulated over recording passes. |
+| [`WeightAccessMode`](#aitune-torch-call_tree-weights-accesses-WeightAccessMode) | Record a ``"read"`` or ``"device"`` access for each torch op that touches a weight's storage. |
+| [`_Owner`](#aitune-torch-call_tree-weights-accesses-_Owner) | The module attribute that holds a weight, e.g. ``lm_head.weight`` as ``_Owner(lm_head, "weight", False)``. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_full_name`](#aitune-torch-call_tree-weights-accesses-_full_name) | The weight name: the module path without the leading ``root.`` plus the local parameter or buffer name. |
+| [`_tensors_in`](#aitune-torch-call_tree-weights-accesses-_tensors_in) | Yield each ``torch.Tensor`` found in ``value``, recursing through lists, tuples and dict values. |
+| [`_weight_owners`](#aitune-torch-call_tree-weights-accesses-_weight_owners) | Yield every parameter and buffer under ``module`` with its owner. |
+| [`named_weights`](#aitune-torch-call_tree-weights-accesses-named_weights) | Each parameter and buffer of ``module`` with its full name. |
+| [`op_name`](#aitune-torch-call_tree-weights-accesses-op_name) | The op name of a ``__torch_function__`` call; property getters arrive as ``Tensor.device.__get__``. |
+| [`storage_key`](#aitune-torch-call_tree-weights-accesses-storage_key) | The key of ``t``'s storage in the log's storage map: ``(device, data address)``. |
+
+### Data
+
+[`DEVICE_OPS`](#aitune-torch-call_tree-weights-accesses-DEVICE_OPS)
+
+[`METADATA_OPS`](#aitune-torch-call_tree-weights-accesses-METADATA_OPS)
+
+### API
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccess">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.WeightAccess()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `NamedTuple`
+
+One access to a weight: which call or code did it, and how.
+
+
+<ParamField path="by" type="str">
+The path of the recorded call it ran in (``forward &gt; llm.embed.forward``, see ``CallNode.path``); outside
+any recorded call, the code found by ``unrecorded_caller()`` (``&lt;unrecorded: Pipe.encode&gt;``) or
+``&lt;outside any call&gt;``. ``shared_weights_of`` reports unrecorded code by its qualified name
+(``Pipe.encode``).
+</ParamField>
+
+<ParamField path="kind" type="Literal['read', 'device', 'move']">
+``"read"`` (an op uses its data), ``"device"`` (its device is checked: ``.device``, ``is_cuda``,
+``get_device()``), or ``"move"`` (``nn.Module._apply``: ``.to()``, ``.cuda()``, casts, reached it).
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessLog">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.call_tree.weights.accesses.WeightAccessLog()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Weight accesses recorded by ``WeightAccessMode``, kept by weight name and accumulated over recording passes.
+
+The log keeps two tables, rebuilt by ``start()`` at the beginning of each pass:
+
+- the owner table: each weight name to the ``_Owner`` attribute that holds it;
+- the storage map: each storage key (device and address) to the names of the weights on it. A tied weight has
+  one key with two names.
+
+An op is credited to a weight when one of its tensors has a key in the storage map. Records are kept by name, not
+by tensor, so they stay valid when a tensor is replaced, and a weight read only in an earlier pass still counts.
+``snapshot()`` returns all records so far.
+
+The storage map is rebuilt from the owner table whenever a weight may have moved: at ``start()``, after each
+``nn.Module._apply`` (``.to()``, casts), when an op hits an address that one of its weights has left (storage
+swapped outside ``_apply``, such as ``param.data = ...``), and when an untracked ``nn.Parameter`` is seen.
+
+Limits:
+
+- Weights of modules attached after ``start()`` are not tracked, since they have no recorded name.
+- A module replaced during recording (``model.head = NewHead()``) is picked up at the next ``start()``; until
+  then, the replaced module is tracked under the name.
+- A buffer replaced outside ``_apply`` is missed until the storage map is next rebuilt, because an op on the new
+  buffer cannot be told apart from one on an activation.
+
+
+<ParamField path="_accesses" type="dict[str, set[WeightAccess]] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_owners" type="dict[str, _Owner] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_storage" type="dict[Hashable, set[str]] = &#123;&#125;">
+</ParamField>
+
+<ParamField path="_untracked" type="dict[int, ref[Tensor]] = &#123;&#125;">
+</ParamField>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessLog-_is_current">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessLog._is_current(
+    key: collections.abc.Hashable
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Whether every weight filed under ``key`` still has its storage there; False means the entry is stale.
+
+All names must still be there, not just one: a tied weight where one name moved away must not keep crediting
+that name. Reads the owners' tensors with torch functions disabled, like ``_rebuild_storage_map``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessLog-_rebuild_storage_map">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessLog._rebuild_storage_map() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Rebuild the storage map from the tensors the owners hold now, keeping the untracked cache.
+
+A weight whose attribute is now empty (``module.weight = None``) is left out, so a tied weight that still uses
+the storage no longer credits it, and an address no weight uses any more drops out.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessLog-lookup">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessLog.lookup(
+    tensor: torch.Tensor,
+    key: collections.abc.Hashable
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Whether ``key`` is tracked; on a miss for an ``nn.Parameter``, rebuild the storage map once and look again.
+
+A weight given new storage outside ``nn.Module._apply`` (``param.data = ...``, a new ``nn.Parameter`` or
+buffer on its owner, as accelerate's ``set_module_tensor_to_device`` does) leaves its name under the old
+key: a hit there rebuilds the storage map first, so the stale address neither credits it nor hides its new
+storage.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessLog-record">
+
+<CodeBlock links={{"aitune.torch.call_tree.weights.accesses.WeightAccess":"#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessLog.record(
+    key: collections.abc.Hashable,
+    access: aitune.torch.call_tree.weights.accesses.WeightAccess
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Add ``access`` to the records of every weight name on the storage ``key``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessLog-retrack">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessLog.retrack() -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Rebuild the storage map and forget the parameters found untracked so far.
+
+Called once per pass by ``start()`` and after ``nn.Module._apply`` gave a module's tensors new storage (a
+move or a dtype cast during recording): every weight keeps its recorded name, so a tied alias living
+outside the moved subtree follows it to the new storage. Reading the storage must not count as an access,
+so it runs with torch functions, and this mode, disabled.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessLog-snapshot">
+
+<CodeBlock links={{"aitune.torch.call_tree.weights.accesses.WeightAccess":"#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessLog.snapshot() -> dict[str, set[aitune.torch.call_tree.weights.accesses.WeightAccess]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Accesses of all recording passes so far, keyed by weight name, as ``WeightAccess`` records.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessLog-start">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessLog.start(
+    modules: collections.abc.Iterable[tuple[str, torch.nn.Module]]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Start a recording pass: rebuild the owner table and the storage map from ``modules``.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessMode">
+
+<CodeBlock links={{"aitune.torch.call_tree.weights.accesses.WeightAccessLog":"#aitune-torch-call_tree-weights-accesses-WeightAccessLog"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.call_tree.weights.accesses.WeightAccessMode(
+    log: aitune.torch.call_tree.weights.accesses.WeightAccessLog,
+    current_call_path: collections.abc.Callable[[], str]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `TorchFunctionMode`
+
+Record a ``"read"`` or ``"device"`` access for each torch op that touches a weight's storage.
+
+The recorder enters it for one recording pass (its ``with`` block). For each op, it skips metadata ops
+(``METADATA_OPS``), classifies device lookups (``DEVICE_OPS``) and reads, and records a ``WeightAccess`` in ``log``
+for every tracked weight among the op's tensors. The access is credited to the innermost recorded call, or to the
+code found by ``unrecorded_caller()`` when no recorded call is running. Inside ``paused()`` it records nothing.
+
+**Parameters:**
+
+<ParamField path="log" type="WeightAccessLog">
+[`WeightAccessLog`](#aitune-torch-call_tree-weights-accesses-WeightAccessLog) — The ``WeightAccessLog`` to record into.
+</ParamField>
+
+<ParamField path="current_call_path" type="Callable[[], str]">
+Returns the path of the innermost recorded call, or ``""`` outside any call.
+</ParamField>
+
+
+<ParamField path="_paused" type="= 0">
+</ParamField>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessMode-__torch_function__">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessMode.__torch_function__(
+    func: typing.Any,
+    types: typing.Any,
+    args: tuple = (),
+    kwargs: dict | None = None
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Classify each op on a tracked storage as a read or device lookup, then run it.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessMode-_record">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessMode._record(
+    func: typing.Any,
+    args: tuple,
+    kwargs: dict
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-weights-accesses-WeightAccessMode-paused">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.WeightAccessMode.paused() -> collections.abc.Generator[None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Suppress recording while inside ``nn.Module._apply``; nestable because ``_apply`` recurses.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-_Owner">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.call_tree.weights.accesses._Owner()
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `NamedTuple`
+
+The module attribute that holds a weight, e.g. ``lm_head.weight`` as ``_Owner(lm_head, "weight", False)``.
+
+The log keeps this rather than the tensor, so it can read the attribute again and find the tensor that is there
+now, after ``.to()``, ``param.data = ...`` or a new ``nn.Parameter`` replaced it.
+
+
+<ParamField path="attribute" type="str">
+</ParamField>
+
+<ParamField path="is_buffer" type="bool">
+</ParamField>
+
+<ParamField path="module" type="Module">
+</ParamField>
+<Anchor id="aitune-torch-call_tree-weights-accesses-_Owner-tensor">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses._Owner.tensor() -> torch.Tensor | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The tensor the attribute holds now, or None if it is empty.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-_full_name">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses._full_name(
+    module_path: str,
+    local: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The weight name: the module path without the leading ``root.`` plus the local parameter or buffer name.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-_tensors_in">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses._tensors_in(
+    value: typing.Any
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Yield each ``torch.Tensor`` found in ``value``, recursing through lists, tuples and dict values.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-_weight_owners">
+
+<CodeBlock links={{"aitune.torch.call_tree.weights.accesses._Owner":"#aitune-torch-call_tree-weights-accesses-_Owner"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses._weight_owners(
+    prefix: str,
+    module: torch.nn.Module,
+    seen: set[str] | None = None
+) -> collections.abc.Iterator[tuple[str, aitune.torch.call_tree.weights.accesses._Owner, torch.Tensor]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Yield every parameter and buffer under ``module`` with its owner.
+
+A submodule reachable through two attributes is visited under each path, so a tied weight is yielded once per
+name. Empty attributes (``None``) are skipped. All parameters come before all buffers, as with
+``named_parameters`` followed by ``named_buffers``.
+
+**Parameters:**
+
+<ParamField path="prefix" type="str">
+The adapter's label for ``module``, e.g. ``root.vlm``.
+</ParamField>
+
+<ParamField path="module" type="nn.Module">
+The module to walk, including its submodules.
+</ParamField>
+
+<ParamField path="seen" type="set[str] | None" default="None">
+Module paths already walked, shared across calls. When the registered modules are walked one after the
+other, a path inside an earlier one is not yielded again.
+</ParamField>
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-named_weights">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.named_weights(
+    prefix: str,
+    module: torch.nn.Module
+) -> collections.abc.Iterator[tuple[str, torch.Tensor]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Each parameter and buffer of ``module`` with its full name.
+
+The full name is the adapter's label for the module without the leading ``root.`` plus the parameter or buffer
+name: prefix ``root`` gives ``weight``, prefix ``root.vlm.lm_head`` gives ``vlm.lm_head.weight``. Tied or aliased
+tensors yield each of their names.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-op_name">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.op_name(
+    func: typing.Any
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The op name of a ``__torch_function__`` call; property getters arrive as ``Tensor.device.__get__``.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-storage_key">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.storage_key(
+    t: torch.Tensor
+) -> collections.abc.Hashable
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The key of ``t``'s storage in the log's storage map: ``(device, data address)``.
+
+Views of a weight (``w.t()``, ``w[0]``) share its storage, so they get the same key and count as the weight.
+
+A tensor without a readable address gets ``("object", id(t))`` instead: sparse tensors and wrapper subclasses,
+which have no storage to read, and empty or ``meta`` tensors, whose address is 0. Such a weight is then seen only
+when the tensor itself is used, not through a view.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-DEVICE_OPS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.DEVICE_OPS = {'device', 'is_cuda', 'is_cpu', 'is_meta', 'is_xpu', 'is_mps', 'get_device'}
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-call_tree-weights-accesses-METADATA_OPS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.weights.accesses.METADATA_OPS = {'dtype', 'shape', 'size', 'dim', 'ndim', 'numel', 'nelement', 'stride', 'storag...
+```
+
+</CodeBlock>
+</Anchor>
+

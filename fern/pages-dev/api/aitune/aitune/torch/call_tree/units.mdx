@@ -1,0 +1,157 @@
+---
+layout: overview
+slug: aitune/aitune/torch/call_tree/units
+title: aitune.torch.call_tree.units
+---
+
+Units of the call tree: a module, a node path or a list of them, as the recorded calls and tensors they cover.
+
+A unit is what tuning would wrap. ``resolve_unit`` finds the recorded calls it stands for, and ``owned_tensors`` the
+parameters and buffers that offloading it would move.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_node_tensors`](#aitune-torch-call_tree-units-_node_tensors) | The ids of the parameters and buffers a node would wrap. |
+| [`_outermost_inside`](#aitune-torch-call_tree-units-_outermost_inside) | Recorded calls of ``module`` or its submodules whose callers are outside it, in first-call order. |
+| [`owned_tensors`](#aitune-torch-call_tree-units-owned_tensors) | The ids of the parameters and buffers ``unit`` owns: what offloading it would move. |
+| [`resolve_unit`](#aitune-torch-call_tree-units-resolve_unit) | The recorded nodes of ``unit``: a node path, a module, or a list of them. |
+| [`unit_items`](#aitune-torch-call_tree-units-unit_items) | The unit's members as a list: a single path or module becomes a one-item list. |
+
+### Data
+
+[`UnitSpec`](#aitune-torch-call_tree-units-UnitSpec)
+
+### API
+
+<Anchor id="aitune-torch-call_tree-units-_node_tensors">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree","aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.units._node_tensors(
+    tree: aitune.torch.call_tree.call_tree.CallTree,
+    node: aitune.torch.call_tree.nodes.CallNode
+) -> set[int]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The ids of the parameters and buffers a node would wrap.
+
+A ``forward`` node owns all of its module's parameters and buffers, because offloading moves all of them, even
+the ones this ``forward`` did not run. Other methods own their module's direct tensors, which they may use
+without a module call (``F.linear(x, self.weight)``), plus the union of what they call.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-units-_outermost_inside">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree","aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.units._outermost_inside(
+    tree: aitune.torch.call_tree.call_tree.CallTree,
+    module: torch.nn.Module
+) -> list[aitune.torch.call_tree.nodes.CallNode]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Recorded calls of ``module`` or its submodules whose callers are outside it, in first-call order.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-units-owned_tensors">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree","aitune.torch.call_tree.units.UnitSpec":"#aitune-torch-call_tree-units-UnitSpec","aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.units.owned_tensors(
+    tree: aitune.torch.call_tree.call_tree.CallTree,
+    unit: aitune.torch.call_tree.units.UnitSpec,
+    nodes: list[aitune.torch.call_tree.nodes.CallNode]
+) -> set[int]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The ids of the parameters and buffers ``unit`` owns: what offloading it would move.
+
+Offloading a module moves all of its parameters and buffers, so a module owns all of them; a path owns what it
+would wrap. ``nodes`` are the unit's nodes from ``resolve_unit``.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-units-resolve_unit">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree","aitune.torch.call_tree.units.UnitSpec":"#aitune-torch-call_tree-units-UnitSpec","aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.units.resolve_unit(
+    tree: aitune.torch.call_tree.call_tree.CallTree,
+    unit: aitune.torch.call_tree.units.UnitSpec
+) -> list[aitune.torch.call_tree.nodes.CallNode]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The recorded nodes of ``unit``: a node path, a module, or a list of them.
+
+A module stands for all its recorded ``forward`` calls. A module without one (an exact ``nn.Sequential`` the
+recorder skips, or a ``forward`` that takes a callable argument) stands for the outermost recorded calls of the
+module and its submodules. A module that is part of the recorded model but never ran resolves to no nodes, so
+every access to its weights counts as outside.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-units-unit_items">
+
+<CodeBlock links={{"aitune.torch.call_tree.units.UnitSpec":"#aitune-torch-call_tree-units-UnitSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.units.unit_items(
+    unit: aitune.torch.call_tree.units.UnitSpec
+) -> list
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The unit's members as a list: a single path or module becomes a one-item list.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-units-UnitSpec">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.units.UnitSpec = str | nn.Module | Sequence[str | nn.Module]
+```
+
+</CodeBlock>
+</Anchor>
+

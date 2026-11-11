@@ -1,0 +1,95 @@
+---
+layout: overview
+slug: aitune/aitune/torch/call_tree/callers
+title: aitune.torch.call_tree.callers
+---
+
+Name the caller of module-moving and weight-touching code when no recorded call is running.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`unrecorded_caller`](#aitune-torch-call_tree-callers-unrecorded_caller) | Name the code that is running when no recorded call is, for example the code that called ``.to()``. |
+
+### Data
+
+[`OUTSIDE_ANY_CALL`](#aitune-torch-call_tree-callers-OUTSIDE_ANY_CALL)
+
+[`UNRECORDED_PREFIX`](#aitune-torch-call_tree-callers-UNRECORDED_PREFIX)
+
+[`_MOVING_METHODS`](#aitune-torch-call_tree-callers-_MOVING_METHODS)
+
+### API
+
+<Anchor id="aitune-torch-call_tree-callers-unrecorded_caller">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.callers.unrecorded_caller() -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Name the code that is running when no recorded call is, for example the code that called ``.to()``.
+
+Code that moves modules is often not a recorded call: a pipeline function outside the model, or library code
+such as ``SentenceTransformer.encode``, which calls ``self.to(device)`` on every call. Instead of reporting all
+of these as ``&lt;outside any call&gt;``, this names the code, e.g. ``&lt;unrecorded: SentenceTransformer.encode&gt;``.
+
+It walks up the stack from its caller and skips frames:
+
+- in ``torch`` (the ``.to()`` to ``_apply`` machinery);
+- in ``aitune.torch.call_tree`` (the recorder's own probes);
+- of a function named like a module-moving method (``to``, ``cuda``, ``half``, ...), so a library override such
+  as ``PreTrainedModel.to`` is skipped and its caller is named. A user function with such a name is skipped too;
+  that only changes which caller is shown.
+
+**Returns:** `str`
+
+``&lt;unrecorded: qualname&gt;`` of the first frame left, or ``&lt;outside any call&gt;`` if every frame is skipped.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-callers-OUTSIDE_ANY_CALL">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.callers.OUTSIDE_ANY_CALL = '<outside any call>'
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-call_tree-callers-UNRECORDED_PREFIX">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.callers.UNRECORDED_PREFIX = '<unrecorded: '
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-call_tree-callers-_MOVING_METHODS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.callers._MOVING_METHODS = frozenset({'_apply', 'to', 'cuda', 'cpu', 'xpu', 'mps', 'half', 'float', 'double...
+```
+
+</CodeBlock>
+</Anchor>
+

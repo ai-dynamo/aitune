@@ -1,0 +1,55 @@
+---
+layout: overview
+slug: aitune/aitune/torch/call_tree/sync
+title: aitune.torch.call_tree.sync
+---
+
+Synchronize a recorded call tree across distributed ranks.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`synchronize_call_tree`](#aitune-torch-call_tree-sync-synchronize_call_tree) | Apply rank zero's call counts and timings to the local call tree. |
+
+### API
+
+<Anchor id="aitune-torch-call_tree-sync-synchronize_call_tree">
+
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallTree":"./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.sync.synchronize_call_tree(
+    tree: aitune.torch.call_tree.call_tree.CallTree
+) -> aitune.torch.call_tree.call_tree.CallTree
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Apply rank zero's call counts and timings to the local call tree.
+
+Every rank must have recorded the same tree: the same node keys (adapter names), with the same owner class and
+call count per key. Times are taken from rank zero so that every rank reports the same times. Sequences, ``.to()`` callers
+and recorded weight accesses stay local; they follow from the verified structure.
+
+**Parameters:**
+
+<ParamField path="tree" type="CallTree">
+[`CallTree`](./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree) — The local call tree.
+</ParamField>
+
+**Returns:** [`CallTree`](./call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree)
+
+The same tree with rank zero's times.
+
+**Raises:**
+
+- `RuntimeError`: If the local tree differs from rank zero's.
+
+
+</Indent>

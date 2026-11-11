@@ -12,6 +12,7 @@ Inspecting and patching modules.
 
 | Name | Description |
 |------|-------------|
+| [`_record_call_tree`](#aitune-torch-inspecting-inspecting-_record_call_tree) | Record the call tree in a pass of its own, resolving the recorder's events after every inference. |
 | [`_reset_total_execution_time`](#aitune-torch-inspecting-inspecting-_reset_total_execution_time) | Reset the timings of the modules. |
 | [`_run_inference`](#aitune-torch-inspecting-inspecting-_run_inference) | Run one complete inference in lockstep across distributed ranks. |
 | [`_synchronize_inspection_result`](#aitune-torch-inspecting-inspecting-_synchronize_inspection_result) | Order local modules and apply timings using rank zero's inspection result. |
@@ -29,6 +30,29 @@ Inspecting and patching modules.
 [`logger`](#aitune-torch-inspecting-inspecting-logger)
 
 ### API
+
+<Anchor id="aitune-torch-inspecting-inspecting-_record_call_tree">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder.CallRecorder":"../call_tree/recorder.mdx#aitune-torch-call_tree-recorder-CallRecorder","aitune.torch.dataloader.DatasetLike":"../dataloader.mdx#aitune-torch-dataloader-DatasetLike","aitune.torch.dataloader.DataLoaderFactory":"../dataloader.mdx#aitune-torch-dataloader-DataLoaderFactory","aitune.torch.call_tree.call_tree.CallTree":"../call_tree/call_tree.mdx#aitune-torch-call_tree-call_tree-CallTree"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.inspecting.inspecting._record_call_tree(
+    recorder: aitune.torch.call_tree.recorder.CallRecorder,
+    inference_function: collections.abc.Callable,
+    dataset: aitune.torch.dataloader.DatasetLike | aitune.torch.dataloader.DataLoaderFactory | torch.Tensor,
+    number_of_iterations: int
+) -> aitune.torch.call_tree.call_tree.CallTree
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Record the call tree in a pass of its own, resolving the recorder's events after every inference.
+
+
+</Indent>
 
 <Anchor id="aitune-torch-inspecting-inspecting-_reset_total_execution_time">
 
@@ -127,7 +151,8 @@ aitune.torch.inspect(
     number_of_iterations: int = DEFAULT_INSPECT_ITERATIONS,
     warmup_iterations: int = DEFAULT_WARMUP_ITERATIONS,
     min_depth: int = 0,
-    max_depth: int = 5
+    max_depth: int = 5,
+    call_tree: bool = False
 ) -> aitune.torch.inspecting.module_info.InspectedModulesInfo
 ```
 
@@ -137,9 +162,6 @@ aitune.torch.inspect(
 <Indent>
 
 Inspect provided callable object searching for nn.Module members executed as part of forward pass.
-
-Returns:
-    InspectedModulesInfo object.
 
 **Parameters:**
 
@@ -170,6 +192,20 @@ Minimum depth of the modules to inspect, if root level modules is not working, t
 <ParamField path="max_depth" type="int" default="5">
 Maximum depth of the modules to inspect
 </ParamField>
+
+<ParamField path="call_tree" type="bool" default="False">
+Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran inside
+which, keyed by their chain of callers, plus the reads and device lookups code outside a module
+makes on its weights. This runs one more pass of ``number_of_iterations`` without per-module
+synchronization, so inspection takes longer. Parts compiled with ``torch.compile`` run compiled in
+the per-module pass, so calls inside them are not measured there; in the call-tree pass they run
+eagerly, so their calls and weight reads are recorded but their times are eager times. For deep
+models the walk must reach the linear layers, for example ``max_depth=8``.
+</ParamField>
+
+**Returns:** [`InspectedModulesInfo`](./module_info.mdx#aitune-torch-inspecting-module_info-InspectedModulesInfo)
+
+InspectedModulesInfo object.
 
 <Note>
 

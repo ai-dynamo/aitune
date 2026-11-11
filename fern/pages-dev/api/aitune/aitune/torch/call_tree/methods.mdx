@@ -1,0 +1,151 @@
+---
+layout: overview
+slug: aitune/aitune/torch/call_tree/methods
+title: aitune.torch.call_tree.methods
+---
+
+Rules for what the call recorder instruments and what it treats as transparent.
+
+## Module Contents
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`is_transparent_call`](#aitune-torch-call_tree-methods-is_transparent_call) | Whether a call runs a callable passed as an argument, like ``_apply_checkpoint(func, x)``. |
+| [`is_transparent_container`](#aitune-torch-call_tree-methods-is_transparent_container) | Whether ``obj`` is an exact torch container class, whose calls are not recorded as nodes. |
+| [`user_defined_methods`](#aitune-torch-call_tree-methods-user_defined_methods) | Return the names of the user-defined methods of ``obj``, without ``forward``. |
+
+### Data
+
+[`SKIP_LIBRARY_PREFIXES`](#aitune-torch-call_tree-methods-SKIP_LIBRARY_PREFIXES)
+
+[`SKIP_METHODS`](#aitune-torch-call_tree-methods-SKIP_METHODS)
+
+### API
+
+<Anchor id="aitune-torch-call_tree-methods-is_transparent_call">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.methods.is_transparent_call(
+    args: tuple[typing.Any, ...],
+    kwargs: dict[str, typing.Any] | None = None
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Whether a call runs a callable passed as an argument, like ``_apply_checkpoint(func, x)``.
+
+Recording such helpers would merge unrelated work under one node, so they are not recorded. Positional and keyword
+arguments both count.
+
+Example:
+    &gt;&gt;&gt; is_transparent_call((len, 1)), is_transparent_call((1,), &#123;"fn": len&#125;), is_transparent_call((nn.Linear(1, 1), 1))
+    (True, True, False)
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-methods-is_transparent_container">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.methods.is_transparent_container(
+    obj: typing.Any
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Whether ``obj`` is an exact torch container class, whose calls are not recorded as nodes.
+
+Only the exact classes ``nn.Sequential``, ``nn.ModuleList`` and ``nn.ModuleDict``, never subclasses: JIT mode does
+not patch these classes (``_DEFAULT_PATCH_EXCLUDE`` matches the exact qualified name), so skipping them gives both
+modes the same tree. Subclasses must stay: ``SentenceTransformer`` subclasses ``nn.Sequential`` and its ``forward``
+is a unit of its own.
+
+Example:
+    &gt;&gt;&gt; class Encoder(nn.Sequential):
+    ...     pass
+    &gt;&gt;&gt; is_transparent_container(nn.Sequential()), is_transparent_container(Encoder())
+    (True, False)
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-methods-user_defined_methods">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.methods.user_defined_methods(
+    obj: typing.Any
+) -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the names of the user-defined methods of ``obj``, without ``forward``.
+
+Methods defined by model code are kept, including single-underscore ones (``_forward_flow``). Methods of library
+base classes, of ``nn.Module`` and ``object``, dunder methods and ``SKIP_METHODS`` are left out.
+
+**Example**
+
+&gt;&gt;&gt; class Model(nn.Module):
+...     def forward(self, x):
+...         return self._step(x)
+...     def _step(self, x):
+...         return x
+&gt;&gt;&gt; user_defined_methods(Model())
+['_step']
+
+**Parameters:**
+
+<ParamField path="obj" type="Any">
+Module or plain object.
+</ParamField>
+
+**Returns:** `list[str]`
+
+Method names in class-hierarchy order.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-methods-SKIP_LIBRARY_PREFIXES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.methods.SKIP_LIBRARY_PREFIXES = ('torch.', 'transformers.', 'diffusers.', 'accelerate.', 'peft.', 'timm.', 'sent...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-call_tree-methods-SKIP_METHODS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.methods.SKIP_METHODS = frozenset({'extra_repr', 'train', 'eval', 'state_dict', 'load_state_dict', 'to',...
+```
+
+</CodeBlock>
+</Anchor>
+
