@@ -265,8 +265,17 @@ counted.
 
 ### Export the call tree
 
-`tree.save("call_tree.json")` writes the tree as JSON that tools outside the inspecting process (no
-torch, no aitune) can read:
+`tree.to_dict()` returns a JSON-serializable dict. To write it to a file for tools outside the inspecting process
+(no torch, no aitune), use Python's `json` module:
+
+```python
+import json
+
+with open("call_tree.json", "w", encoding="utf-8") as f:
+    json.dump(tree.to_dict(), f, indent=2)
+```
+
+The exported data has this structure:
 
 ```json
 {
@@ -297,8 +306,8 @@ The object path is the attribute path from the inspected object to the object wh
 `ModuleInfo.object_path`: when you inspect `model`, `model.visual` is `model.model.visual`, `language_model.layers.0`
 is `model.language_model.layers[0]`, and `""` is `model` itself (also for its own methods such as `dit_forward`).
 Split at the last dot: method names never contain one, object paths can. The keys of `modules` are object paths, so
-`modules[object_path]` gives a module node's class name and parameter bytes. `weights` lists the recorded accesses (reads, device lookups, moves) per weight. In distributed runs call `save`
-on one rank — the tree is already synchronized across ranks.
+`modules[object_path]` gives a module node's class name and parameter bytes. `weights` lists the recorded accesses
+(reads, device lookups, moves) per weight. In distributed runs write the file on one rank.
 
 Later versions may add fields without changing `schema_version`, so readers should ignore keys they don't know.
 `schema_version` changes when a field is removed, renamed or changes its meaning.

@@ -2,9 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The context-keyed call tree recorded by the call recorder."""
 
-import json
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from torch import nn
@@ -116,8 +114,8 @@ class CallTree:
     def to_dict(self) -> dict[str, Any]:
         """The call tree as plain JSON data, for tools that read it without torch or aitune.
 
-        ``save`` writes this dict to a file. Node values are totals over ``iterations``: divide by ``iterations`` for
-        per iteration, by ``calls`` for per call.
+        Node values are totals over ``iterations``: divide by ``iterations`` for per iteration, by ``calls`` for
+        per call.
 
         Returns:
             A dict of str, int, float, list and dict values with these keys:
@@ -196,11 +194,3 @@ class CallTree:
                 for name, accesses in sorted(self.weight_accesses.items())
             },
         }
-
-    def save(self, path: str | Path) -> None:
-        """Write the call tree to ``path`` as JSON, in the format of ``to_dict``.
-
-        In distributed runs call this on one rank: the tree is already synchronized across ranks.
-        """
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2)

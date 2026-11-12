@@ -106,14 +106,6 @@ def test_to_dict_weights_have_the_recorded_accesses_sorted():
         assert accesses == sorted(accesses, key=lambda a: (a["kind"], a["by"]))
 
 
-def test_save_writes_the_same_json(tmp_path):
-    tree = _vla_tree()
-
-    out = tmp_path / "t.json"
-    assert tree.save(out) is None
-    assert json.loads(out.read_text()) == tree.to_dict()
-
-
 def test_to_dict_keeps_two_callers_of_one_module_apart():
     model = TwoRoleToy()
     x = torch.randn(4, 8)
