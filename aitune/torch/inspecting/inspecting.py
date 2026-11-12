@@ -48,8 +48,8 @@ def inspect(
         min_depth: Minimum depth of the modules to inspect, if root level modules is not working, try to increase this value
         max_depth: Maximum depth of the modules to inspect
         call_tree: Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran inside
-            which, keyed by their chain of callers, plus the reads and device lookups code outside a module
-            makes on its weights. This runs one more pass of ``number_of_iterations`` without per-module
+            which, keyed by their chain of callers, with their times and tensor bytes in and out, plus the reads
+            and device lookups code outside a module makes on its weights. This runs one more pass of ``number_of_iterations`` without per-module
             synchronization, so inspection takes longer. Parts compiled with ``torch.compile`` run compiled in
             the per-module pass, so calls inside them are not measured there; in the call-tree pass they run
             eagerly, so their calls and weight reads are recorded but their times are eager times. For deep

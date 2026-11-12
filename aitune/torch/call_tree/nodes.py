@@ -42,6 +42,11 @@ def key_path(key: NodeKey) -> str:
 class CallNode:
     """One node of the call tree.
 
+    ``bytes_in`` and ``bytes_out`` measure the tensor data passed into and returned from the node's calls. Only
+    tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
+    inside lists, tuples, dicts and ``ModelOutput`` count too. Everything else counts as 0 bytes: numbers, strings,
+    ``None``, and objects such as a ``DynamicCache``, including the tensors they hold.
+
     Attributes:
         key: Labels of the calling chain, outermost first. Identifies the node.
         label: Adapter name of this call, for example ``root.vlm.model.visual.forward``.
@@ -50,6 +55,9 @@ class CallNode:
         module: Module the method belongs to, or None for methods of plain objects.
         calls: Number of calls over all recorded iterations.
         time_ms: Time in milliseconds over all recorded iterations.
+        bytes_in: Tensor bytes in the arguments, summed over all recorded iterations. Bytes per call:
+            ``bytes_in / calls``.
+        bytes_out: Tensor bytes in the results, summed over all recorded iterations.
         children: Keys of the called nodes in first-call order.
         first_seen: Position of the node's first call among all nodes.
 
@@ -68,6 +76,8 @@ class CallNode:
     module: nn.Module | None = None
     calls: int = 0
     time_ms: float = 0.0
+    bytes_in: int = 0
+    bytes_out: int = 0
     children: list[NodeKey] = field(default_factory=list)
     first_seen: int = 0
 

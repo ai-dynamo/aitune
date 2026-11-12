@@ -28,11 +28,13 @@ class CallTree:
         >>> outer = CallNode(
         ...     key=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
         ... )
+        >>> dit_module = nn.Linear(2, 2)
         >>> dit = CallNode(
         ...     key=("root.forward", "root.dit.forward"),
         ...     label="root.dit.forward",
         ...     owner_class="Dit",
         ...     method="forward",
+        ...     module=dit_module,
         ...     calls=10,
         ...     time_ms=25.0,
         ...     first_seen=1,
@@ -45,6 +47,8 @@ class CallTree:
         ['forward > dit.forward']
         >>> [(n.path, n.calls) for n in tree.find("dit")]
         [('forward > dit.forward', 10)]
+        >>> [n.path for n in tree.nodes_of(dit_module)]
+        ['forward > dit.forward']
     """
 
     nodes: dict[NodeKey, CallNode] = field(default_factory=dict)
@@ -71,6 +75,29 @@ class CallTree:
             out.append(child)
             todo.extend(child.children)
         return out
+
+    def nodes_of(self, module: nn.Module, method: str = "forward") -> list[CallNode]:
+        """Nodes recorded for calls of ``module.<method>``.
+
+        A node is one chain of callers, so a module called from one place has one node, however often it ran there.
+        A module called from several places (e.g. an LLM used by both ``prefill`` and ``generate``) has one node per
+        place.
+
+        Matching is by object identity (``node.module is module``), not by label, so a module that is reachable under
+        several names (e.g. a tied embedding) is found under whichever name was recorded.
+
+        Args:
+            module: The module object that was recorded. After ``ait.wrap`` the attribute holds the wrapper instead,
+                which matches nothing; pass a reference to the original module.
+            method: Name of the recorded method.
+
+        Returns:
+            The matching nodes in first-call order; empty if the module was not recorded. Methods of objects that
+            are not ``nn.Module`` cannot be looked up this way, because their nodes have no ``module``.
+        """
+        return sorted(
+            (n for n in self.nodes.values() if n.module is module and n.method == method), key=lambda n: n.first_seen
+        )
 
     def find(self, text: str) -> list[CallNode]:
         """Nodes whose label contains ``text``, in first-call order."""

@@ -31,6 +31,18 @@ def test_same_module_from_two_callers_gives_two_nodes():
 
     llm_nodes = [n for n in tree.nodes.values() if n.label == "root.llm.forward"]
     assert [n.key[-2] for n in llm_nodes] == ["root.prefill", "root.generate"]
+    assert tree.nodes_of(model.llm) == llm_nodes
+
+
+def test_nodes_of_finds_a_modules_nodes_by_identity_and_method():
+    model = VlaToy(steps=2)
+    tokens, image = vla_inputs()
+
+    tree = record(model, lambda: model(tokens, image))
+
+    assert [n.path for n in tree.nodes_of(model.dit)] == ["forward > dit_forward > dit.forward"]
+    assert [n.path for n in tree.nodes_of(model, "dit_forward")] == ["forward > dit_forward"]
+    assert tree.nodes_of(nn.Linear(2, 2)) == []
 
 
 def test_calls_are_counted_over_iterations_and_children_keep_first_call_order():
@@ -733,3 +745,125 @@ def test_a_tied_weight_removed_under_one_name_only_credits_the_other_name():
     read = WeightAccess(f"<unrecorded: {infer.__qualname__}>", "read")
     assert read in tree.weight_accesses["a.weight"]
     assert read not in tree.weight_accesses.get("b.weight", set())
+
+
+def test_bytes_in_counts_tensors_in_nested_args_and_kwargs():
+    class Model(nn.Module):
+        def forward(self, x, extra=None):
+            return x
+
+    model = Model()
+    a, b, c = torch.randn(4, 8), torch.randn(2, 8), torch.randn(8)
+    expected = a.numel() * a.element_size() + b.numel() * b.element_size() + c.numel() * c.element_size()
+
+    tree = record(model, lambda: model([a, b], extra={"t": c}), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == expected
+    assert node.bytes_in / node.calls == expected
+
+
+def test_bytes_in_counts_a_tensor_passed_twice_once():
+    class Model(nn.Module):
+        def forward(self, x, extra=None):
+            return x
+
+    model = Model()
+    t = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(t, extra={"again": t}), iterations=1)
+
+    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+
+
+def test_bytes_ignores_non_tensor_objects():
+    class Model(nn.Module):
+        def forward(self, x, cache=None):
+            return x, cache  # returns the untracked object too
+
+    model = Model()
+    t = torch.randn(4, 8)
+    obj = object()
+
+    tree = record(model, lambda: model(t, cache=obj), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.bytes_out == t.numel() * t.element_size()  # the (x, cache) tuple counts only x
+
+
+def test_bytes_out_counts_the_tensors_of_a_model_output():
+    from transformers.cache_utils import DynamicCache
+    from transformers.modeling_outputs import BaseModelOutputWithPast
+
+    class Model(nn.Module):
+        def forward(self, x):
+            return BaseModelOutputWithPast(last_hidden_state=x, past_key_values=DynamicCache())
+
+    model = Model()
+    t = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(t), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_out == t.numel() * t.element_size()
+
+
+def test_bytes_sum_over_calls_and_iterations():
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.head = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return self.head(self.head(x))
+
+    model = Model()
+    x = torch.randn(4, 8)
+    per_call = x.numel() * x.element_size()
+    iterations = 3
+
+    tree = record(model, lambda: model(x), iterations=iterations)
+
+    [node] = tree.nodes_of(model.head)
+    calls = 2 * iterations  # forward calls head twice per iteration
+    assert node.calls == calls
+    assert node.bytes_in == calls * per_call
+    assert node.bytes_out == calls * per_call  # Linear returns a same-shaped tensor here
+
+
+def test_bytes_in_counts_a_call_that_raises_but_not_bytes_out():
+    class Model(nn.Module):
+        def forward(self, x):
+            raise RuntimeError("boom")
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    recorder = CallRecorder()
+    with instrumented(recorder, model), recorder:
+        recorder.begin_iteration()
+        with pytest.raises(RuntimeError, match="boom"):
+            model(x)
+        recorder.end_iteration()
+    tree = recorder.result()
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == x.numel() * x.element_size()
+    assert node.bytes_out == 0
+
+
+def test_the_bytes_walk_records_no_weight_access():
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, w):
+            return torch.zeros(2)
+
+    model = Model()
+
+    tree = record(model, lambda: model(model.lin.weight), iterations=1)
+
+    assert not tree.weight_accesses.get("lin.weight")

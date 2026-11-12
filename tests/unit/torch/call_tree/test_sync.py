@@ -16,7 +16,7 @@ def _tree(time_ms: float = 1.0, calls: int = 1):
 def test_rank_zero_times_are_applied(mocker):
     tree = _tree(time_ms=1.0)
     rank_zero = _tree(time_ms=4.0)
-    records = tuple((k, n.owner_class, n.calls, n.time_ms) for k, n in rank_zero.nodes.items())
+    records = tuple((k, n.owner_class, n.calls, n.time_ms, n.bytes_in, n.bytes_out) for k, n in rank_zero.nodes.items())
     broadcast = mocker.patch(BROADCAST, return_value=(2, records))
 
     synchronize_call_tree(tree)
@@ -28,8 +28,8 @@ def test_rank_zero_times_are_applied(mocker):
 def test_different_keys_raise(mocker):
     tree = _tree()
     records = (
-        (("root.forward",), "root", 1, 10.0),
-        (("root.forward", "root.other.forward"), "other", 1, 1.0),
+        (("root.forward",), "root", 1, 10.0, 0, 0),
+        (("root.forward", "root.other.forward"), "other", 1, 1.0, 0, 0),
     )
     mocker.patch(BROADCAST, return_value=(2, records))
 
@@ -40,8 +40,22 @@ def test_different_keys_raise(mocker):
 def test_different_call_counts_raise(mocker):
     tree = _tree(calls=1)
     rank_zero = _tree(calls=3)
-    records = tuple((k, n.owner_class, n.calls, n.time_ms) for k, n in rank_zero.nodes.items())
+    records = tuple((k, n.owner_class, n.calls, n.time_ms, n.bytes_in, n.bytes_out) for k, n in rank_zero.nodes.items())
     mocker.patch(BROADCAST, return_value=(2, records))
 
     with pytest.raises(RuntimeError, match="head.forward"):
         synchronize_call_tree(tree)
+
+
+def test_rank_zero_bytes_are_applied(mocker):
+    tree = _tree(time_ms=1.0)
+    rank_zero = _tree(time_ms=1.0)
+    for node in rank_zero.nodes.values():
+        node.bytes_in, node.bytes_out = 100, 200
+    records = tuple((k, n.owner_class, n.calls, n.time_ms, n.bytes_in, n.bytes_out) for k, n in rank_zero.nodes.items())
+    mocker.patch(BROADCAST, return_value=(2, records))
+
+    synchronize_call_tree(tree)
+
+    head = tree.nodes[("root.forward", "root.head.forward")]
+    assert (head.bytes_in, head.bytes_out) == (100, 200)
