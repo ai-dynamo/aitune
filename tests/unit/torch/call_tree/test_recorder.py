@@ -843,10 +843,8 @@ def test_bytes_in_counts_a_call_that_raises_but_not_bytes_out():
     recorder = CallRecorder()
     with instrumented(recorder, model), recorder:
         recorder.begin_iteration()
-        try:
+        with pytest.raises(RuntimeError, match="boom"):
             model(x)
-        except RuntimeError:
-            pass
         recorder.end_iteration()
     tree = recorder.result()
 
