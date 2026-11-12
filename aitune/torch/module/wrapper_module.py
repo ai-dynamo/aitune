@@ -3,6 +3,7 @@
 """AITune wrapper module."""
 
 from collections import OrderedDict
+from collections.abc import Callable
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
@@ -109,7 +110,7 @@ class Module(wrapt.CallableObjectProxy):
         self._self_orig_forward = module.forward
         self._current_forward_pre_hooks = module._forward_pre_hooks
         self._current_forward_hooks = module._forward_hooks
-        self._self_proxy_forward = wrapt.decorator(self._forward)(module.forward)
+        self._self_proxy_forward: Callable = wrapt.decorator(self._forward)(module.forward)
         module.forward = self._self_proxy_forward
         self._setup_strategies(strategy, strategies)
 
@@ -457,6 +458,15 @@ class Module(wrapt.CallableObjectProxy):
             self._proxy_forward()
 
         return result
+
+    def set_proxy_forward(self, forward: Callable) -> None:
+        """Install ``forward`` as the wrapped module's ``forward``; the wrapper reinstalls it after every call.
+
+        Args:
+            forward: The forward to proxy calls through between calls to the wrapper.
+        """
+        self._self_proxy_forward = forward
+        self.__wrapped__.forward = forward
 
     def _proxy_forward(self):
         """Proxy the forward calls.

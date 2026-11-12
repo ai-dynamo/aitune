@@ -326,6 +326,11 @@ report and is stored in its checkpoint, so the match also works after `ait.save`
 its class name and covers the whole tree. A module reachable under two paths appears under the one the inspector
 found first.
 
+You can run `inspect(..., call_tree=True)` again after `ait.tune` or `ait.load`. A wrapped module's node keeps its
+`call_path`, so the two saved trees can be joined by `call_path` to compare eager and tuned time per node inside the
+pipeline. Nodes inside a module tuned with a compiling backend do not appear, because the compiled module runs as
+one call.
+
 ## Shared weights and wrap
 
 After tuning, AITune offloads a module's original weights (`device_after_tuning`, `"meta"` by default). That breaks a
