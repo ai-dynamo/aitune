@@ -241,7 +241,6 @@ def check_lazy_mutations(model, case, device, backend_type):
 
 @pytest.mark.matrix("aot_tuning.models.mutable-inputs")
 @pytest.mark.parametrize("model_factory", [InplaceCacheModel, ProjectedCacheModel], ids=["buffer", "projected"])
-@pytest.mark.parametrize("batch_sizes", [(2,), (1, 2)], ids=["static", "dynamic"])
 @with_backends(
     "base",
     marks={
@@ -252,9 +251,29 @@ def check_lazy_mutations(model, case, device, backend_type):
         ),
     },
 )
-def test_inplace_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path, model_factory, batch_sizes):
-    """Unreturned in-place cache updates survive consecutive calls and save/load."""
-    check_mutable_input_lifecycle(case, device, tmp_path, model_factory, returns_state=False, batch_sizes=batch_sizes)
+def test_static_inplace_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path, model_factory):
+    """Fixed-batch in-place cache updates survive consecutive calls and save/load."""
+    check_mutable_input_lifecycle(case, device, tmp_path, model_factory, returns_state=False, batch_sizes=(2,))
+
+
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.parametrize("model_factory", [InplaceCacheModel, ProjectedCacheModel], ids=["buffer", "projected"])
+@with_backends(
+    "base",
+    marks={
+        "torch-tensorrt-aot": pytest.mark.skip(
+            reason="Torch-TensorRT AOT serialization rejects batch 1 for dynamic in-place inputs (aitune#190)",
+        ),
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
+            raises=AssertionError,
+            strict=True,
+        ),
+    },
+)
+def test_dynamic_inplace_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path, model_factory):
+    """Dynamic-batch in-place cache updates survive consecutive calls and save/load."""
+    check_mutable_input_lifecycle(case, device, tmp_path, model_factory, returns_state=False, batch_sizes=(1, 2))
 
 
 @pytest.mark.matrix("aot_tuning.models.mutable-inputs")
@@ -296,6 +315,9 @@ def test_tensor_mutation_lifecycle(case: BackendCase, device: torch.device, tmp_
 @with_backends(
     "base",
     marks={
+        "torch-tensorrt-aot": pytest.mark.skip(
+            reason="Torch-TensorRT AOT serialization rejects batch 1 for dynamic in-place inputs (aitune#190)",
+        ),
         "torch-tensorrt-jit": pytest.mark.skip(
             reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
         ),
