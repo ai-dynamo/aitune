@@ -2,12 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 """The context-keyed call tree recorded by the call recorder."""
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 from torch import nn
 
-from aitune.torch.call_tree.nodes import CallNode, NodeKey
+from aitune.torch.call_tree.nodes import ROOT_LABEL, CallNode, NodeKey
 from aitune.torch.call_tree.weights.accesses import WeightAccess
+
+SCHEMA_VERSION = 1
+
+
+def _object_path(label_prefix: str) -> str:
+    """The object path of a module's label prefix: ``root`` gives ``""``, ``root.vlm.lm_head`` gives ``vlm.lm_head``."""
+    return label_prefix.removeprefix(ROOT_LABEL).removeprefix(".")
 
 
 @dataclass
@@ -102,3 +112,94 @@ class CallTree:
     def find(self, text: str) -> list[CallNode]:
         """Nodes whose label contains ``text``, in first-call order."""
         return sorted((n for n in self.nodes.values() if text in n.label), key=lambda n: n.first_seen)
+
+    def to_dict(self) -> dict[str, Any]:
+        """The call tree as plain JSON data, for tools that read it without torch or aitune.
+
+        ``save`` writes this dict to a file. Node values are totals over ``iterations``: divide by ``iterations`` for
+        per iteration, by ``calls`` for per call.
+
+        Returns:
+            A dict of str, int, float, list and dict values with these keys:
+
+            - ``schema_version``: format version. Fields may be added under the same version, so readers should
+              ignore keys they don't know; it changes when a field is removed, renamed or changes meaning.
+            - ``iterations``: number of recorded iterations.
+            - ``total_ms``: time of the outermost calls over all iterations (``CallTree.total_ms``).
+            - ``nodes``: one dict per node, in first-call order, with ``call_path`` (``CallNode.path``, which
+              identifies the node), ``owner_class``, ``calls``, ``time_ms``, ``bytes_in`` and ``bytes_out``.
+            - ``modules``: for each instrumented module, by object path, its ``class`` (qualified name) and
+              ``parameter_bytes``: ``numel() * element_size()`` summed over the parameters and buffers of the module
+              and its submodules, also for ``meta`` tensors. Each tensor object counts once, so a weight tied by
+              assigning the same ``Parameter`` to two submodules counts once; different tensor objects that share
+              storage count separately, as in ``CallNode.bytes_in``.
+            - ``weights``: for each weight name, its recorded accesses as ``{"by": call_path, "kind": ...}``,
+              ``kind`` being ``read``, ``device`` or ``move``.
+
+            A node's parent, object path and method follow from its ``call_path``::
+
+                parent = call_path.rpartition(" > ")[0]  # "" for outermost nodes
+                object_path, _, method = call_path.rpartition(" > ")[2].rpartition(".")
+
+            The object path is ``ModuleInfo.object_path``: the attribute path from the inspected object to the
+            object whose method was called. Inspecting ``model``, ``language_model.layers.0`` is
+            ``model.language_model.layers[0]``, and ``""`` is ``model`` itself, also for its own methods such as
+            ``dit_forward``. For a module node it is the key into ``modules``.
+
+        Example:
+            >>> node = CallNode(
+            ...     key=("root.forward", "root.dit.forward"),
+            ...     label="root.dit.forward",
+            ...     owner_class="Dit",
+            ...     method="forward",
+            ...     first_seen=1,
+            ... )
+            >>> outer = CallNode(key=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+            >>> tree = CallTree(nodes={n.key: n for n in (outer, node)}, iterations=2)
+            >>> exported = tree.to_dict()["nodes"][1]
+            >>> exported["call_path"], exported["owner_class"]
+            ('forward > dit.forward', 'Dit')
+            >>> exported["call_path"].rpartition(" > ")[2].rpartition(".")
+            ('dit', '.', 'forward')
+        """
+        modules: dict[str, Any] = {}
+        for label, module in self.modules:
+            object_path = _object_path(label)
+            if object_path not in modules:  # keep the first prefix that maps to the same object path
+                modules[object_path] = {
+                    "class": f"{type(module).__module__}.{type(module).__qualname__}",
+                    "parameter_bytes": sum(
+                        t.numel() * t.element_size() for t in (*module.parameters(), *module.buffers())
+                    ),
+                }
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "iterations": self.iterations,
+            "total_ms": self.total_ms,
+            "nodes": [
+                {
+                    "call_path": node.path,
+                    "owner_class": node.owner_class,
+                    "calls": node.calls,
+                    "time_ms": node.time_ms,
+                    "bytes_in": node.bytes_in,
+                    "bytes_out": node.bytes_out,
+                }
+                for node in sorted(self.nodes.values(), key=lambda n: n.first_seen)
+            ],
+            "modules": modules,
+            "weights": {
+                name: [
+                    {"by": access.by, "kind": access.kind} for access in sorted(accesses, key=lambda a: (a.kind, a.by))
+                ]
+                for name, accesses in sorted(self.weight_accesses.items())
+            },
+        }
+
+    def save(self, path: str | Path) -> None:
+        """Write the call tree to ``path`` as JSON, in the format of ``to_dict``.
+
+        In distributed runs call this on one rank: the tree is already synchronized across ranks.
+        """
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2)
