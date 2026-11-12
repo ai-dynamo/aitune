@@ -3,6 +3,7 @@
 """Build dynamic shape rules and safe example inputs for exporters."""
 
 import logging
+from collections.abc import Sequence
 from copy import deepcopy
 from typing import Any, cast
 
@@ -11,6 +12,7 @@ import torch
 from aitune.torch.dynamic_shapes import BatchDim, ShapeDefinition
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.tensor_spec import TensorSpec
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,7 @@ def log_dynamic_shapes(dynamic_shapes: dict[str, Any] | None) -> None:
     _print(dynamic_shapes, "dynamic_shapes")
 
 
-def make_batch_dim(tensor_specs) -> Any:
+def make_batch_dim(tensor_specs: Sequence[TensorSpec]) -> Any:
     """Create one shared export dimension for all recorded batch axes."""
     if not any(ts.has_batch_axis() for ts in tensor_specs):
         return None
@@ -69,19 +71,21 @@ def axis_dims_for_tensor(
         for axis, multiplier in tensor_spec.get_batch_axis_multipliers().items():
             axis_dims[axis] = batch_dim if multiplier == 1 else multiplier * batch_dim
     for index, entry in enumerate(tensor_spec.shape):
-        if isinstance(entry, str) and entry.startswith("dim"):
-            if tensor_spec.min_shape[index] != tensor_spec.max_shape[index]:
-                if use_auto:
-                    axis_dims[index] = torch.export.Dim.AUTO
-                else:
-                    key = (tensor_spec.min_shape[index], tensor_spec.max_shape[index])
-                    if dim_cache is not None and key in dim_cache:
-                        axis_dims[index] = dim_cache[key]
-                    else:
-                        dim = torch.export.Dim(f"{tensor_name}_dim_{index}", min=key[0], max=key[1])
-                        if dim_cache is not None:
-                            dim_cache[key] = dim
-                        axis_dims[index] = dim
+        if not isinstance(entry, str) or not entry.startswith("dim"):
+            continue
+        if tensor_spec.min_shape[index] == tensor_spec.max_shape[index]:
+            continue
+        if use_auto:
+            axis_dims[index] = torch.export.Dim.AUTO
+            continue
+        key = (tensor_spec.min_shape[index], tensor_spec.max_shape[index])
+        if dim_cache is not None and key in dim_cache:
+            axis_dims[index] = dim_cache[key]
+            continue
+        dim = torch.export.Dim(f"{tensor_name}_dim_{index}", min=key[0], max=key[1])
+        if dim_cache is not None:
+            dim_cache[key] = dim
+        axis_dims[index] = dim
     return axis_dims
 
 

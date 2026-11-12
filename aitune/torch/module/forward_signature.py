@@ -196,7 +196,11 @@ class ForwardSignature:
             if parameter_kinds.get(name) in ("POSITIONAL_OR_KEYWORD", "KEYWORD_ONLY"):
                 path: ForwardInputPath = name
             else:
-                assert var_keyword_name is not None
+                if var_keyword_name is None:
+                    raise RuntimeError(
+                        f"Cannot capture call layout for keyword {name!r}: the call passed signature binding, "
+                        "but no matching keyword parameter or **kwargs parameter was found."
+                    )
                 path = (var_keyword_name, name)
             keyword_paths.append((name, path))
 

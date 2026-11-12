@@ -95,6 +95,8 @@ class ONNXExporter:
         verbose: bool | None = None,
     ) -> None:
         """Export the prepared adapter with the legacy ONNX tracer."""
+        # Torch's annotation separates list and dict forms; our mapping can contain both.
+        dynamic_axes = cast(dict[str, list[int]] | dict[str, dict[int, str]], self._create_dynamic_axes(graph_spec))
         torch.onnx.export(
             preparation.adapter,
             args=preparation.flat_inputs,
@@ -104,7 +106,7 @@ class ONNXExporter:
             input_names=self._input_names(graph_spec),
             output_names=list(graph_spec.output_names()),
             opset_version=self.opset_version,
-            dynamic_axes=self._create_dynamic_axes(graph_spec),
+            dynamic_axes=dynamic_axes,
             verbose=verbose,
         )
 
@@ -114,7 +116,7 @@ class ONNXExporter:
         return [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
 
     @staticmethod
-    def _create_dynamic_axes(graph_spec: GraphSpec) -> dict:
+    def _create_dynamic_axes(graph_spec: GraphSpec) -> dict[str, list[int] | dict[int, str]]:
         """Create dynamic-axis rules for the legacy ONNX tracer."""
         # Inferred axes use index lists; explicit definitions use axis-name dictionaries.
         dynamic_axes: defaultdict[str, list[int] | dict[int, str]] = defaultdict(list)
