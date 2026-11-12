@@ -50,6 +50,9 @@ class CallNode:
         module: Module the method belongs to, or None for methods of plain objects.
         calls: Number of calls over all recorded iterations.
         time_ms: Time in milliseconds over all recorded iterations.
+        bytes_in: Total bytes of the tensor arguments over all recorded iterations (bytes per call:
+            ``bytes_in / calls``).
+        bytes_out: Total bytes of the tensor results over all recorded iterations.
         children: Keys of the called nodes in first-call order.
         first_seen: Position of the node's first call among all nodes.
 
@@ -68,6 +71,8 @@ class CallNode:
     module: nn.Module | None = None
     calls: int = 0
     time_ms: float = 0.0
+    bytes_in: int = 0
+    bytes_out: int = 0
     children: list[NodeKey] = field(default_factory=list)
     first_seen: int = 0
 

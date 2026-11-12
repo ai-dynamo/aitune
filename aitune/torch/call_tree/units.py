@@ -36,7 +36,7 @@ def resolve_unit(tree: CallTree, unit: UnitSpec) -> list[CallNode]:
     nodes: list[CallNode] = []
     for item in items:
         if isinstance(item, nn.Module):
-            matches = [n for n in tree.nodes.values() if n.module is item and n.method == "forward"]
+            matches = tree.nodes_of(item)
             if not matches:
                 matches = _outermost_inside(tree, item)
             if not matches:

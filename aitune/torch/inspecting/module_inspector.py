@@ -448,9 +448,12 @@ class ModuleInspector:
                 label = f"{_label_prefix(self._module_info[module].object_path)}.forward"
                 frame = recorder.begin_call(label, module, "forward", args, kwargs)
                 try:
-                    return original_forward(*args, **kwargs)
-                finally:
+                    result = original_forward(*args, **kwargs)
+                except BaseException:
                     recorder.end_call(frame)
+                    raise
+                recorder.end_call(frame, result)
+                return result
             # Call through while the compiled-call wrapper times this module (compiled code run eagerly).
             if id(module) in self._timed_by_compiled_call:
                 return original_forward(*args, **kwargs)
@@ -616,9 +619,12 @@ def _recording_wrapper(recorder: CallRecorder, obj: Any, name: str, label: str, 
             return original(*args, **kwargs)
         frame = recorder.begin_call(label, obj, name, args, kwargs)
         try:
-            return original(*args, **kwargs)
-        finally:
+            result = original(*args, **kwargs)
+        except BaseException:
             recorder.end_call(frame)
+            raise
+        recorder.end_call(frame, result)
+        return result
 
     return wrapper
 

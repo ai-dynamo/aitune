@@ -7,9 +7,12 @@ wraps the methods it finds and calls ``begin_call`` and ``end_call`` around the 
 
     frame = recorder.begin_call(label, obj, name, args, kwargs)
     try:
-        return original(*args, **kwargs)
-    finally:
+        result = original(*args, **kwargs)
+    except BaseException:
         recorder.end_call(frame)
+        raise
+    recorder.end_call(frame, result)
+    return result
 
 The only hook the recorder owns is a process-wide probe on ``nn.Module._apply`` (``.to()``, ``.cuda()``, ...), active
 inside a ``with recorder:`` block. Timing uses CUDA events per call (no per-call synchronization) when CUDA is
@@ -31,6 +34,8 @@ from aitune.torch.call_tree.callers import unrecorded_caller
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container
 from aitune.torch.call_tree.nodes import NodeKey, key_path
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, WeightAccessMode, storage_key
+
+_NO_RESULT = object()
 
 
 class CallRecorder:
@@ -156,17 +161,25 @@ class CallRecorder:
             if parent in self._nodes:
                 self._nodes[parent].children.append(key)
         node.calls += 1
+        node.bytes_in += _tensor_bytes((args, kwargs))
         if self._current_sequence is not None:
             self._current_sequence.append(key)
         self._stack.append(key)
         start, device = self._start_timer()
         return _Frame(node=node, start=start, device=device)
 
-    def end_call(self, frame: _Frame | None) -> None:
-        """Record the end of a call started with ``begin_call``."""
+    def end_call(self, frame: _Frame | None, result: Any = _NO_RESULT) -> None:
+        """Record the end of a call started with ``begin_call``.
+
+        Args:
+            frame: The frame ``begin_call`` returned.
+            result: The call's return value, to count its tensor bytes; omit it when the call raised.
+        """
         if frame is None:
             return
         self._stop_timer(frame)
+        if result is not _NO_RESULT:
+            frame.node.bytes_out += _tensor_bytes(result)
         if self._stack and self._stack[-1] == frame.node.key:
             self._stack.pop()
 
@@ -283,6 +296,22 @@ class CallRecorder:
                     recorder._weight_access_log.retrack()
 
         return _apply
+
+
+def _tensor_bytes(tree: Any) -> int:
+    """Total bytes of the tensor leaves of ``tree``, deduplicated by object identity.
+
+    Containers of tensors (lists, dicts, ModelOutputs, ...) are walked; non-tensor leaves (a ``DynamicCache``, a
+    plain object) are ignored. The walk runs with torch function disabled so it records no weight accesses.
+    """
+    with torch._C.DisableTorchFunction():
+        seen: set[int] = set()
+        total = 0
+        for leaf in torch.utils._pytree.tree_leaves(tree):
+            if isinstance(leaf, torch.Tensor) and id(leaf) not in seen:
+                seen.add(id(leaf))
+                total += leaf.numel() * leaf.element_size()
+    return total
 
 
 @dataclass
