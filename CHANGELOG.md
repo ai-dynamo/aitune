@@ -9,6 +9,7 @@ title: "Changelog"
 
 - feat: record a model's call tree with `ait.inspect(..., call_tree=True)`: module `forward` calls and model-defined methods, keyed by their chain of callers, with call counts, times, tensor bytes in and out (`bytes_in`, `bytes_out`) and the code that moves modules with `.to()`, exported as a JSON-serializable dict with `CallTree.to_dict()`
 - feat: keep weights that code outside a tuned module still uses on the device when tuning offloads the module, for modules wrapped from `ait.inspect(..., call_tree=True)`; `aitune.torch.call_tree.shared_weights_of(call_tree, module)` lists them with each read, device lookup or move, and the kept set persists across `ait.save`/`ait.load`
+- fix: `wrap` names each wrapped module by its object path (`blocks.0.attn` instead of `attn`), so modules with the same short name no longer share a registry entry and a cache directory, where only one of them was tuned; the name matches the module's call-tree nodes, and nested wrapped modules rebuild their cache once
 - fix: `inspect()` works on models with parts compiled by `torch.compile` or `nn.Module.compile()`; it counts a compiled part as one call and no longer wraps the calls inside it, where Dynamo cannot trace its timing
 - breaking change: `inspect()` no longer counts the modules inside a compiled part; it logs a warning for each compiled part, and running `inspect()` under `torch.compiler.set_stance("force_eager")` counts them
 

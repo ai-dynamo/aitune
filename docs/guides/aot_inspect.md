@@ -312,6 +312,20 @@ Split at the last dot: method names never contain one, object paths can. The key
 Later versions may add fields without changing `schema_version`, so readers should ignore keys they don't know.
 `schema_version` changes when a field is removed, renamed or changes its meaning.
 
+### Match wrapped modules to call-tree nodes
+
+`ait.wrap` names each wrapped module by its object path — `model.blocks[0].attn` is wrapped as `blocks.0.attn` —
+so its name is the `object_path` of its call-tree nodes:
+
+```python
+wrapped_name = call_path.rpartition(" > ")[2].rpartition(".")[0]   # "blocks.0.attn"
+```
+
+Every node below it is covered by that wrapped module. The same name is the module's `module_name` in the tuning
+report and is stored in its checkpoint, so the match also works after `ait.save` and `ait.load`. The root module keeps
+its class name and covers the whole tree. A module reachable under two paths appears under the one the inspector
+found first.
+
 ## Shared weights and wrap
 
 After tuning, AITune offloads a module's original weights (`device_after_tuning`, `"meta"` by default). That breaks a
