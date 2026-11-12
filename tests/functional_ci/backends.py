@@ -23,7 +23,6 @@ from aitune.torch.backend import (
     TorchInductorJitBackend,
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
-    TorchTensorRTConfig,
     TorchTensorRTJitBackend,
     TorchTensorRTJitBackendConfig,
 )
@@ -51,26 +50,25 @@ class BackendCase:
         assert ("export" in self.tags) == (self.artifact_format is not None), "set both or neither"
 
 
-def _torch_tensorrt_config() -> TorchTensorRTConfig:
-    """Convert the whole graph in fp32 without TF32."""
-    return TorchTensorRTConfig(
-        enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True, require_full_compilation=True
-    )
-
-
 def _torch_tensorrt_aot() -> Backend:
     """Build a Torch-TensorRT AOT backend."""
-    return TorchTensorRTAotBackend(
-        TorchTensorRTAotBackendConfig(compile_config=_torch_tensorrt_config(), validate_stage_shapes=True)
-    )
+    config = TorchTensorRTAotBackendConfig(validate_stage_shapes=True)
+    config.compile_config.enabled_precisions = {torch.float32}
+    config.compile_config.min_block_size = 1
+    config.compile_config.disable_tf32 = True
+    config.compile_config.require_full_compilation = True
+    return TorchTensorRTAotBackend(config)
 
 
 def _torch_tensorrt_jit() -> Backend:
     """Build a Torch-TensorRT JIT backend."""
     # Dynamic batch compilation fails the max-shape correctness check (sympy `Infinity` bound), so compile per shape.
-    return TorchTensorRTJitBackend(
-        TorchTensorRTJitBackendConfig(compile_config=_torch_tensorrt_config(), dynamic=False)
-    )
+    config = TorchTensorRTJitBackendConfig(dynamic=False)
+    config.compile_config.enabled_precisions = {torch.float32}
+    config.compile_config.min_block_size = 1
+    config.compile_config.disable_tf32 = True
+    config.compile_config.require_full_compilation = True
+    return TorchTensorRTJitBackend(config)
 
 
 def tensorrt_backend(**overrides) -> Backend:
