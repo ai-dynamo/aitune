@@ -109,7 +109,9 @@ class LazyCacheModel(nn.Module):
         return {"value": projected + state[0], "state": state}
 
 
-def check_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path, model_factory, returns_state):
+def check_mutable_input_lifecycle(
+    case: BackendCase, device: torch.device, tmp_path, model_factory, returns_state, batch_sizes=(2,)
+):
     """Outputs, accumulated input state, and container aliases survive tuning and save/load."""
     backend = case.factory()
     tuned = ait.Module(model_factory(device), "mutable-inputs", strategy=pinned_strategy(backend))
@@ -117,34 +119,40 @@ def check_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_p
     ait.tune(
         partial(mutable_input_pipeline, tuned),
         list(torch.full((8, FEATURES), 2.0, device=device).unbind(0)),
-        batch_sizes=[2],
+        batch_sizes=list(batch_sizes),
         device=device,
         ignore_failing_modules=False,
     )
 
-    check_mutable_input_state(tuned, case, device, model_factory, returns_state, type(backend))
+    selected_backend(tuned, type(backend))
+    for batch_size in batch_sizes:
+        check_mutable_input_state(tuned, case, device, model_factory, returns_state, batch_size)
     checkpoint = tmp_path / "mutable_inputs.ait"
     ait.save(tuned, checkpoint)
     tuned.deactivate()
     # A different initial increment ensures reload restores the model buffer as well as mutation metadata.
     restored = ait.load(model_factory(device, seed=1), checkpoint)
     assert isinstance(restored, ait.Module)
-    check_mutable_input_state(restored, case, device, model_factory, returns_state, type(backend))
+    selected_backend(restored, type(backend))
+    for batch_size in batch_sizes:
+        check_mutable_input_state(restored, case, device, model_factory, returns_state, batch_size)
     return restored
 
 
-def check_jit_mutations(case, device, *, replace_cache):
+def check_jit_mutations(case, device, *, replace_cache=False, model_factory=None, batch_sizes=(1, 2)):
     backend = case.factory()
     jit_config.mode = JITMode.TUNE_EAGER
     jit_config.device = device
     jit_config.min_samples = 2
+    jit_config.batch_axis_required = len(set(batch_sizes)) > 1
     jit_config.strategy = pinned_strategy(backend)
-    reference = ProjectedCacheModel(device, replace_cache=replace_cache).eval()
+    if model_factory is None:
+        model_factory = partial(ProjectedCacheModel, replace_cache=replace_cache)
     with prepare_for_jit_tuning():
-        model = ProjectedCacheModel(device, replace_cache=replace_cache).eval()
+        model = model_factory(device).eval()
 
     with torch.no_grad():
-        for batch in (1, 2):
+        for batch in (batch_sizes[0], batch_sizes[-1]):
             value = torch.ones(batch, FEATURES, device=device)
             model(value, {"cache": torch.full_like(value, 0.25)})
 
@@ -152,15 +160,8 @@ def check_jit_mutations(case, device, *, replace_cache):
         assert head._state == ModuleState.TUNED
         (selected,) = cast(TunedModule, head._wrapper).backends.values()
         assert type(selected) is type(backend)
-        states = [{"cache": torch.full((2, FEATURES), initial, device=device)} for initial in (0.25, 1.5)]
-        expected_states = [{"cache": state["cache"].clone()} for state in states]
-        for index, scale in ((0, 1.0), (1, 7.0), (0, 3.0)):
-            value = torch.full((2, FEATURES), scale, device=device)
-            expected = reference(value, expected_states[index])
-            actual = model(value, states[index])
-            case.tolerance.assert_close(actual, expected)
-            for state, expected_state in zip(states, expected_states, strict=True):
-                case.tolerance.assert_close(state["cache"], expected_state["cache"])
+        for batch_size in batch_sizes:
+            check_mutable_input_state(model, case, device, model_factory, returns_state=False, batch_size=batch_size)
 
 
 def mutable_input_pipeline(model, value: torch.Tensor):
@@ -170,17 +171,16 @@ def mutable_input_pipeline(model, value: torch.Tensor):
     return model(value, state)
 
 
-def check_mutable_input_state(model, case, device, model_factory, returns_state, backend_type):
-    selected_backend(model, backend_type)
+def check_mutable_input_state(model, case, device, model_factory, returns_state, batch_size):
     eager = model_factory(device).eval()
     # Interleave independent callers. A later inference must not overwrite another cache.
-    states = [{"cache": torch.full((2, FEATURES), initial, device=device)} for initial in (0.25, 1.5)]
+    states = [{"cache": torch.full((batch_size, FEATURES), initial, device=device)} for initial in (0.25, 1.5)]
     eager_states = [{"cache": state["cache"].clone()} for state in states]
     retained_outputs = []
     with torch.no_grad():
         for cache_index, scale in ((0, 1.0), (1, 7.0), (0, 3.0)):
             state = states[cache_index]
-            value = torch.arange(2 * FEATURES, device=device).reshape(2, FEATURES).float() / 8 + scale
+            value = torch.arange(batch_size * FEATURES, device=device).reshape(batch_size, FEATURES).float() / 8 + scale
             expected = eager(value, eager_states[cache_index])
             actual = model(value, state)
             retained_outputs.append((actual["value"], expected["value"].clone()))
@@ -240,6 +240,8 @@ def check_lazy_mutations(model, case, device, backend_type):
 
 
 @pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.parametrize("model_factory", [InplaceCacheModel, ProjectedCacheModel], ids=["buffer", "projected"])
+@pytest.mark.parametrize("batch_sizes", [(2,), (1, 2)], ids=["static", "dynamic"])
 @with_backends(
     "base",
     marks={
@@ -250,9 +252,9 @@ def check_lazy_mutations(model, case, device, backend_type):
         ),
     },
 )
-def test_inplace_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path):
+def test_inplace_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path, model_factory, batch_sizes):
     """Unreturned in-place cache updates survive consecutive calls and save/load."""
-    check_mutable_input_lifecycle(case, device, tmp_path, InplaceCacheModel, returns_state=False)
+    check_mutable_input_lifecycle(case, device, tmp_path, model_factory, returns_state=False, batch_sizes=batch_sizes)
 
 
 @pytest.mark.matrix("aot_tuning.models.mutable-inputs")
@@ -280,6 +282,17 @@ def test_tensor_mutation_lifecycle(case: BackendCase, device: torch.device, tmp_
 
 
 @pytest.mark.matrix("jit_tuning.models.mutable-inputs")
+@pytest.mark.parametrize(
+    "model_factory",
+    [
+        pytest.param(
+            InplaceCacheModel,
+            id="buffer",
+            marks=pytest.mark.skip(reason="Automatic JIT tuning excludes models without parameters"),
+        ),
+        pytest.param(ProjectedCacheModel, id="projected"),
+    ],
+)
 @with_backends(
     "base",
     marks={
@@ -288,9 +301,34 @@ def test_tensor_mutation_lifecycle(case: BackendCase, device: torch.device, tmp_
         ),
     },
 )
-def test_jit_inplace_mutable_inputs(case: BackendCase, device: torch.device):
-    """Automatic JIT tuning preserves caller-visible in-place updates over successive calls."""
-    check_jit_mutations(case, device, replace_cache=False)
+def test_jit_dynamic_inplace_mutable_inputs(case: BackendCase, device: torch.device, model_factory):
+    """Automatic JIT tuning preserves dynamic-batch updates using the same models and checks as AOT."""
+    check_jit_mutations(case, device, model_factory=model_factory, batch_sizes=(1, 2))
+
+
+@pytest.mark.matrix("jit_tuning.models.mutable-inputs")
+@pytest.mark.parametrize(
+    "model_factory",
+    [
+        pytest.param(
+            InplaceCacheModel,
+            id="buffer",
+            marks=pytest.mark.skip(reason="Automatic JIT tuning excludes models without parameters"),
+        ),
+        pytest.param(ProjectedCacheModel, id="projected"),
+    ],
+)
+@with_backends(
+    "base",
+    marks={
+        "torch-tensorrt-jit": pytest.mark.skip(
+            reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
+        ),
+    },
+)
+def test_jit_static_inplace_mutable_inputs(case: BackendCase, device: torch.device, model_factory):
+    """Automatic JIT tuning preserves fixed-batch updates using the same models and checks as AOT."""
+    check_jit_mutations(case, device, model_factory=model_factory, batch_sizes=(2,))
 
 
 @pytest.mark.matrix("jit_tuning.models.mutable-inputs")

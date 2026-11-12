@@ -84,13 +84,10 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
     Attributes:
         compile_config: Torch-TensorRT compilation settings. Defaults to TorchTensorRTConfig().
         pickle_protocol: Pickle protocol for saved compiled artifacts. Defaults to 5.
-        validate_stage_shapes: Run recorded inputs after export, compilation, and reload to locate shape changes.
-            Defaults to False because these diagnostics add forward calls and can update module buffers.
     """
 
     compile_config: TorchTensorRTConfig = field(default_factory=TorchTensorRTConfig)
     pickle_protocol: int = 5
-    validate_stage_shapes: bool = False
 
     def describe(self) -> str:
         """Describe the backend configuration. Display only changed fields."""
@@ -232,11 +229,6 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
             export_sample = exported.example_inputs
             if export_sample is None:
                 raise RuntimeError("Torch-TensorRT serialization requires the flat example inputs used during export.")
-            expected_shapes = None
-            if self._config.validate_stage_shapes:
-                expected_shapes = check_stage_shapes(
-                    exported.module(), graph_spec, samples, self.device, "torch.export"
-                )
 
         # Optimization-profile inputs for TRT engine building.
         input_signature = []
@@ -268,10 +260,6 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
                     inputs=input_signature,
                     **self._compile_settings(),
                 )
-            if self._config.validate_stage_shapes:
-                check_stage_shapes(
-                    trt_model_compiled, graph_spec, samples, self.device, "TensorRT compilation", expected_shapes
-                )
 
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
@@ -288,15 +276,6 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
         # Validate the same persisted artifact that production will load.
         del trt_model_compiled
         self._activate()
-        if self._config.validate_stage_shapes:
-            check_stage_shapes(
-                cast(nn.Module, self._opt_module),
-                graph_spec,
-                samples,
-                self.device,
-                "serialization and reload",
-                expected_shapes,
-            )
         logger.info("Module has been compiled, saved, and reloaded with TensorRT.")
         return self
 
@@ -365,45 +344,6 @@ def assert_torch_tensorrt():
     """Check if torch_tensorrt is installed."""
     if torch_tensorrt is None:
         raise ImportError("torch-tensorrt is not installed. Please install `torch-tensorrt`.")
-
-
-def check_stage_shapes(
-    module: nn.Module,
-    graph_spec: GraphSpec,
-    samples: SampleStore,
-    device: torch.device,
-    stage: str,
-    expected_shapes: list[tuple[torch.Size, ...]] | None = None,
-) -> list[tuple[torch.Size, ...]]:
-    """Compare flat output shapes on recorded inputs, including appended mutation outputs.
-
-    Reload samples for every stage so input mutations do not affect later checks.
-    These diagnostics execute the module and cover recorded shapes, not every shape in its profiles.
-    """
-    if expected_shapes is not None and len(expected_shapes) != len(samples):
-        raise ValueError("Shape validation requires one expected output shape tuple per recorded sample")
-    shapes = []
-    for index, (args, kwargs) in enumerate(samples.iter_samples(device=device)):
-        arguments = graph_spec.forward_signature.normalize(args, kwargs).arguments
-        flat_inputs = graph_spec.input_spec.flatten_tensors(arguments)
-        input_shapes = tuple(tensor.shape for tensor in flat_inputs)
-        try:
-            with torch.no_grad():
-                outputs = module(*flat_inputs)
-            if isinstance(outputs, torch.Tensor):
-                outputs = (outputs,)
-            output_shapes = tuple(tensor.shape for tensor in outputs)
-            if expected_shapes is not None and output_shapes != expected_shapes[index]:
-                raise ValueError(f"expected {expected_shapes[index]}, got {output_shapes}")
-        except Exception as error:
-            raise RuntimeError(
-                f"Torch-TensorRT shape validation failed after {stage}, sample {index}, inputs {input_shapes}: {error}"
-            ) from error
-        logger.info(
-            "Shape validation after %s, sample %d: inputs=%s outputs=%s", stage, index, input_shapes, output_shapes
-        )
-        shapes.append(output_shapes)
-    return shapes
 
 
 def _is_primitive(value: Any) -> bool:

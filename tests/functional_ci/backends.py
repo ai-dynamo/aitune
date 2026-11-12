@@ -52,7 +52,7 @@ class BackendCase:
 
 def _torch_tensorrt_aot() -> Backend:
     """Build a Torch-TensorRT AOT backend."""
-    config = TorchTensorRTAotBackendConfig(validate_stage_shapes=True)
+    config = TorchTensorRTAotBackendConfig()
     config.compile_config.enabled_precisions = {torch.float32}
     config.compile_config.min_block_size = 1
     config.compile_config.disable_tf32 = True
