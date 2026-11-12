@@ -111,7 +111,7 @@ class ForwardParameter:
 
 @dataclass(frozen=True, slots=True)
 class ForwardCallLayout:
-    """Original positional and keyword layout of one valid forward call."""
+    """Preserve positional and keyword layout for decorators that enforce call style."""
 
     positional_paths: tuple[ForwardInputPath, ...]
     keyword_paths: tuple[tuple[str, ForwardInputPath], ...]

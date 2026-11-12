@@ -240,7 +240,10 @@ class SampleMetadata:
         template: Any,
         preserved_values: tuple[tuple[Locator, Any], ...] = (),
     ) -> Any:
-        """Rebuild a structured value from flat tensors and an isolated template."""
+        """Rebuild the structure, preserving explicitly supplied values by identity.
+
+        Preserved paths take precedence over tensor replacements beneath them.
+        """
         if len(self._tensor_data) == 1 and isinstance(tensors, torch.Tensor):
             tensors = (tensors,)
         else:

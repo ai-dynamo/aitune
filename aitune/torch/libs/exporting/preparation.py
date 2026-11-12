@@ -31,6 +31,9 @@ def prepare_tensor_export(
 ) -> TensorExportPreparation:
     """Prepare a structured module call for a tensor-only exporter.
 
+    Uses recorded metadata without executing the module. Device placement applies
+    only to sample tensors.
+
     Args:
         module: Module to prepare.
         sample: Representative positional and keyword inputs.

@@ -43,7 +43,7 @@ def _prepare_argument_reconstruction(
 
 
 class TensorExportAdapter(nn.Module):
-    """Expose a structured module call as flat tensor inputs and outputs."""
+    """Expose tensors in recorded order, keeping non-tensor sample arguments constant."""
 
     def __init__(
         self,
