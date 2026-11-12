@@ -224,7 +224,6 @@ def lazy_cache_pipeline(model, value):
 
 
 def check_lazy_mutations(model, case, device, backend_type):
-    assert len(model.graph_specs) == 2
     backends = cast(TunedModule, model.module).backends.values()
     assert [type(selected) for selected in backends] == [backend_type] * 2
     reference = LazyCacheModel(device).eval()
@@ -366,6 +365,8 @@ def test_lazy_mutable_input_lifecycle(case: BackendCase, device: torch.device, t
         ignore_failing_modules=False,
     )
 
+    # Recording metadata is available before saving; reload restores the compiled backends.
+    assert len(tuned.graph_specs) == 2
     check_lazy_mutations(tuned, case, device, type(backend))
     checkpoint = tmp_path / "lazy-cache.ait"
     ait.save(tuned, checkpoint)
