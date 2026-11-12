@@ -22,50 +22,6 @@ class ObjectType(IntEnum):
     USER_TYPE = 3
 
 
-@cache
-def get_class_data_fields_cached(cls):
-    """Inspects class ONCE. Returns a PRE-SORTED tuple."""
-    class_fields = []
-    for attr in dir(cls):
-        if attr.startswith("_"):
-            continue
-
-        # This lookup is the expensive part we want to avoid repeating
-        value = getattr(cls, attr, None)
-
-        if isinstance(value, property) or callable(value):
-            continue
-        class_fields.append(attr)
-
-    # Sort once here, so we don't have to sort later for simple objects
-    return tuple(class_fields)
-
-
-@cache
-def get_class_fields_set_cached(cls):
-    """Returns a set of class fields for fast lookup."""
-    return set(get_class_data_fields_cached(cls))
-
-
-def get_object_fields(obj):
-    """Returns SORTED public data fields."""
-    # 1. Get pre-calculated, pre-sorted fields for this Class
-    # We create a new list from the cached one to avoid modifying the cache
-    cls_fields = get_class_data_fields_cached(type(obj))
-
-    # 2. Check for dynamic instance variables (rare in strict schemas, common in loose ones)
-    obj_dict = getattr(obj, "__dict__", None)
-    if obj_dict:
-        cls_fields_set = get_class_fields_set_cached(type(obj))
-
-        new_fields = [attr for attr in obj_dict if not attr.startswith("_") and attr not in cls_fields_set]
-
-        if new_fields:
-            return sorted(itertools.chain(cls_fields, new_fields))
-
-    return cls_fields
-
-
 class Locator:
     """A path-based locator for navigating and manipulating nested data structures.
 
@@ -437,3 +393,47 @@ class Locator:
         """Unignore a type."""
         Locator._ignored_types.discard(cls)
         Locator._get_iter_handler.cache_clear()
+
+
+@cache
+def get_class_data_fields_cached(cls):
+    """Inspects class ONCE. Returns a PRE-SORTED tuple."""
+    class_fields = []
+    for attr in dir(cls):
+        if attr.startswith("_"):
+            continue
+
+        # This lookup is the expensive part we want to avoid repeating
+        value = getattr(cls, attr, None)
+
+        if isinstance(value, property) or callable(value):
+            continue
+        class_fields.append(attr)
+
+    # Sort once here, so we don't have to sort later for simple objects
+    return tuple(class_fields)
+
+
+@cache
+def get_class_fields_set_cached(cls):
+    """Returns a set of class fields for fast lookup."""
+    return set(get_class_data_fields_cached(cls))
+
+
+def get_object_fields(obj):
+    """Returns SORTED public data fields."""
+    # 1. Get pre-calculated, pre-sorted fields for this Class
+    # We create a new list from the cached one to avoid modifying the cache
+    cls_fields = get_class_data_fields_cached(type(obj))
+
+    # 2. Check for dynamic instance variables (rare in strict schemas, common in loose ones)
+    obj_dict = getattr(obj, "__dict__", None)
+    if obj_dict:
+        cls_fields_set = get_class_fields_set_cached(type(obj))
+
+        new_fields = [attr for attr in obj_dict if not attr.startswith("_") and attr not in cls_fields_set]
+
+        if new_fields:
+            return sorted(itertools.chain(cls_fields, new_fields))
+
+    return cls_fields

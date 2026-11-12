@@ -3,8 +3,8 @@
 
 import dataclasses
 from collections import UserDict, namedtuple
-from typing import cast
 
+import pytest
 import torch
 
 from aitune.torch.module.locator import Locator, ObjectType
@@ -47,6 +47,12 @@ class NestedDataClass:
 
     inner: InnerDataClass = dataclasses.field(default_factory=InnerDataClass)
     value: int = 5
+
+
+class TensorUserDict(UserDict):
+    """Minimal UserDict subclass mimicking BatchEncoding shape."""
+
+    pass
 
 
 def test_locator_string_representation_sequence():
@@ -139,7 +145,11 @@ def test_find_leaves_nested_dict():
 def test_find_leaves_nested_dataclass():
     """Test traversal of nested dataclasses."""
     obj = NestedDataClass()
-    results = sorted(Locator.find_leaves(obj), key=lambda x: cast(int, x[1]))
+    results = []
+    for locator, value in Locator.find_leaves(obj):
+        assert isinstance(value, int)
+        results.append((locator, value))
+    results.sort(key=lambda item: item[1])
 
     expected = [(1, ".inner.a"), (2, ".inner.b[0]"), (3, ".inner.b[1]"), (4, '.inner.c["d"]'), (5, ".value")]
 
@@ -262,7 +272,10 @@ def test_set_value_nested_list():
 
 def test_set_values_replaces_multiple_values_below_the_same_tuple():
     obj = {"values": (1, {"nested": (2, 3)})}
-    replacements = tuple((locator, -cast(int, value)) for locator, value in Locator.find_leaves(obj))
+    replacements = []
+    for locator, value in Locator.find_leaves(obj):
+        assert isinstance(value, int)
+        replacements.append((locator, -value))
 
     result = Locator.set_values(obj, replacements)
 
@@ -272,7 +285,10 @@ def test_set_values_replaces_multiple_values_below_the_same_tuple():
 def test_set_values_preserves_namedtuple_type():
     Pair = namedtuple("Pair", ("first", "second"))
     original = Pair(1, 2)
-    replacements = tuple((locator, -cast(int, value)) for locator, value in Locator.find_leaves(original))
+    replacements = []
+    for locator, value in Locator.find_leaves(original):
+        assert isinstance(value, int)
+        replacements.append((locator, -value))
 
     result = Locator.set_values(original, replacements)
 
@@ -427,12 +443,6 @@ def test_locator_leaf_name():
     assert locator.leaf_name == "key"
 
 
-class TensorUserDict(UserDict):
-    """Minimal UserDict subclass mimicking BatchEncoding shape."""
-
-    pass
-
-
 def test_find_leaves_user_dict_non_strict():
     """UserDict subclass is traversed; tensors found, non-tensors skipped."""
     t1 = torch.tensor([1, 2, 3])
@@ -447,7 +457,8 @@ def test_find_leaves_user_dict_non_strict():
     assert "attention_mask" in locators
     assert isinstance(locators["input_ids"], torch.Tensor)
     assert torch.equal(locators["input_ids"], t1)
-    assert torch.equal(cast(torch.Tensor, locators["attention_mask"]), t2)
+    assert isinstance(locators["attention_mask"], torch.Tensor)
+    assert torch.equal(locators["attention_mask"], t2)
 
 
 def test_find_leaves_user_dict_all_leaves():
@@ -461,7 +472,8 @@ def test_find_leaves_user_dict_all_leaves():
     locators = {str(loc): val for loc, val in results}
     assert "input_ids" in locators
     assert "meta" in locators
-    assert torch.equal(cast(torch.Tensor, locators["input_ids"]), t)
+    assert isinstance(locators["input_ids"], torch.Tensor)
+    assert torch.equal(locators["input_ids"], t)
     assert locators["meta"] == "some_string"
 
 
@@ -476,7 +488,8 @@ def test_find_leaves_user_dict_nested_inside_dict():
     locators = {str(loc): val for loc, val in results}
     assert 'outer["input_ids"]' in locators
     assert 'outer["flag"]' in locators
-    assert torch.equal(cast(torch.Tensor, locators['outer["input_ids"]']), t)
+    assert isinstance(locators['outer["input_ids"]'], torch.Tensor)
+    assert torch.equal(locators['outer["input_ids"]'], t)
     assert locators['outer["flag"]'] is True
 
 
@@ -488,5 +501,24 @@ def test_find_leaves_user_dict_locator_get_value():
     results = list(Locator.find_leaves(obj, only_tensors=False))
     assert len(results) == 1
     locator, _ = results[0]
-    assert torch.equal(cast(torch.Tensor, locator.get_value(obj)), t)
+    value = locator.get_value(obj)
+    assert isinstance(value, torch.Tensor)
+    assert torch.equal(value, t)
     assert str(locator) == "input_ids"
+
+
+@pytest.mark.parametrize("obj_type", [ObjectType.DATACLASS, ObjectType.USER_TYPE])
+@pytest.mark.parametrize("operation", ["get_value", "set_value", "set_values"])
+def test_attribute_access_rejects_integer_accessor(obj_type, operation):
+    obj = InnerDataClass() if obj_type == ObjectType.DATACLASS else UserType(1)
+    # Even if this attribute exists, an integer accessor must not be converted to its name.
+    setattr(obj, "3", 1)
+    locator = Locator(((3, obj_type),))
+
+    with pytest.raises(TypeError, match="attribute name must be string"):
+        if operation == "get_value":
+            locator.get_value(obj)
+        elif operation == "set_value":
+            locator.set_value(obj, 2)
+        else:
+            Locator.set_values(obj, ((locator, 2),))
