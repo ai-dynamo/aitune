@@ -445,7 +445,8 @@ def test_find_leaves_user_dict_non_strict():
     locators = {str(loc): val for loc, val in results}
     assert "input_ids" in locators
     assert "attention_mask" in locators
-    assert torch.equal(cast(torch.Tensor, locators["input_ids"]), t1)
+    assert isinstance(locators["input_ids"], torch.Tensor)
+    assert torch.equal(locators["input_ids"], t1)
     assert torch.equal(cast(torch.Tensor, locators["attention_mask"]), t2)
 
 
