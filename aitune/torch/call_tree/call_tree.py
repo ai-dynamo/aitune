@@ -169,7 +169,8 @@ class CallTree:
                 modules[object_path] = {
                     "class": f"{type(module).__module__}.{type(module).__qualname__}",
                     "parameter_bytes": sum(
-                        t.numel() * t.element_size() for t in (*module.parameters(), *module.buffers())
+                        t.numel() * t.element_size()
+                        for t in {id(t): t for t in (*module.parameters(), *module.buffers())}.values()
                     ),
                 }
         return {

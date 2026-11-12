@@ -80,6 +80,17 @@ def test_to_dict_modules_have_class_and_parameter_bytes():
     assert modules[""]["parameter_bytes"] == tied
 
 
+def test_parameter_bytes_count_each_tensor_object_once_across_parameters_and_buffers():
+    model = torch.nn.Linear(2, 2, bias=False)  # weight: 4 float32 = 16 bytes
+    model.register_buffer("alias", model.weight)  # the same object as a buffer: not counted again
+    model.copy = torch.nn.Parameter(model.weight.data)  # another object over the same storage: counted
+    x = torch.randn(1, 2)
+
+    tree = record(model, lambda: model(x), iterations=1)
+
+    assert tree.to_dict()["modules"][""]["parameter_bytes"] == 2 * 16
+
+
 def test_to_dict_weights_have_the_recorded_accesses_sorted():
     tree = _vla_tree()
 
