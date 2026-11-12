@@ -16,6 +16,7 @@ from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTConfig,
     _restore_constant_inputs,
     _save_compiled_model,
+    check_stage_shapes,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.dynamic_shapes import BatchDim
@@ -50,6 +51,27 @@ class SimpleModel(nn.Module):
 
     def module(self):
         return self
+
+
+class FlatCacheModel(nn.Module):
+    def __init__(self, *, reject_batch_one=False, truncate_output=False):
+        super().__init__()
+        self.reject_batch_one = reject_batch_one
+        self.truncate_output = truncate_output
+
+    def forward(self, x, cache):
+        if self.reject_batch_one and x.shape[0] == 1:
+            raise RuntimeError("u0 >= 2")
+        cache.add_(x)
+        output = x + cache
+        return output[:1] if self.truncate_output else output, cache
+
+
+def make_shape_validation_samples(tmp_path):
+    model = FlatCacheModel()
+    data = [((torch.ones(batch, 4), torch.zeros(batch, 4)), {}) for batch in (1, 2)]
+    graph_spec = make_recorded_graph_spec(model, ((torch.ones(1, 4), torch.zeros(1, 4)), {}), name="0", strict=True)
+    return graph_spec, make_sample_store(data, tmp_path)
 
 
 @pytest.fixture
@@ -87,6 +109,34 @@ def backend(mocker) -> TorchTensorRTAotBackend:
 
 def _fake_torch_tensorrt_save(model, path, **kwargs):
     Path(path).write_bytes(b"fake")
+
+
+def test_check_stage_shapes_preserves_recorded_inputs(tmp_path):
+    graph_spec, samples = make_shape_validation_samples(tmp_path)
+    expected = check_stage_shapes(FlatCacheModel(), graph_spec, samples, torch.device("cpu"), "export")
+
+    actual = check_stage_shapes(FlatCacheModel(), graph_spec, samples, torch.device("cpu"), "reload", expected)
+
+    assert actual == expected == [(torch.Size([1, 4]),) * 2, (torch.Size([2, 4]),) * 2]
+    for args, _ in samples:
+        assert torch.count_nonzero(args[1]) == 0
+
+
+def test_check_stage_shapes_reports_runtime_restriction(tmp_path):
+    graph_spec, samples = make_shape_validation_samples(tmp_path)
+
+    with pytest.raises(RuntimeError, match=r"reload.*sample 0.*inputs.*1, 4.*u0 >= 2"):
+        check_stage_shapes(FlatCacheModel(reject_batch_one=True), graph_spec, samples, torch.device("cpu"), "reload")
+
+
+def test_check_stage_shapes_reports_output_shape_change(tmp_path):
+    graph_spec, samples = make_shape_validation_samples(tmp_path)
+    expected = check_stage_shapes(FlatCacheModel(), graph_spec, samples, torch.device("cpu"), "export")
+
+    with pytest.raises(RuntimeError, match=r"compilation.*sample 1.*expected.*2, 4.*got.*1, 4"):
+        check_stage_shapes(
+            FlatCacheModel(truncate_output=True), graph_spec, samples, torch.device("cpu"), "compilation", expected
+        )
 
 
 def test_save_compiled_model_without_retracing(mocker, tmp_path: Path):
@@ -373,6 +423,7 @@ def test_mock_build(
     assert save_compiled.call_args.args[2] is export_mock.spy_return.example_inputs
 
 
+@pytest.mark.parametrize("validate_stage_shapes", [False, True])
 @pytest.mark.parametrize(
     ("dynamic_shapes", "expected_opt", "expected_max"),
     [
@@ -391,6 +442,7 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     dynamic_shapes,
     expected_opt,
     expected_max,
+    validate_stage_shapes,
 ):
     model = SimpleModel().eval()
     sample_data = [
@@ -414,14 +466,22 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.get_cuda_device", return_value=0)
     mocker.patch.object(TorchTensorRTAotBackend, "_devices", ["cpu", "cuda"])
 
-    backend = TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
+    backend = TorchTensorRTAotBackend(
+        config=TorchTensorRTAotBackendConfig(
+            compile_config=TorchTensorRTTestConfig(), validate_stage_shapes=validate_stage_shapes
+        )
+    )
     export_mock = mocker.spy(torch.export, "export")
     save_compiled = mocker.spy(torch_tensorrt_aot_backend, "_save_compiled_model")
+    shape_checks = mocker.spy(torch_tensorrt_aot_backend, "check_stage_shapes")
 
     backend.build(
         model, graph_spec, make_sample_store(sample_data, tmp_path), device=torch.device("cpu"), cache_dir=tmp_path
     )
 
+    assert [call.args[4] for call in shape_checks.call_args_list] == (
+        ["torch.export", "TensorRT compilation", "serialization and reload"] if validate_stage_shapes else []
+    )
     dynamic_shapes = export_mock.call_args.kwargs["dynamic_shapes"]
     assert save_compiled.call_args.args[2] is export_mock.spy_return.example_inputs
     assert save_compiled.call_args.args[3] is dynamic_shapes["flat_inputs"]

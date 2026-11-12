@@ -60,7 +60,9 @@ def _torch_tensorrt_config() -> TorchTensorRTConfig:
 
 def _torch_tensorrt_aot() -> Backend:
     """Build a Torch-TensorRT AOT backend."""
-    return TorchTensorRTAotBackend(TorchTensorRTAotBackendConfig(compile_config=_torch_tensorrt_config()))
+    return TorchTensorRTAotBackend(
+        TorchTensorRTAotBackendConfig(compile_config=_torch_tensorrt_config(), validate_stage_shapes=True)
+    )
 
 
 def _torch_tensorrt_jit() -> Backend:
