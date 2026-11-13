@@ -19,7 +19,6 @@ from aitune.torch.config import config as global_config
 from aitune.torch.distributed import resolve_tuning_device
 from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.module.forward_signature import ForwardSignature
-from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.tuned_module import TunedModule
@@ -264,13 +263,7 @@ def test_tune_dry_run(module, torch_device):
         call(
             module,
             TEST_MODULE_NAME,
-            GraphSpec(
-                name="0",
-                input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
-                output_spec=SampleMetadata.from_outputs(1, strict=True),
-                forward_signature=IDENTITY_FORWARD_SIGNATURE,
-                post_input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
-            ),
+            module.graph_specs[0],
             stores[0],
             tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[0].name,
@@ -278,13 +271,7 @@ def test_tune_dry_run(module, torch_device):
         call(
             module,
             TEST_MODULE_NAME,
-            GraphSpec(
-                name="1",
-                input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
-                output_spec=SampleMetadata.from_outputs(2, strict=True),
-                forward_signature=IDENTITY_FORWARD_SIGNATURE,
-                post_input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
-            ),
+            module.graph_specs[1],
             stores[1],
             tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,
@@ -347,13 +334,7 @@ def test_tune(module, torch_device, mocker):
         call(
             module,
             TEST_MODULE_NAME,
-            GraphSpec(
-                name="0",
-                input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
-                output_spec=SampleMetadata.from_outputs(1, strict=True),
-                forward_signature=IDENTITY_FORWARD_SIGNATURE,
-                post_input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
-            ),
+            module.graph_specs[0],
             stores[0],
             tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[0].name,
@@ -361,13 +342,7 @@ def test_tune(module, torch_device, mocker):
         call(
             module,
             TEST_MODULE_NAME,
-            GraphSpec(
-                name="1",
-                input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
-                output_spec=SampleMetadata.from_outputs(2, strict=True),
-                forward_signature=IDENTITY_FORWARD_SIGNATURE,
-                post_input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
-            ),
+            module.graph_specs[1],
             stores[1],
             tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,

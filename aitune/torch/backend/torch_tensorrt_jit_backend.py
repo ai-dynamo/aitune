@@ -122,6 +122,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
     """Torch TensorRT thought torch.compile(backend="torch_tensorrt").
 
     Backend does not use intermediate formats, and compiled model is not stored.
+    Input mutations use native torch.compile behavior, without AITune contract replay.
     """
 
     _build_mode = BuildMode.JUST_IN_TIME
@@ -198,13 +199,12 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
 
     def _compile(self):
         """Compile module with Torch compile."""
-        if self._samples is None:
+        if self._samples is None or self._orig_module is None:
             raise RuntimeError("Backend has no warmup samples. Please call build() first.")
         logger.info("Start compiling torch module with torch.compile(backend='torch_tensorrt').")
         torch._dynamo.reset()
 
         move_module_to_device(self._orig_module, self.device)
-
         compile_options = self._compile_settings()
         if self.device.type == "cuda":
             compile_options["device"] = get_cuda_device(self.device)

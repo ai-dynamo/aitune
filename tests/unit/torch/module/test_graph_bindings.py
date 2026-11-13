@@ -182,12 +182,12 @@ def test_tensorrt_profiles_and_bindings_use_original_names(named_source, layout,
         for shapes in profiles[1].values():
             assert tuple(list(shape) for shape in shapes) == ([1, 3], [4, 3], [4, 3])
     backend._engine_info = SimpleNamespace(input_names=["input.1", "kwargs"])
-    inputs = backend._prepare_inputs(*_sample(layout, 2))
+    arguments = graph.forward_signature.normalize(*_sample(layout, 2)).arguments
+    inputs = backend._prepare_inputs(arguments)
     torch.testing.assert_close(inputs["input.1"], torch.full((2, 3), 5.0))
     torch.testing.assert_close(inputs["kwargs"], torch.ones(2, 3))
-    backend._output_object = {"output.1": None}
     backend._output_allocator = SimpleNamespace(outputs={"output.1": inputs["input.1"] - inputs["kwargs"]})
-    torch.testing.assert_close(backend._prepare_outputs_for_return()["output.1"], torch.full((2, 3), 4.0))
+    torch.testing.assert_close(backend._prepare_outputs_for_return(arguments)["output.1"], torch.full((2, 3), 4.0))
 
 
 def test_torch_export_uses_the_same_tensor_name_resolution(tmp_path):

@@ -25,7 +25,7 @@ from aitune.torch.backend.backend import (
 from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_errors, torch_tensorrt_warnings
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.distributed import distributed_output_path
-from aitune.torch.libs.torch import TorchExporter
+from aitune.torch.libs.exporting import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
@@ -78,11 +78,6 @@ def assert_torch_tensorrt():
     """Check if torch_tensorrt is installed."""
     if torch_tensorrt is None:
         raise ImportError("torch-tensorrt is not installed. Please install `torch-tensorrt`.")
-
-
-def _is_primitive(value: Any) -> bool:
-    """Check if a value is a primitive type (int, float, str, bool)."""
-    return isinstance(value, int | float | str | bool)
 
 
 @dataclass
@@ -145,6 +140,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
     STATE_TYPE = "type"
     EXPORTED_MODEL_PATH_KEY = "exported_model_path"
     STATE_DEVICE = "device"
+    STATE_GRAPH_SPEC = "graph_spec"
 
     # Supported devices
     _devices: ClassVar[list[str]] = ["cuda"]
@@ -165,6 +161,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
         # build variables
         self._opt_module = None
         self._exported_model_artifact: ArtifactPath | None = None
+        self._graph_spec: GraphSpec | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -212,6 +209,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
         model = module.eval()
         move_module_to_device(model, self.device)
+        self._graph_spec = graph_spec
 
         # Set the device for the TensorRT backend compilation
         self._config.compile_config.device = torch_tensorrt.Device(get_cuda_device(self.device))
@@ -231,7 +229,10 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
                 device=self.device,
             )
             exported = export_result.exported_program
-            _, kwargs = export_result.sample
+            # Retracing needs the captured flat tensors, not TensorRT optimization-profile descriptors.
+            export_sample = exported.example_inputs
+            if export_sample is None:
+                raise RuntimeError("Torch-TensorRT serialization requires the flat example inputs used during export.")
 
         # Optimization-profile inputs for TRT engine building.
         input_signature = []
@@ -255,25 +256,12 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
                 tensor_spec.dtype,
             )
 
-        # Pass non-tensor kwargs through; tensors are already captured by the ExportedProgram.
-        kwarg_inputs = {}
-        for key, value in kwargs.items():
-            if value is None:
-                continue
-            if isinstance(value, torch.Tensor):
-                continue
-            if _is_primitive(value):
-                kwarg_inputs[key] = [value]
-            else:
-                kwarg_inputs[key] = value
-
         with self._track_build_step(TorchTensorRTAotBuildStep.TORCHTRT_COMPILE):
             logger.info("Compile model with Torch-TensorRT.")
             with torch_tensorrt_warnings(torch_tensorrt):
                 trt_model_compiled = torch_tensorrt.dynamo.compile(
                     exported,
                     inputs=input_signature,
-                    kwarg_inputs=kwarg_inputs,
                     **self._compile_settings(),
                 )
 
@@ -282,7 +270,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
             _save_compiled_model(
                 trt_model_compiled,
                 self._exported_model_artifact.path,
-                export_result.sample,
+                export_sample,
                 export_result.dynamic_shapes,
                 self._config.pickle_protocol,
             )
@@ -303,20 +291,16 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
             self._opt_module = loaded.module().to(self.device)
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
-        """Run inference with TensorRT engine.
-
-        Args:
-            *args: Inference arguments
-            **kwargs: Inference keyword arguments
-
-        Returns:
-            Model outputs
-        """
+        """Run the flat Torch-TensorRT module, then restore outputs and input changes."""
         if self._opt_module is None:
             raise RuntimeError("Module is not activated. Please call activate() first.")
 
+        graph_spec = cast(GraphSpec, self._graph_spec)
         with torch.no_grad():
-            return self._opt_module(*args, **kwargs)
+            forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
+            flat_inputs = graph_spec.input_spec.flatten_tensors(forward_inputs.arguments)
+            flat_outputs = self._opt_module(*flat_inputs)
+            return graph_spec.restore_outputs(flat_outputs, forward_inputs.arguments)
 
     def _deactivate(self):
         """Deactivate backend and cleanup."""
@@ -336,12 +320,13 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
     def to_dict(self) -> dict:
         """Returns the state_dict of the backend."""
-        if self._exported_model_artifact is None:
+        if self._exported_model_artifact is None or self._graph_spec is None:
             raise RuntimeError("No exported model path available. Model must be built first.")
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.EXPORTED_MODEL_PATH_KEY: self._exported_model_artifact,
             self.STATE_DEVICE: self._device,
+            self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
         }
 
     @classmethod
@@ -353,8 +338,14 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
         backend = cls()  # create with default args, config is not needed
         backend._exported_model_artifact = state_dict[cls.EXPORTED_MODEL_PATH_KEY]
         backend._device = state_dict[cls.STATE_DEVICE]
+        backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend
+
+
+def _is_primitive(value: Any) -> bool:
+    """Check if a value is a primitive type (int, float, str, bool)."""
+    return isinstance(value, int | float | str | bool)
 
 
 def _restore_constant_inputs(program: ExportedProgram) -> None:
