@@ -22,7 +22,8 @@ available and ``time.perf_counter`` otherwise; ``flush()`` resolves the pending 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections import UserDict
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 from typing import Any, Self
 
@@ -298,20 +299,34 @@ class CallRecorder:
         return _apply
 
 
+def _tensor_leaves(tree: Any) -> Iterator[torch.Tensor]:
+    """Yield the unique tensors inside ``tree``, deduplicated by object identity.
+
+    Containers of tensors (lists, dicts, ModelOutputs, ...) are walked; non-tensor leaves (a ``DynamicCache``, a
+    plain object) are ignored. UserDicts, which pytree does not flatten — such as ``transformers.BatchFeature``
+    and ``BatchEncoding`` — are walked into their ``.data``: it is a plain dict, so the walk runs no code of the
+    mapping's class (a lazy mapping would run ``__getitem__``), and walking each once stops self-references.
+    """
+    seen: set[int] = set()
+    stack = [tree]
+    while stack:
+        for leaf in torch.utils._pytree.tree_leaves(stack.pop()):
+            if id(leaf) in seen or not isinstance(leaf, (torch.Tensor, UserDict)):
+                continue
+            seen.add(id(leaf))
+            if isinstance(leaf, UserDict):
+                stack.append(leaf.data)
+            else:
+                yield leaf
+
+
 def _tensor_bytes(tree: Any) -> int:
     """Total bytes of the tensor leaves of ``tree``, deduplicated by object identity.
 
-    Containers of tensors (lists, dicts, ModelOutputs, ...) are walked; non-tensor leaves (a ``DynamicCache``, a
-    plain object) are ignored. The walk runs with torch function disabled so it records no weight accesses.
+    The walk runs with torch function disabled so it records no weight accesses.
     """
     with torch._C.DisableTorchFunction():
-        seen: set[int] = set()
-        total = 0
-        for leaf in torch.utils._pytree.tree_leaves(tree):
-            if isinstance(leaf, torch.Tensor) and id(leaf) not in seen:
-                seen.add(id(leaf))
-                total += leaf.numel() * leaf.element_size()
-    return total
+        return sum(t.numel() * t.element_size() for t in _tensor_leaves(tree))
 
 
 @dataclass
