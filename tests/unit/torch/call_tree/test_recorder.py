@@ -945,15 +945,20 @@ def test_bytes_count_a_userdict_that_contains_itself():
 
 
 def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
+    reads = []
+
     class LazyMap(Mapping):
         def __getitem__(self, key):
-            raise AssertionError("must not be read")
+            reads.append(("getitem", key))
+            raise KeyError(key)
 
         def __iter__(self):
-            raise AssertionError("must not be read")
+            reads.append(("iter",))
+            return iter(())
 
         def __len__(self):
-            raise AssertionError("must not be read")
+            reads.append(("len",))
+            return 0
 
     class Model(nn.Module):
         def forward(self, x, extra=None):
@@ -965,3 +970,4 @@ def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
     tree = record(model, lambda: model(x, extra=LazyMap()), iterations=1)
 
     assert tree.nodes[("root.forward",)].bytes_in == x.numel() * x.element_size()
+    assert reads == []
