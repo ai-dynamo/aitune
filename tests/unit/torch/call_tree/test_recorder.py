@@ -945,19 +945,19 @@ def test_bytes_count_a_userdict_that_contains_itself():
 
 
 def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
-    reads = []
+    reads: list[str] = []
 
     class LazyMap(Mapping):
         def __getitem__(self, key):
-            reads.append(("getitem", key))
+            reads.append("__getitem__")
             raise KeyError(key)
 
         def __iter__(self):
-            reads.append(("iter",))
+            reads.append("__iter__")
             return iter(())
 
         def __len__(self):
-            reads.append(("len",))
+            reads.append("__len__")
             return 0
 
     class Model(nn.Module):
