@@ -148,7 +148,7 @@ def register_flextensor_units(
 
     Identity-deduplicated managers and units retain discovery order. AITune's existing
     external-placement and backend validation apply unchanged. Native repeated-unit tuning
-    requires a FlexTensor version containing its per-unit compilation and replay fixes.
+    uses FlexTensor's per-unit compilation and replay support.
 
     External compilation/replan mode must expose an available public replan request. The
     retained view-profile mode also works; it keeps FT's pre-AITune strategy and must not

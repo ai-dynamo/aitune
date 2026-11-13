@@ -708,9 +708,8 @@ def require_native_flextensor() -> None:
     pre_compute = getattr(torch.ops.flextensor, "pre_compute", None)
     if missing or not callable(getattr(custom_ops, "unit_index_tensor", None)) or not hasattr(pre_compute, "unit"):
         raise RuntimeError(
-            "Native FlexTensor tuning requires a development/source build containing the per-unit compilation "
-            "and replay fixes, together with the public offload/profile lifecycle APIs. "
-            "The stock FlexTensor 0.5.0 release does not contain these fixes; see this example's README."
+            "Native FlexTensor tuning requires per-unit compilation and replay support "
+            "(unit_index_tensor and pre_compute.unit), together with the public offload/profile lifecycle APIs."
         )
 
 

@@ -5,7 +5,6 @@
 # /// script
 # dependencies = ["flextensor>=0.5.0"]
 # scope = "always"
-# skip = true  # Manual until a public FT release includes native compilation/replay fixes.
 # allow_failure = false
 # arguments = [
 #   {mode = "eager"},

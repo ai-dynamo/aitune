@@ -8,11 +8,7 @@ FlexTensor owns weight placement while AITune tunes the original offload-unit mo
 through public FlexTensor APIs, finish provider startup, then register its public units for AITune JIT tuning.
 Ordinary AITune correctness checks, performance profiling and backend selection remain enabled.
 
-FlexTensor is optional for other AITune paths. Native tuning requires a source/development build containing the per-unit
-compilation and replay fixes. The stock PyPI 0.5.0 release predates those fixes; a dependency on `flextensor>=0.5.0` alone
-does not establish support. The maintained functional workflows and LTX example check for the native unit-index helper
-and `flextensor.pre_compute.unit` operator at startup. Install the verified development wheel in the test environment
-and preserve it when running workflows, for example with `uv run --no-sync`.
+Install FlexTensor separately; it remains optional for other AITune paths.
 
 ## Native offload units
 
@@ -180,7 +176,7 @@ parameter/storage aliases remain outside the placement contract.
 
 ## Verification
 
-Use the development FT wheel described above and a fresh interpreter for each variant:
+Run each variant in a fresh interpreter:
 
 ```bash
 python tests/functional/pytorch/jit/021_jit_flextensor.py --mode=eager
@@ -195,9 +191,6 @@ for placement in aitune external; do
 done
 python -m pytest tests/unit/torch/jit/test_flextensor.py
 ```
-
-These FT-specific scripts are temporarily excluded from automatic CI selection (`skip = true`) until a public
-FT release includes the required fixes. Run them directly in an environment with the verified development wheel.
 
 The positive native tests require all ten Inductor targets in diagnostic mode, normal correctness checks, actual
 per-graph profiling, known/held-out numerical parity, rolling storage under a strict reported weight-residency cap,

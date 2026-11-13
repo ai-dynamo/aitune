@@ -40,19 +40,7 @@ Use its CUDA forward-compatibility shell initialization where required by the ho
 Actual package/device versions are recorded in each result. PyAV supplies decoding and H.264 encoding; no system
 FFmpeg executable is required.
 
-**Native FlexTensor prerequisite:** the stock PyPI 0.5.0 release predates the per-unit compilation and replay fixes.
-Install a source/development wheel containing those fixes into the prepared example environment. The dependency floor
-`flextensor>=0.5.0` alone does not supply them. Startup checks the native unit-index operator and public lifecycle APIs
-and fails clearly when they are absent. For a project environment prepared with `uv`, install the verified wheel after
-resolving dependencies:
-
-```bash
-uv pip install --python examples/LTX23OutpaintAITuneFlexTensor/.venv/bin/python \
-  --no-deps --reinstall /absolute/path/to/flextensor-native.whl
-```
-
-Use `uv run --no-sync` for the commands below so dependency synchronization cannot replace that installed wheel with
-the older public release. Keep the same CUDA-compatible PyTorch build in all benchmark arms.
+Keep the same CUDA-compatible PyTorch build in all benchmark arms.
 
 Small activations do not make the weights small. The text encoder download alone is about 48.75 GB; inference
 components occupy about 45.13 GiB. On a 31 GiB host, encode the prompt in its own worker: the stored FP32 Gemma weights
@@ -79,19 +67,19 @@ From the AITune repository root, in the prepared runtime:
 ```bash
 # Bound compiler worker memory on this 31 GiB host; use the same environment in every arm.
 export TORCHINDUCTOR_COMPILE_THREADS=1
-uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py prepare-source
-uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py encode-prompt
+uv run --project examples/LTX23OutpaintAITuneFlexTensor python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py prepare-source
+uv run --project examples/LTX23OutpaintAITuneFlexTensor python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py encode-prompt
 
 # Resident eager reference: the whole transformer stays on GPU.
-uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode eager --warmups 3 --runs 10
+uv run --project examples/LTX23OutpaintAITuneFlexTensor python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode eager --warmups 3 --runs 10
 
 # Eager compute under real FlexTensor offloading; save its exact workload profile.
-uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode baseline --warmups 3 --runs 10
+uv run --project examples/LTX23OutpaintAITuneFlexTensor python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode baseline --warmups 3 --runs 10
 
 # Same profile and offloading policy, all 48 original blocks tuned with Inductor.
-uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode combined --reuse-profile --warmups 3 --runs 10
+uv run --project examples/LTX23OutpaintAITuneFlexTensor python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py run --mode combined --reuse-profile --warmups 3 --runs 10
 
-uv run --project examples/LTX23OutpaintAITuneFlexTensor --no-sync python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py compare
+uv run --project examples/LTX23OutpaintAITuneFlexTensor python examples/LTX23OutpaintAITuneFlexTensor/outpaint.py compare
 ```
 
 Defaults put caches, JSON, logs and media under `tuning/ltx23_outpaint/`, which is ignored by Git. Override `--work-dir`

@@ -11,6 +11,6 @@ def require_native_compile_support():
     pre_compute = getattr(torch.ops.flextensor, "pre_compute", None)
     if not callable(getattr(custom_ops, "unit_index_tensor", None)) or not hasattr(pre_compute, "unit"):
         raise RuntimeError(
-            "Native FlexTensor tuning requires a development/source build containing the per-unit compilation "
-            "and replay fixes. The stock FlexTensor 0.5.0 release does not contain them."
+            "Native FlexTensor tuning requires per-unit compilation and replay support "
+            "(unit_index_tensor and pre_compute.unit)."
         )

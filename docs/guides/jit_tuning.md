@@ -158,7 +158,7 @@ JIT uses the ordinary top-level tuning report lifecycle and process-exit diagnos
 unrelated AOT report or replacing its active report during serving is outside this contract.
 
 The registration API accepts existing instances without depending on their provider. For optional FlexTensor unit
-preparation, public FlexTensor 0.5.0 manager discovery and explicit strategy replanning, see
+preparation, public FlexTensor manager discovery and explicit strategy replanning, see
 [FlexTensor Integration](flextensor.md).
 
 #### Externally owned placement
