@@ -246,7 +246,8 @@ What is recorded:
 - times from CUDA events without synchronizing after every call, or from `time.perf_counter` without CUDA;
 - tensor bytes in and out (`bytes_in`, `bytes_out`), summed over a node's calls: the tensors in each call's
   args/kwargs and in its result, nested containers and ModelOutputs included, each tensor counted once per call.
-  Objects that `torch.utils._pytree` does not flatten, such as caches or your own classes, are not looked into.
+  `UserDict`s, such as transformers' `BatchFeature` and `BatchEncoding`, are walked into their values. Other objects
+  that `torch.utils._pytree` does not flatten, such as caches or your own classes, are not looked into.
 
 `call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. Parts compiled with
 `torch.compile` run compiled in the per-module pass, so calls inside them are not measured there; in the call-tree
