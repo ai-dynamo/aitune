@@ -23,69 +23,6 @@ _PARAMETER_KINDS = {
 ForwardInputPath = str | tuple[str | int, ...]
 
 
-def _resolve_argument_path(arguments: dict[str, Any], path: ForwardInputPath) -> Any:
-    """Resolve a normalized argument value from a call-layout path."""
-    if isinstance(path, str):
-        return arguments[path]
-    # Normalized input paths always start with a forward parameter name.
-    value = arguments[cast(str, path[0])]
-    for component in path[1:]:
-        value = value[component]
-    return value
-
-
-def _is_partial(obj: Any) -> bool:
-    """Return whether the object itself, rather than a transparent proxy, is a partial."""
-    return issubclass(type(obj), functools.partial)
-
-
-def _find_partial(obj: Any) -> functools.partial | None:
-    """Return the first concrete partial in a callable's wrapper chain.
-
-    ``inspect.signature`` normally follows ``__wrapped__``. For a wrapped partial, that loses the partial's pre-bound
-    arguments and exposes the original callable's signature. An explicit ``__signature__`` remains authoritative and
-    therefore stops traversal before any deeper partial is considered.
-
-    For example, Diffusers Context Parallelism effectively installs
-    ``update_wrapper(partial(context_parallel_forward, module), context_parallel_forward)``. Following
-    ``__wrapped__`` reports ``(module, x, ...)`` even though ``module`` is already bound; inspecting the concrete
-    partial reports the callable interface correctly as ``(x, ...)``.
-    """
-    seen = set()
-    # Wrapper metadata is user-controlled and may contain cycles. Track identities so malformed chains cannot hang
-    # signature inspection.
-    while id(obj) not in seen:
-        seen.add(id(obj))
-        if _is_partial(obj):
-            return obj
-        if hasattr(obj, "__signature__"):
-            # Match inspect.signature semantics: a caller-provided public signature takes precedence over unwrapping.
-            return None
-        try:
-            obj = obj.__wrapped__
-        except AttributeError:
-            return None
-    return None
-
-
-def validate_forward_input_path(path: object) -> None:
-    """Validate a forward parameter name or nested path rooted at one."""
-    if isinstance(path, str):
-        if path:
-            return
-    elif isinstance(path, tuple):
-        if (
-            len(path) >= 2
-            and isinstance(path[0], str)
-            and path[0]
-            and all(isinstance(component, (str, int)) and not isinstance(component, bool) for component in path[1:])
-        ):
-            return
-    raise AITuneUserInputError(
-        f"Forward input path must be a non-empty parameter name or a nested path tuple, got {path!r}."
-    )
-
-
 @dataclass(frozen=True, slots=True)
 class ForwardParameter:
     """Serializable description of a forward parameter."""
@@ -111,16 +48,32 @@ class ForwardParameter:
 
 @dataclass(frozen=True, slots=True)
 class ForwardCallLayout:
-    """Preserve positional and keyword layout for decorators that enforce call style."""
+    """Preserve positional and keyword layout for decorators that enforce call style.
+
+    Captured paths are parameter names for ordinary arguments, ``(name, index)`` for ``*args``,
+    and ``(name, key)`` for ``**kwargs``. Tuple paths therefore contain one lookup after the parameter name;
+    the shared ``ForwardInputPath`` type also permits deeper paths for nested input shape definitions.
+    """
 
     positional_paths: tuple[ForwardInputPath, ...]
     keyword_paths: tuple[tuple[str, ForwardInputPath], ...]
 
     def restore(self, arguments: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
         """Restore the captured call layout from normalized arguments."""
-        args = tuple(_resolve_argument_path(arguments, path) for path in self.positional_paths)
-        kwargs = {name: _resolve_argument_path(arguments, path) for name, path in self.keyword_paths}
+        args = tuple(self._resolve_argument_path(arguments, path) for path in self.positional_paths)
+        kwargs = {name: self._resolve_argument_path(arguments, path) for name, path in self.keyword_paths}
         return args, kwargs
+
+    @staticmethod
+    def _resolve_argument_path(arguments: dict[str, Any], path: ForwardInputPath) -> Any:
+        """Resolve a normalized argument value from a call-layout path."""
+        if isinstance(path, str):
+            return arguments[path]
+        # Normalized input paths always start with a forward parameter name.
+        value = arguments[cast(str, path[0])]
+        for component in path[1:]:
+            value = value[component]
+        return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,3 +158,55 @@ class ForwardSignature:
             keyword_paths.append((name, path))
 
         return ForwardCallLayout(tuple(positional_paths), tuple(keyword_paths))
+
+
+def validate_forward_input_path(path: object) -> None:
+    """Validate a forward parameter name or nested path rooted at one."""
+    if isinstance(path, str):
+        if path:
+            return
+    elif isinstance(path, tuple):
+        if (
+            len(path) >= 2
+            and isinstance(path[0], str)
+            and path[0]
+            and all(isinstance(component, (str, int)) and not isinstance(component, bool) for component in path[1:])
+        ):
+            return
+    raise AITuneUserInputError(
+        f"Forward input path must be a non-empty parameter name or a nested path tuple, got {path!r}."
+    )
+
+
+def _find_partial(obj: Any) -> functools.partial | None:
+    """Return the first concrete partial in a callable's wrapper chain.
+
+    ``inspect.signature`` normally follows ``__wrapped__``. For a wrapped partial, that loses the partial's pre-bound
+    arguments and exposes the original callable's signature. An explicit ``__signature__`` remains authoritative and
+    therefore stops traversal before any deeper partial is considered.
+
+    For example, Diffusers Context Parallelism effectively installs
+    ``update_wrapper(partial(context_parallel_forward, module), context_parallel_forward)``. Following
+    ``__wrapped__`` reports ``(module, x, ...)`` even though ``module`` is already bound; inspecting the concrete
+    partial reports the callable interface correctly as ``(x, ...)``.
+    """
+    seen = set()
+    # Wrapper metadata is user-controlled and may contain cycles. Track identities so malformed chains cannot hang
+    # signature inspection.
+    while id(obj) not in seen:
+        seen.add(id(obj))
+        if _is_partial(obj):
+            return obj
+        if hasattr(obj, "__signature__"):
+            # Match inspect.signature semantics: a caller-provided public signature takes precedence over unwrapping.
+            return None
+        try:
+            obj = obj.__wrapped__
+        except AttributeError:
+            return None
+    return None
+
+
+def _is_partial(obj: Any) -> bool:
+    """Return whether the object itself, rather than a transparent proxy, is a partial."""
+    return issubclass(type(obj), functools.partial)

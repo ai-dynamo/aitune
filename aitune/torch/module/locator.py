@@ -169,7 +169,11 @@ class Locator:
 
     @staticmethod
     def set_values(obj: object, replacements: Iterable[tuple["Locator", object]]) -> object:
-        """Replace several values while rebuilding each immutable tuple only once."""
+        """Replace values in mutable containers and rebuild each affected tuple once.
+
+        Replacing a parent takes precedence over replacements beneath it. Grouping shared paths avoids
+        repeatedly rebuilding large or nested tuples, but adds Python overhead for small mutable containers.
+        """
         return Locator._set_values_at_depth(obj, tuple(replacements), 0)
 
     @staticmethod

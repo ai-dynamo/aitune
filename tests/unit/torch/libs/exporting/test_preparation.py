@@ -9,6 +9,16 @@ from aitune.torch.module.recording_module import RecordingModule
 from tests.toy_models import TOY_EXPORT_MODELS
 
 
+class CountingModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.call_count = 0
+
+    def forward(self, x):
+        self.call_count += 1
+        return x + 1
+
+
 def test_prepare_moves_nested_tensor_leaves_to_device():
     model = dict(TOY_EXPORT_MODELS)["complex"]().eval()
     sample = model.samples(batch_sizes=[2])[0]
@@ -23,15 +33,6 @@ def test_prepare_moves_nested_tensor_leaves_to_device():
 
 
 def test_prepare_uses_recorded_graph_spec_without_calling_module(tmp_path):
-    class CountingModule(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.call_count = 0
-
-        def forward(self, x):
-            self.call_count += 1
-            return x + 1
-
     model = CountingModule()
     recording = RecordingModule(model, "counting", cache_dir_resolver=lambda: tmp_path)
     x = torch.ones(2)

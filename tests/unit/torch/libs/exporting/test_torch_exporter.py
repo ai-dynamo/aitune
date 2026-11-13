@@ -2,12 +2,25 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for Torch Export through the flat tensor boundary."""
 
+from functools import partial
+
 import pytest
 import torch
 
 from aitune.torch.libs.exporting import TorchExporter
 from tests.toy_models import ToyNestedInputModel
 from tests.utilities.helpers import make_graph_spec, update_input_spec
+
+
+class BatchMultiplierModel(torch.nn.Module):
+    def forward(self, x, doubled):
+        return x + 1, doubled + 1
+
+
+def fail_strict_export(real_export, *args, **kwargs):
+    if kwargs["strict"]:
+        raise RuntimeError("strict export failed")
+    return real_export(*args, **kwargs)
 
 
 @pytest.mark.parametrize("strict", [True, False], ids=["strict", "non-strict"])
@@ -30,12 +43,7 @@ def test_export_falls_back_to_non_strict_mode(mocker):
     graph_spec = make_graph_spec(model.forward, sample, model(x))
     real_export = torch.export.export
 
-    def fail_strict_export(*args, **kwargs):
-        if kwargs["strict"]:
-            raise RuntimeError("strict export failed")
-        return real_export(*args, **kwargs)
-
-    export = mocker.patch("torch.export.export", side_effect=fail_strict_export)
+    export = mocker.patch("torch.export.export", side_effect=partial(fail_strict_export, real_export))
 
     export_result = TorchExporter().export(model, sample, graph_spec)
     output = export_result.exported_program.module()(x)
@@ -68,11 +76,7 @@ def test_export_supports_nested_dynamic_inputs(use_auto):
     reason="Requires PyTorch 2.10 or newer; PyTorch 2.9 generates invalid export guards referencing 'L'",
 )
 def test_export_supports_different_batch_axis_multipliers():
-    class Model(torch.nn.Module):
-        def forward(self, x, doubled):
-            return x + 1, doubled + 1
-
-    model = Model().eval()
+    model = BatchMultiplierModel().eval()
     samples = [
         ((torch.ones(1, 4), torch.ones(2, 4)), {}),
         ((torch.ones(2, 4), torch.ones(4, 4)), {}),

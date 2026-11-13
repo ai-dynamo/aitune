@@ -227,7 +227,11 @@ class SampleMetadata:
         return [ts for _, ts in self._tensor_data]
 
     def flatten_tensors(self, value: Any) -> tuple[torch.Tensor, ...]:
-        """Read tensors from a value in the stable order recorded by this metadata."""
+        """Read tensor references in the stable order recorded by this metadata.
+
+        Each call walks the recorded paths in Python without copying tensor data. Inference overhead
+        therefore depends on the number and depth of tensor paths, rather than tensor size.
+        """
         tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
         for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
             if not isinstance(tensor, torch.Tensor):
@@ -243,6 +247,9 @@ class SampleMetadata:
         """Rebuild the structure, preserving explicitly supplied values by identity.
 
         Preserved paths take precedence over tensor replacements beneath them.
+        Containers and non-tensor data are deep-copied to isolate calls; tensor data is not copied.
+        This adds Python work on each output restoration, including ordinary tensor outputs.
+        The cost depends on the template structure and the number of replacements and preserved paths.
         """
         if len(self._tensor_data) == 1 and isinstance(tensors, torch.Tensor):
             tensors = (tensors,)

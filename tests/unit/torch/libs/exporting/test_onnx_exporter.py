@@ -14,12 +14,18 @@ from tests.toy_models import ToyNestedInputModel
 from tests.utilities.helpers import make_graph_spec
 
 
+class NestedModule(torch.nn.Module):
+    def forward(self, x, state):
+        return {"result": x + state["bias"]}
+
+
+class Add(torch.nn.Module):
+    def forward(self, x, y):
+        return x + y
+
+
 @pytest.mark.parametrize("use_dynamo", [False, True], ids=["trace", "dynamo"])
 def test_export_runs_nested_input_and_output_model(tmp_path, use_dynamo):
-    class NestedModule(torch.nn.Module):
-        def forward(self, x, state):
-            return {"result": x + state["bias"]}
-
     model = NestedModule().eval()
     x = torch.ones(2)
     bias = torch.full((2,), 3.0)
@@ -68,10 +74,6 @@ def test_dynamo_export_preserves_nested_dynamic_shapes(tmp_path):
 
 
 def test_trace_export_uses_explicit_dynamic_axis_names(tmp_path):
-    class Add(torch.nn.Module):
-        def forward(self, x, y):
-            return x + y
-
     model = Add().eval()
     sample = ((torch.ones(2, 4), torch.ones(2, 4)), {})
     graph_spec = make_graph_spec(model.forward, sample, model(*sample[0]))
