@@ -4,6 +4,7 @@
 
 from collections.abc import Callable
 from dataclasses import replace
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -13,10 +14,17 @@ from torch import nn
 
 import aitune.torch as ait
 from aitune.torch.dynamic_shapes import DynamicShapes
+from aitune.torch.jit.config import JITMode
+from aitune.torch.jit.config import config as jit_config
+from aitune.torch.jit.patched_module import ModuleState, PatchedModule
+from aitune.torch.jit.patcher import prepare_for_jit_tuning
 from aitune.torch.libs.torch import torch_exporter
+from aitune.torch.module.recording_module import RecordingModule
+from aitune.torch.module.tuned_module import TunedModule
 from tests.functional_ci.backends import BACKENDS, BackendCase, with_backends
 from tests.functional_ci.lifecycle import TENSORRT_FP32, assert_matches_eager, pinned_strategy, selected_backend
 from tests.functional_ci.models import IN_FEATURES, make_image_model, make_input, make_mlp, seeded
+from tests.functional_ci.test_jit import JitMLP
 
 TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10))
 
@@ -77,6 +85,34 @@ def test_recorded_batch_range(case: BackendCase, device: torch.device):
     assert (graph_spec.get_min_batch_size(), graph_spec.get_max_batch_size()) == (1, 4)
     selected_backend(tuned, type(backend))
     assert_matches_eager(tuned, make_mlp(device), device, case.tolerance, batch_sizes=(1, 2, 3, 4))
+
+
+@pytest.mark.matrix("jit_tuning.models.dynamic-batch-recorded")
+@with_backends("base")
+def test_recorded_batch_range_jit(case: BackendCase, device: torch.device):
+    """Infer batch bounds from live traffic and serve unseen in-range batch sizes."""
+    backend = case.factory()
+    jit_config.mode = JITMode.TUNE_EAGER
+    jit_config.device = device
+    jit_config.min_samples = 3
+    jit_config.strategy = pinned_strategy(backend)
+    reference = make_mlp(device)
+    with prepare_for_jit_tuning():
+        model = JitMLP(make_mlp(device))
+
+    with torch.no_grad():
+        model(make_input(device, batch_size=1))
+        model(make_input(device, batch_size=4))
+        (head,) = PatchedModule.heads
+        (graph_spec,) = cast(RecordingModule, head._wrapper).graph_specs
+        (tensor_spec,) = graph_spec.input_spec.tensor_specs
+        assert tensor_spec.min_shape == [1, IN_FEATURES]
+        assert tensor_spec.max_shape == [4, IN_FEATURES]
+        model(make_input(device, batch_size=1))
+    assert head._state == ModuleState.TUNED
+    (selected,) = cast(TunedModule, head._wrapper).backends.values()
+    assert type(selected) is type(backend)
+    assert_matches_eager(model, reference, device, case.tolerance, batch_sizes=(1, 2, 3, 4))
 
 
 @pytest.mark.matrix("aot_tuning.models.dynamic-batch-user")
@@ -145,6 +181,53 @@ def test_explicit_spatial_dims(case: BackendCase, device: torch.device, tmp_path
             case.tolerance.assert_close(restored(value), reference(value))
 
 
+@pytest.mark.matrix("jit_tuning.models.dynamic-non-batch")
+@with_backends(
+    "base",
+    marks={
+        "torch-tensorrt-aot": pytest.mark.xfail(
+            TORCH_2_8_TO_2_10,
+            reason="PyTorch 2.8–2.10's exported-program loader rejects symbolic 4D image strides (aitune#118)",
+            raises=AssertionError,
+            strict=True,
+        )
+    },
+)
+def test_explicit_spatial_dims_jit(case: BackendCase, device: torch.device):
+    """Infer spatial and batch bounds from traffic and serve an unrecorded image size."""
+    backend = case.factory()
+    jit_config.mode = JITMode.TUNE_EAGER
+    jit_config.device = device
+    jit_config.min_samples = 3
+    jit_config.strategy = pinned_strategy(backend)
+    reference = make_image_model(device)
+    with prepare_for_jit_tuning():
+        model = JitMLP(make_image_model(device))
+
+    generator = torch.Generator(device=device).manual_seed(1)
+    with torch.no_grad():
+        model(torch.randn(1, 3, 16, 16, device=device, generator=generator))
+        model(torch.randn(4, 3, 32, 32, device=device, generator=generator))
+        (head,) = PatchedModule.heads
+        (graph_spec,) = cast(RecordingModule, head._wrapper).graph_specs
+        (tensor_spec,) = graph_spec.input_spec.tensor_specs
+        assert tensor_spec.has_dynamic_axis()
+        assert tensor_spec.min_shape == [1, 3, 16, 16]
+        assert tensor_spec.max_shape == [4, 3, 32, 32]
+        model(torch.randn(1, 3, 16, 16, device=device, generator=generator))
+    assert head._state == ModuleState.TUNED
+    (selected,) = cast(TunedModule, head._wrapper).backends.values()
+    assert type(selected) is type(backend)
+    value = torch.randn(4, 3, 23, 23, device=device, generator=generator)
+    assert_matches_eager(
+        lambda x: model(value[: x.shape[0]]),
+        lambda x: reference(value[: x.shape[0]]),
+        device,
+        case.tolerance,
+        batch_sizes=(2, 3),
+    )
+
+
 @pytest.mark.matrix("aot_tuning.models.dynamic-non-batch/torch-tensorrt-aot")
 def test_spatial_dims_export_retry(device: torch.device):
     """Torch-TensorRT AOT exports again with bounded dynamic hints if strict export rejects the user's spatial dims.
@@ -211,6 +294,45 @@ def test_structured_io(case: BackendCase, device: torch.device):
 
     selected_backend(tuned, type(backend))
     assert_matches_eager(pipeline(tuned), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
+
+
+@pytest.mark.matrix(
+    "jit_tuning.models.non-tensor-inputs",
+    "jit_tuning.models.nested-inputs",
+    "jit_tuning.models.structured-outputs",
+)
+@with_backends("base")
+def test_structured_io_jit(case: BackendCase, device: torch.device):
+    """Preserve nested inputs, scalar and optional arguments, and structured outputs through JIT tuning."""
+    backend = case.factory()
+    jit_config.mode = JITMode.TUNE_EAGER
+    jit_config.device = device
+    jit_config.min_samples = 2
+    jit_config.strategy = pinned_strategy(backend)
+    tolerance = replace(case.tolerance, atol=5 * case.tolerance.atol)
+    bias = torch.linspace(-1, 1, IN_FEATURES, device=device)
+    residuals = [bias.flip(0), 0.5 * bias]
+    reference = StructuredModel(make_mlp(device))
+    with prepare_for_jit_tuning():
+        model = StructuredModel(make_mlp(device))
+
+    def pipeline(model: Callable) -> Callable:
+        return lambda x: model(
+            x,
+            {"bias": bias.repeat(x.shape[0], 1)},
+            [residual.repeat(x.shape[0], 1) for residual in residuals],
+            scale=2.0,
+            mask=None,
+        )
+
+    with torch.no_grad():
+        pipeline(model)(make_input(device, batch_size=1))
+        pipeline(model)(make_input(device, batch_size=4))
+    (head,) = PatchedModule.heads
+    assert head._state == ModuleState.TUNED
+    (selected,) = cast(TunedModule, head._wrapper).backends.values()
+    assert type(selected) is type(backend)
+    assert_matches_eager(pipeline(model), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
 
 
 @pytest.mark.matrix("aot_tuning.models.nested-inputs/torch-tensorrt-aot")
