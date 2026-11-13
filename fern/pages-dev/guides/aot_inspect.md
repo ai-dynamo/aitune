@@ -225,7 +225,7 @@ modules_info = ait.inspect(model, input_data, inference_function=run_chunk, min_
 tree = modules_info.call_tree
 
 for node in tree.find("dit"):    # recorded calls whose label contains "dit"
-    print(node.path, node.calls, node.time_ms)
+    print(node.path, node.calls, node.time_ms, node.bytes_in, node.bytes_out)
 # forward > dit_forward 10 ...
 # forward > dit_forward > dit.forward 10 ...
 ```
@@ -233,6 +233,8 @@ for node in tree.find("dit"):    # recorded calls whose label contains "dit"
 A node's **path** is its chain of callers, outermost first, joined by ` > `. Each part is an object path from the
 inspected object plus a method name: `forward > dit_forward` is `model.dit_forward` called from `model.forward`. The
 same module called from two places gives two nodes, for example an LLM used for prefill and for generation.
+`tree.nodes_of(model.dit)` returns the nodes of a module's `forward`, one per place it was called from, and
+`tree.nodes_of(model, "dit_forward")` those of another method.
 
 What is recorded:
 
@@ -241,13 +243,17 @@ What is recorded:
   `transformers`, `diffusers`, ...) are not recorded, but methods of your own subclasses of them are;
 - calls of `.to()`, `.cuda()` and similar that reach a module from code outside it, with the code that made them;
 - every torch op that reads a module's parameter or buffer, or looks up its device, with the recorded call it ran in;
-- times from CUDA events without synchronizing after every call, or from `time.perf_counter` without CUDA.
+- times from CUDA events without synchronizing after every call, or from `time.perf_counter` without CUDA;
+- tensor bytes in and out (`bytes_in`, `bytes_out`), summed over a node's calls: the tensors in each call's
+  args/kwargs and in its result, nested containers and ModelOutputs included, each tensor counted once per call.
+  Objects that `torch.utils._pytree` does not flatten, such as caches or your own classes, are not looked into.
 
 `call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. Parts compiled with
 `torch.compile` run compiled in the per-module pass, so calls inside them are not measured there; in the call-tree
 pass they run eagerly, so their calls and weight reads are recorded too, and the call tree's
-times for them are eager times, not compiled ones. Call-tree times also include the cost of recording weight accesses,
-so compare them with each other, not with deployed latency. `get_modules()` and
+times for them are eager times, not compiled ones. Call-tree times also include the cost of recording weight accesses
+and counting tensor bytes, which run in Python. Where the GPU waits for the CPU, this inflates times, most of all for
+calls with many recorded calls inside, so use them for a rough comparison, not as deployed latency. `get_modules()` and
 `describe()` are unchanged: they still come from the synchronized pass. The object walk has to reach the linear
 layers, so deep models need a larger `max_depth` (8 for BAGEL-sized pipelines).
 

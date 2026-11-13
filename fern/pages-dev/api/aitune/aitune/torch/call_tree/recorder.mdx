@@ -14,9 +14,12 @@ wraps the methods it finds and calls ``begin_call`` and ``end_call`` around the 
 ```python
 frame = recorder.begin_call(label, obj, name, args, kwargs)
 try:
-    return original(*args, **kwargs)
-finally:
+    result = original(*args, **kwargs)
+except BaseException:
     recorder.end_call(frame)
+    raise
+recorder.end_call(frame, result)
+return result
 ```
 
 </CodeBlock>
@@ -33,6 +36,16 @@ available and ``time.perf_counter`` otherwise; ``flush()`` resolves the pending 
 |------|-------------|
 | [`CallRecorder`](#aitune-torch-call_tree-recorder-CallRecorder) | Record a context-keyed call tree from begin_call/end_call callbacks. |
 | [`_Frame`](#aitune-torch-call_tree-recorder-_Frame) | An open call: its node and the start of its timer. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_tensor_bytes`](#aitune-torch-call_tree-recorder-_tensor_bytes) | Total bytes of the tensor leaves of ``tree``, deduplicated by object identity. |
+
+### Data
+
+[`_NO_RESULT`](#aitune-torch-call_tree-recorder-_NO_RESULT)
 
 ### API
 
@@ -301,7 +314,8 @@ Mark the start of one iteration (for example one call of the inference function)
 
 ```python
 aitune.torch.call_tree.CallRecorder.end_call(
-    frame: aitune.torch.call_tree.recorder._Frame | None
+    frame: aitune.torch.call_tree.recorder._Frame | None,
+    result: typing.Any = _NO_RESULT
 ) -> None
 ```
 
@@ -311,6 +325,16 @@ aitune.torch.call_tree.CallRecorder.end_call(
 <Indent>
 
 Record the end of a call started with ``begin_call``.
+
+**Parameters:**
+
+<ParamField path="frame" type="_Frame | None">
+The frame ``begin_call`` returned.
+</ParamField>
+
+<ParamField path="result" type="Any" default="_NO_RESULT">
+The call's return value, to count its tensor bytes; omit it when the call raised.
+</ParamField>
 
 
 </Indent>
@@ -435,3 +459,38 @@ recorded on.
 <ParamField path="node" type="CallNode">
 </ParamField>
 </Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_tensor_bytes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._tensor_bytes(
+    tree: typing.Any
+) -> int
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Total bytes of the tensor leaves of ``tree``, deduplicated by object identity.
+
+Containers of tensors (lists, dicts, ModelOutputs, ...) are walked; non-tensor leaves (a ``DynamicCache``, a
+plain object) are ignored. The walk runs with torch function disabled so it records no weight accesses.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_NO_RESULT">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._NO_RESULT = object()
+```
+
+</CodeBlock>
+</Anchor>
+

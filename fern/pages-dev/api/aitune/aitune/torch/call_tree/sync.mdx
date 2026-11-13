@@ -12,7 +12,7 @@ Synchronize a recorded call tree across distributed ranks.
 
 | Name | Description |
 |------|-------------|
-| [`synchronize_call_tree`](#aitune-torch-call_tree-sync-synchronize_call_tree) | Apply rank zero's call counts and timings to the local call tree. |
+| [`synchronize_call_tree`](#aitune-torch-call_tree-sync-synchronize_call_tree) | Apply rank zero's call counts, timings and byte totals to the local call tree. |
 
 ### API
 
@@ -31,11 +31,12 @@ aitune.torch.call_tree.sync.synchronize_call_tree(
 
 <Indent>
 
-Apply rank zero's call counts and timings to the local call tree.
+Apply rank zero's call counts, timings and byte totals to the local call tree.
 
 Every rank must have recorded the same tree: the same node keys (adapter names), with the same owner class and
-call count per key. Times are taken from rank zero so that every rank reports the same times. Sequences, ``.to()`` callers
-and recorded weight accesses stay local; they follow from the verified structure.
+call count per key. Times and tensor bytes are taken from rank zero so that every rank reports the same values;
+the bytes are not compared, because tensor-parallel ranks can hold differently sized shards. Sequences,
+``.to()`` callers and recorded weight accesses stay local; they follow from the verified structure.
 
 **Parameters:**
 

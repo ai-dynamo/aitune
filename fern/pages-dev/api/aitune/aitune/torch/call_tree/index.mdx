@@ -53,6 +53,8 @@ class aitune.torch.CallNode(
     module: torch.nn.Module | None = None,
     calls: int = 0,
     time_ms: float = 0.0,
+    bytes_in: int = 0,
+    bytes_out: int = 0,
     children: list[aitune.torch.call_tree.nodes.NodeKey] = list(),
     first_seen: int = 0
 )
@@ -67,6 +69,11 @@ class aitune.torch.CallNode(
 
 One node of the call tree.
 
+``bytes_in`` and ``bytes_out`` measure the tensor data passed into and returned from the node's calls. Only
+tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
+inside lists, tuples, dicts and ``ModelOutput`` count too. Everything else counts as 0 bytes: numbers, strings,
+``None``, and objects such as a ``DynamicCache``, including the tensors they hold.
+
 **Example**
 
 &gt;&gt;&gt; node = CallNode(
@@ -75,6 +82,15 @@ One node of the call tree.
 &gt;&gt;&gt; node.path, node.parent_key
 ('forward &gt; dit_forward', ('root.forward',))
 
+
+<ParamField path="bytes_in" type="int = 0">
+Tensor bytes in the arguments, summed over all recorded iterations. Bytes per call:
+``bytes_in / calls``.
+</ParamField>
+
+<ParamField path="bytes_out" type="int = 0">
+Tensor bytes in the results, summed over all recorded iterations.
+</ParamField>
 
 <ParamField path="calls" type="int = 0">
 Number of calls over all recorded iterations.
@@ -386,7 +402,8 @@ Mark the start of one iteration (for example one call of the inference function)
 
 ```python
 aitune.torch.call_tree.CallRecorder.end_call(
-    frame: aitune.torch.call_tree.recorder._Frame | None
+    frame: aitune.torch.call_tree.recorder._Frame | None,
+    result: typing.Any = _NO_RESULT
 ) -> None
 ```
 
@@ -396,6 +413,16 @@ aitune.torch.call_tree.CallRecorder.end_call(
 <Indent>
 
 Record the end of a call started with ``begin_call``.
+
+**Parameters:**
+
+<ParamField path="frame" type="_Frame | None">
+The frame ``begin_call`` returned.
+</ParamField>
+
+<ParamField path="result" type="Any" default="_NO_RESULT">
+The call's return value, to count its tensor bytes; omit it when the call raised.
+</ParamField>
 
 
 </Indent>
@@ -517,11 +544,13 @@ Call tree of one recording.
 &gt;&gt;&gt; outer = CallNode(
 ...     key=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
 ... )
+&gt;&gt;&gt; dit_module = nn.Linear(2, 2)
 &gt;&gt;&gt; dit = CallNode(
 ...     key=("root.forward", "root.dit.forward"),
 ...     label="root.dit.forward",
 ...     owner_class="Dit",
 ...     method="forward",
+...     module=dit_module,
 ...     calls=10,
 ...     time_ms=25.0,
 ...     first_seen=1,
@@ -534,6 +563,8 @@ Call tree of one recording.
 ['forward &gt; dit.forward']
 &gt;&gt;&gt; [(n.path, n.calls) for n in tree.find("dit")]
 [('forward &gt; dit.forward', 10)]
+&gt;&gt;&gt; [n.path for n in tree.nodes_of(dit_module)]
+['forward &gt; dit.forward']
 
 
 <ParamField path="iterations" type="int = 0">
@@ -601,6 +632,48 @@ aitune.torch.CallTree.find(
 <Indent>
 
 Nodes whose label contains ``text``, in first-call order.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-nodes_of">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.nodes_of(
+    module: torch.nn.Module,
+    method: str = 'forward'
+) -> list[aitune.torch.call_tree.nodes.CallNode]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Nodes recorded for calls of ``module.&lt;method&gt;``.
+
+A node is one chain of callers, so a module called from one place has one node, however often it ran there.
+A module called from several places (e.g. an LLM used by both ``prefill`` and ``generate``) has one node per
+place.
+
+Matching is by object identity (``node.module is module``), not by label, so a module that is reachable under
+several names (e.g. a tied embedding) is found under whichever name was recorded.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+The module object that was recorded. After ``ait.wrap`` the attribute holds the wrapper instead,
+which matches nothing; pass a reference to the original module.
+</ParamField>
+
+<ParamField path="method" type="str" default="'forward'">
+Name of the recorded method.
+</ParamField>
+
+**Returns:** `list[` [`CallNode`](./nodes.mdx#aitune-torch-call_tree-nodes-CallNode) `]`
+
+The matching nodes in first-call order; empty if the module was not recorded. Methods of objects that
 
 
 </Indent>

@@ -48,6 +48,8 @@ class aitune.torch.CallNode(
     module: torch.nn.Module | None = None,
     calls: int = 0,
     time_ms: float = 0.0,
+    bytes_in: int = 0,
+    bytes_out: int = 0,
     children: list[aitune.torch.call_tree.nodes.NodeKey] = list(),
     first_seen: int = 0
 )
@@ -62,6 +64,11 @@ class aitune.torch.CallNode(
 
 One node of the call tree.
 
+``bytes_in`` and ``bytes_out`` measure the tensor data passed into and returned from the node's calls. Only
+tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
+inside lists, tuples, dicts and ``ModelOutput`` count too. Everything else counts as 0 bytes: numbers, strings,
+``None``, and objects such as a ``DynamicCache``, including the tensors they hold.
+
 **Example**
 
 &gt;&gt;&gt; node = CallNode(
@@ -70,6 +77,15 @@ One node of the call tree.
 &gt;&gt;&gt; node.path, node.parent_key
 ('forward &gt; dit_forward', ('root.forward',))
 
+
+<ParamField path="bytes_in" type="int = 0">
+Tensor bytes in the arguments, summed over all recorded iterations. Bytes per call:
+``bytes_in / calls``.
+</ParamField>
+
+<ParamField path="bytes_out" type="int = 0">
+Tensor bytes in the results, summed over all recorded iterations.
+</ParamField>
 
 <ParamField path="calls" type="int = 0">
 Number of calls over all recorded iterations.
