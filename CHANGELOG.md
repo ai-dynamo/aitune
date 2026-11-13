@@ -29,6 +29,7 @@ title: "Changelog"
 - fix: save Torch-TensorRT AOT models whose inputs include non-tensor values
 - fix: `inspect()` accepts `MinMaxRandomDataset`, directly or through `DataLoaderFactory`, and no longer replaces the factory's dataset
 - fix: AOT tuning writes and clears module caches under `config.cache_dir` instead of always using `AITUNE_CACHE_DIR`
+- fix: hardware metrics report `cuda:N` GPU memory, utilization, and power for the N-th GPU visible through `CUDA_VISIBLE_DEVICES` instead of the N-th GPU in the machine
 - breaking change: concrete strategy constructors now require explicit backend candidates; use `resolve_strategy` for dynamic defaults
 - breaking change: TorchInductor JIT, Torch-TensorRT JIT, and TorchAO checkpoints now require disk-backed warmup samples; legacy checkpoints with inline sample data are no longer supported
 
