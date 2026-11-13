@@ -286,3 +286,66 @@ def test_module_compiled_child_is_recorded_once_and_counts_stay_unchanged(datase
     nodes = _tree(info).nodes
     assert nodes[("root.forward", "root.child.forward")].calls == ITERATIONS
     assert ("root.forward", "root.child.forward", "root.child.lin.forward") in nodes
+
+
+class _Block(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.proj = nn.Linear(8, 8)
+
+    def forward(self, x):
+        return self.proj(x)
+
+
+class _TunedBlocksModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.blocks = nn.ModuleList([_Block(), _Block()])
+        self.head = nn.Linear(8, 8)
+
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        return self.head(x)
+
+
+def test_call_tree_after_tune_matches_eager_call_paths():
+    """A wrapped, tuned module keeps its call path; the wrapper's own methods are not recorded."""
+    from aitune.torch.backend import TorchEagerBackend
+    from aitune.torch.inspecting.wrapping import wrap
+    from aitune.torch.module.wrapper_module import Module, ModuleState
+    from aitune.torch.module_registry import MODULE_REGISTRY
+    from aitune.torch.tune_strategy import OneBackendStrategy
+    from aitune.torch.tuning import tune
+
+    def call_paths(info):
+        return {n.path for n in info.call_tree.nodes.values()}
+
+    model = _TunedBlocksModel()
+    x = torch.randn(4, 8)
+
+    eager_info = inspect(model, x, number_of_iterations=1, warmup_iterations=0, min_depth=2, call_tree=True)
+    eager_paths = call_paths(eager_info)
+    assert "forward > blocks.0.forward" in eager_paths
+
+    blocks0 = [m for m in eager_info.get_modules() if m.object_path == ".blocks.0"]
+    wrap(model, blocks0, strategy=OneBackendStrategy(backend=TorchEagerBackend()))
+    tune(model, x, batch_sizes=[1], device="cpu")
+    tuned_block = model.blocks[0]
+    assert isinstance(tuned_block, Module) and tuned_block.state == ModuleState.TUNED
+
+    expected = model(x.unsqueeze(0))
+    tuned_info = inspect(model, x, number_of_iterations=1, warmup_iterations=0, min_depth=2, call_tree=True)
+    tuned_paths = call_paths(tuned_info)
+
+    assert tuned_paths == eager_paths
+    assert all("_proxy_forward" not in p and "_restore_original_forward" not in p for p in tuned_paths)
+    assert all("._" not in p.rpartition(" > ")[2] for p in tuned_paths)
+
+    # Inspect restores the wrapper's proxy forward; the model still runs through the tuned module.
+    assert torch.equal(model(x.unsqueeze(0)), expected)
+    assert isinstance(model.blocks[0], Module) and model.blocks[0].state == ModuleState.TUNED
+    assert MODULE_REGISTRY.modules["blocks.0"] is model.blocks[0]
+
+    again = inspect(model, x, number_of_iterations=1, warmup_iterations=0, min_depth=2, call_tree=True)
+    assert call_paths(again) == eager_paths

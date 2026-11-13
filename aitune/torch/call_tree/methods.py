@@ -8,10 +8,12 @@ from typing import Any
 import torch
 from torch import nn
 
-# Library packages whose classes' methods are not recorded as nodes; their ``forward`` still is, through the
-# adapters' forward wrappers.
+# Library packages, and aitune's own wrappers, whose classes' methods are not recorded as nodes; their ``forward``
+# still is, through the adapters' forward wrappers.
 SKIP_LIBRARY_PREFIXES = (
     "torch.",
+    "aitune.torch.module.",
+    "aitune.torch.jit.",
     "transformers.",
     "diffusers.",
     "accelerate.",

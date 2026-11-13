@@ -49,6 +49,7 @@ from aitune.torch.inspecting.module_info import (
     OnnxModuleInfo,
 )
 from aitune.torch.module.onnx_module import OnnxModule
+from aitune.torch.module.wrapper_module import Module
 from aitune.torch.utils.cuda_utils import synchronize
 from aitune.utils.env_vars import get_bool_env_variable
 
@@ -150,7 +151,10 @@ class ModuleInspector:
         """Reset the inspector state."""
         # Restore original forward methods
         for module, original_forward in self._original_forward.items():
-            module.forward = original_forward
+            if isinstance(module, Module):
+                module.set_proxy_forward(original_forward)
+            else:
+                module.forward = original_forward
         for module, original_compiled_call in self._original_compiled_call.items():
             module._compiled_call_impl = original_compiled_call
         self._restore_methods()
@@ -459,7 +463,10 @@ class ModuleInspector:
                 return original_forward(*args, **kwargs)
             return self._time_call(module, original_forward, args, kwargs)
 
-        module.forward = wrapped_forward
+        if isinstance(module, Module):
+            module.set_proxy_forward(wrapped_forward)
+        else:
+            module.forward = wrapped_forward
         self._wrap_compiled_call(module)
 
     def _time_call(self, module: torch.nn.Module, call: Callable, args: tuple, kwargs: dict) -> Any:

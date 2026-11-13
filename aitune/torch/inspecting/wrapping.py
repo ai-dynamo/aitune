@@ -40,7 +40,9 @@ def wrap(
             checks the device of, or moves stay on the device when tuning offloads the module (see
             ``aitune.torch.call_tree.shared_weights_of``), and each kept weight is logged. Wrapping a module again
             replaces the weights it keeps; a weight stays kept while any wrapped module keeps it. A ``ModuleInfo``
-            without ``inspection``, such as one built by hand, keeps nothing.
+            without ``inspection``, such as one built by hand, keeps nothing. Each wrapped submodule is named by its
+            object path (``blocks.0.attn``), which is also the object path of its call-tree nodes; a ``ModuleInfo``
+            without ``object_path`` keeps its ``name``, and the root module is named by its class.
         strategy: Strategy to use for patching.
         strategies: Strategies to use for patching.
 
@@ -50,21 +52,24 @@ def wrap(
     setup_logging(format_string=LOG_FORMAT)
     MODULE_REGISTRY.clear()
     for module_info in modules:
-        logger.info("Wrapping module: %s", module_info.object_path or module_info.name or obj.__class__.__name__)
+        name = (
+            module_info.object_path.removeprefix(".")
+            if module_info.object_path
+            else module_info.name or obj.__class__.__name__
+        )
+        logger.info("Wrapping module: %s", name)
         module = module_info.module if module_info.parent is not None else obj
         if isinstance(module, torch.nn.Module):
             release_kept_on_device(module)
             call_tree = module_info.inspection.call_tree if module_info.inspection is not None else None
             if call_tree is not None:
-                _keep_shared_weights(
-                    call_tree, module, module_info.object_path or module_info.name or type(module).__name__
-                )
+                _keep_shared_weights(call_tree, module, name)
         if module_info.parent is None:
             return Module(
                 cast(torch.nn.Module, obj), name=obj.__class__.__name__, strategy=strategy, strategies=strategies
             )
 
-        ait_module = Module(module_info.module, name=module_info.name, strategy=strategy, strategies=strategies)
+        ait_module = Module(module_info.module, name=name, strategy=strategy, strategies=strategies)
         module_info.parent.set_wrapped(module_info.name, ait_module)
 
     return obj
