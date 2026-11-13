@@ -193,6 +193,36 @@ def test_normalize_supports_all_parameter_kinds():
     assert forward(*normalized.args, **normalized.kwargs) == (1, 2, (), 3, {"extra": 4})
 
 
+@pytest.mark.parametrize(
+    ("args", "kwargs"),
+    [
+        pytest.param((1, 2, 3), {"keyword": 4, "extra": 5}, id="variadic-positional"),
+        pytest.param((1,), {"optional": 2, "keyword": 4, "extra": 5}, id="keyword"),
+    ],
+)
+def test_call_layout_restores_original_argument_style(args, kwargs):
+    def forward(positional, /, optional=None, *values, keyword=None, **options):
+        return positional, optional, values, keyword, options
+
+    signature = ForwardSignature.from_callable(forward)
+    layout = signature.capture_call_layout(args, kwargs)
+    arguments = signature.normalize(args, kwargs).arguments
+
+    assert layout.restore(arguments) == (args, kwargs)
+
+
+def test_call_layout_distinguishes_positional_only_names_from_extra_keywords():
+    def forward(positional=1, /, **options):
+        return positional, options
+
+    signature = ForwardSignature.from_callable(forward)
+    args = (1,)
+    kwargs = {"positional": 2}
+    layout = signature.capture_call_layout(args, kwargs)
+
+    assert layout.restore(signature.normalize(args, kwargs).arguments) == (args, kwargs)
+
+
 def test_forward_signature_serialization_round_trip():
     def forward(x, optional=None, *args, keyword=None, **kwargs):
         pass

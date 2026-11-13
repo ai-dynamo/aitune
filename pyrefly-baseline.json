@@ -974,34 +974,6 @@
       "severity": "error"
     },
     {
-      "column": 36,
-      "path": "aitune/torch/module/locator.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `int | str` is not assignable to parameter `name` with type `str` in function `getattr`",
-      "severity": "error"
-    },
-    {
-      "column": 23,
-      "path": "aitune/torch/module/locator.py",
-      "name": "bad-index",
-      "concise_description": "Cannot index into `object`",
-      "severity": "error"
-    },
-    {
-      "column": 36,
-      "path": "aitune/torch/module/locator.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `int | str` is not assignable to parameter `name` with type `str` in function `getattr`",
-      "severity": "error"
-    },
-    {
-      "column": 26,
-      "path": "aitune/torch/module/locator.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `int | str` is not assignable to parameter `name` with type `str` in function `setattr`",
-      "severity": "error"
-    },
-    {
       "column": 38,
       "path": "aitune/torch/module/onnx_module.py",
       "name": "bad-argument-type",
@@ -1013,41 +985,6 @@
       "path": "aitune/torch/module/onnx_module.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Unknown | None` is not assignable to parameter `session` with type `InferenceSession` in function `aitune.torch.libs.onnx.runtime.run_onnx`",
-      "severity": "error"
-    },
-    {
-      "column": 76,
-      "path": "aitune/torch/module/sample_metadata.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `int | Unknown | None` is not assignable to parameter `batch_size` with type `float | int` in function `aitune.torch.module.tensor_spec.TensorSpec.from_tensor`",
-      "severity": "error"
-    },
-    {
-      "column": 38,
-      "path": "aitune/torch/module/sample_metadata.py",
-      "name": "bad-index",
-      "concise_description": "Cannot index into `object`",
-      "severity": "error"
-    },
-    {
-      "column": 76,
-      "path": "aitune/torch/module/sample_metadata.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `int | Unknown | None` is not assignable to parameter `batch_size` with type `float | int` in function `aitune.torch.module.tensor_spec.TensorSpec.from_tensor`",
-      "severity": "error"
-    },
-    {
-      "column": 22,
-      "path": "aitune/torch/module/sample_metadata.py",
-      "name": "bad-assignment",
-      "concise_description": "`object` is not assignable to variable `inputs` with type `dict[str, Any]`",
-      "severity": "error"
-    },
-    {
-      "column": 61,
-      "path": "aitune/torch/module/sample_metadata.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `tensor` with type `Tensor` in function `batch_tensor`",
       "severity": "error"
     },
     {
@@ -3813,48 +3750,6 @@
       "path": "tests/unit/torch/module/test_graph_bindings.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `int | str | tuple[int | str, ...]` is not assignable to parameter `path` with type `str | tuple[int | str, ...]` in function `aitune.torch.backend.tensorrt.tensorrt_profile.TensorRTProfile.add_input_shape`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "tests/unit/torch/module/test_locator.py",
-      "name": "no-matching-overload",
-      "concise_description": "No matching overload found for function `sorted` called with arguments: (Generator[tuple[Locator, object]], key=(x: Unknown) -> Unknown)",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "tests/unit/torch/module/test_locator.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `input` with type `Tensor` in function `torch._C._VariableFunctions.equal`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "tests/unit/torch/module/test_locator.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `input` with type `Tensor` in function `torch._C._VariableFunctions.equal`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "tests/unit/torch/module/test_locator.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `input` with type `Tensor` in function `torch._C._VariableFunctions.equal`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "tests/unit/torch/module/test_locator.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `input` with type `Tensor` in function `torch._C._VariableFunctions.equal`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "tests/unit/torch/module/test_locator.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `input` with type `Tensor` in function `torch._C._VariableFunctions.equal`",
       "severity": "error"
     },
     {
