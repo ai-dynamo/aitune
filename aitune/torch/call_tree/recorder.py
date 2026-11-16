@@ -21,6 +21,8 @@ available and ``time.perf_counter`` otherwise; ``flush()`` resolves the pending 
 
 from __future__ import annotations
 
+import contextlib
+import dataclasses
 import time
 from collections import UserDict
 from collections.abc import Callable, Iterator
@@ -303,21 +305,41 @@ def _tensor_leaves(tree: Any) -> Iterator[torch.Tensor]:
     """Yield the unique tensors inside ``tree``, deduplicated by object identity.
 
     Containers of tensors (lists, dicts, ModelOutputs, ...) are walked; non-tensor leaves (a ``DynamicCache``, a
-    plain object) are ignored. UserDicts, which pytree does not flatten — such as ``transformers.BatchFeature``
-    and ``BatchEncoding`` — are walked into their ``.data``: it is a plain dict, so the walk runs no code of the
-    mapping's class (a lazy mapping would run ``__getitem__``), and walking each once stops self-references.
+    plain object) are ignored. Two kinds of container that pytree does not flatten are walked too:
+
+    - UserDicts, such as ``transformers.BatchFeature`` and ``BatchEncoding``, into their ``.data``: it is a plain
+      dict, so the walk runs no code of the mapping's class (a lazy mapping would run ``__getitem__``).
+    - Dataclass instances, into the values of their fields (``dataclasses.fields``), so tensors that a pipeline
+      passes in its own dataclasses count. Fields are read with ``getattr``, which runs no code of the class unless
+      a property shadows the field; a field without a value, such as an unset slot, is skipped. Dataclasses that
+      pytree flattens itself, such as ``ModelOutput``, are walked by pytree as before.
+
+    Each container is walked once, which also stops self-references.
     """
     seen: set[int] = set()
     stack = [tree]
     while stack:
         for leaf in torch.utils._pytree.tree_leaves(stack.pop()):
-            if id(leaf) in seen or not isinstance(leaf, (torch.Tensor, UserDict)):
+            if id(leaf) in seen:
                 continue
-            seen.add(id(leaf))
-            if isinstance(leaf, UserDict):
-                stack.append(leaf.data)
-            else:
+            if isinstance(leaf, torch.Tensor):
+                seen.add(id(leaf))
                 yield leaf
+            elif isinstance(leaf, UserDict):
+                seen.add(id(leaf))
+                stack.append(leaf.data)
+            elif dataclasses.is_dataclass(leaf) and not isinstance(leaf, type):
+                seen.add(id(leaf))
+                stack.append(_field_values(leaf))
+
+
+def _field_values(instance: Any) -> list[Any]:
+    """The values of a dataclass instance's fields, skipping fields that have no value."""
+    values = []
+    for field in dataclasses.fields(instance):
+        with contextlib.suppress(AttributeError):
+            values.append(getattr(instance, field.name))
+    return values
 
 
 def _tensor_bytes(tree: Any) -> int:

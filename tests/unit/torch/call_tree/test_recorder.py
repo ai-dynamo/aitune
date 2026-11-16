@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import dataclasses
 from collections import UserDict
 from collections.abc import Mapping
 
@@ -942,6 +943,81 @@ def test_bytes_count_a_userdict_that_contains_itself():
     node = tree.nodes[("root.forward",)]
     assert node.bytes_in == t.numel() * t.element_size()
     assert node.bytes_out == t.numel() * t.element_size()
+
+
+@pytest.mark.parametrize("options", [{}, {"frozen": True}, {"slots": True}], ids=["plain", "frozen", "slots"])
+def test_bytes_count_tensors_inside_a_dataclass(options):
+    @dataclasses.dataclass(**options)
+    class Packed:
+        x: torch.Tensor
+        nested: list
+        label: str = "packed"
+
+    class Model(nn.Module):
+        def forward(self, packed):
+            return Packed(x=packed.x, nested=[torch.zeros(8)])
+
+    model = Model()
+    a, b = torch.randn(4, 8), torch.randn(2, 8)
+
+    tree = record(model, lambda: model(Packed(x=a, nested=[b])), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == a.numel() * a.element_size() + b.numel() * b.element_size()
+    assert node.bytes_out == a.numel() * a.element_size() + 8 * 4
+
+
+def test_bytes_count_a_dataclass_that_contains_itself():
+    @dataclasses.dataclass
+    class Node:
+        x: torch.Tensor
+        parent: object = None
+
+    class Model(nn.Module):
+        def forward(self, node):
+            return node.x
+
+    model = Model()
+    t = torch.randn(4, 8)
+    node = Node(t)
+    node.parent = node
+
+    tree = record(model, lambda: model(node), iterations=1)
+
+    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+
+
+def test_bytes_skip_a_dataclass_field_without_a_value():
+    @dataclasses.dataclass(slots=True)
+    class Partial:
+        x: torch.Tensor
+        later: torch.Tensor = dataclasses.field(init=False)
+
+    class Model(nn.Module):
+        def forward(self, partial):
+            return partial.x
+
+    model = Model()
+    t = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(Partial(t)), iterations=1)
+
+    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+
+
+def test_bytes_walk_a_model_output_as_before():
+    from transformers.modeling_outputs import BaseModelOutput
+
+    class Model(nn.Module):
+        def forward(self, x):
+            return BaseModelOutput(last_hidden_state=x, hidden_states=(x, x[:2] * 0))
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(x), iterations=1)
+
+    assert tree.nodes[("root.forward",)].bytes_out == x.numel() * x.element_size() + 2 * 8 * 4
 
 
 def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
