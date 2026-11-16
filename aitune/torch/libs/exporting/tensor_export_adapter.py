@@ -16,10 +16,34 @@ from aitune.torch.module.sample_store import Sample
 class TensorExportAdapter(nn.Module):
     """Adapt a structured module call to flat tensor inputs and outputs in recorded order.
 
+    Flattening is the explicit interface shared by export and later backend execution. It separates
+    tensor computation from Python containers, whose structure and identity must be restored outside
+    the compiled runner. This adapter returns recorded user outputs; mutation outputs are added separately.
+
     Non-tensor arguments come from the recorded sample. Compatible inputs use a prepared PyTree
     recipe to keep reconstruction simple for strict Torch Export. Otherwise, recorded locators
     reconstruct the arguments, including custom objects supported by Locator but unknown to PyTree.
     This fallback preserves reconstruction support; export still depends on the module and exporter.
+
+    Example:
+        For a module whose forward returns ``{"result": (x + state["bias"]) * state["scale"]}``,
+        preparation from ``module(x=x, state={"bias": bias, "scale": 2})`` records this interface::
+
+            Flat inputs:   (x, bias)
+            Rebuilt call:  module(x=x, state={"bias": bias, "scale": 2})
+            Flat outputs:  (result,)
+
+        Each invocation supplies current tensors in the recorded order. The scale stays 2 because it
+        comes from the sample, and the call stays keyword-based. Outputs contain only recorded tensors;
+        restoring the caller's Python output structure belongs to backend integration.
+
+    Reconstruction rules:
+        PyTree is used only when tensor identity and order agree with SampleMetadata and replacing
+        tensors with None preserves the tree structure and non-tensor leaf identity. Matching only
+        tensor counts could silently associate a flat input with the wrong argument. On mismatch,
+        locators reconstruct from a copied template instead. Rebuilt containers isolate ordinary
+        list and dict changes between calls; input tensors are references, so tensor writes can still
+        affect supplied tensors. Custom-object reconstruction does not guarantee traceability.
     """
 
     def __init__(

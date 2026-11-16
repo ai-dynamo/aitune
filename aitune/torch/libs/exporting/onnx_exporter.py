@@ -22,7 +22,23 @@ logger = logging.getLogger(__name__)
 
 
 class ONNXExporter:
-    """Export a module to ONNX through AITune's flat tensor interface."""
+    """Export a module to ONNX through AITune's flat tensor interface.
+
+    For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, the artifact
+    has tensor inputs for x and bias and one tensor output for result. Names come from recorded paths;
+    Python containers and non-tensor sample values are handled by the adapter during export.
+    Runtime code must supply the named tensors and restore the original output structure.
+
+    Both export modes use the same prepared adapter. Dynamo receives Torch dynamic-shape constraints;
+    the legacy tracer receives ONNX dynamic-axis annotations. The selected mode is used without fallback.
+    Export returns the artifact path after ONNX structural validation, which does not establish numerical
+    equivalence with the original module. An incomplete artifact is removed on failure when possible.
+
+    Args:
+        output_path: Destination for the ONNX artifact.
+        use_dynamo: Use Dynamo export if True; otherwise use the legacy tracer.
+        opset_version: ONNX operator-set version, or None to use Torch's default.
+    """
 
     def __init__(self, output_path: Path, use_dynamo: bool = False, opset_version: int | None = None):
         """Initialize the output path and ONNX export mode."""
@@ -39,7 +55,11 @@ class ONNXExporter:
         *,
         device: torch.device | str | None = None,
     ) -> Path:
-        """Prepare a tensor-only example call and export it to ONNX."""
+        """Prepare a tensor-only example call and export it to ONNX.
+
+        ``verbose`` controls Torch exporter output; AITune diagnostics use logger configuration.
+        ``device`` moves sample tensors only, so the caller must place the module separately.
+        """
         logger.info("Exporting PyTorch module to ONNX: %s", self.output_path)
 
         try:

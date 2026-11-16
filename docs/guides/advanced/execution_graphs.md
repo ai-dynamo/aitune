@@ -43,6 +43,52 @@ AITune creates a new execution graph when it encounters inputs that differ in th
 
 **Important**: Tensors with the same rank but different shapes belong to the **same graph**. AITune handles shape variations through dynamic shape tracking (batch axes and dynamic dimensions).
 
+## Why export uses flat tensors
+
+AITune's shared Torch Export and ONNX preparation uses an explicit ordered tensor interface.
+The original module can still accept and return nested Python structures:
+
+```python
+def forward(x, state):
+    return {"result": x + state["bias"]}
+```
+
+For this call, recorded paths identify `x`, `state["bias"]`, and the output `result`.
+The export adapter accepts `(x, bias)`, reconstructs the original call, and returns `(result,)`.
+Input tensors and shape constraints follow the same recorded order. Non-tensor arguments
+come from the sample used to prepare the adapter.
+
+Graph matching and replay have different requirements. Matching uses parameter names so
+equivalent positional and keyword calls share metadata. Replay preserves the supplied call
+layout because a decorator can reject positional arguments even when the signature accepts them.
+
+### Why reconstruction also needs object identity
+
+The flat interface is a foundation for mutable-input support. Consider a module that changes
+a cache without returning it:
+
+```python
+def forward(x, cache):
+    cache[0] = x + 1
+    return x * 2
+```
+
+Returning only `x * 2` would lose the cache update. Backend integration therefore needs to
+carry the updated tensor as an additional result and write it into the caller's cache.
+If the module also returns that cache, the returned object must be the caller's original
+container. Equal tensor values in a new container would not preserve that behavior.
+
+`SampleMetadata` provides ordered tensor extraction and reconstruction from a template.
+Reconstruction copies ordinary containers to isolate calls and can preserve selected objects
+by identity. It does not itself detect or apply input mutations. Backend integration and
+mutation restoration build on these operations separately from export preparation.
+
+The corresponding checks live in `tests/unit/torch/module/test_sample_metadata.py`
+(tensor order, identity, container isolation, and conversion timings) and
+`tests/unit/torch/libs/exporting/test_onnx_exporter.py`
+(nested export, tensor names, and numerical comparison with ONNX Runtime).
+Conversion timings measure Python overhead only; they do not establish end-to-end backend performance.
+
 ## Graph Detection in the Tuning Workflow
 
 Execution graphs are detected during the **Sample Gathering Phase** of tuning:

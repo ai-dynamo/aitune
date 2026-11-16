@@ -50,9 +50,26 @@ class ForwardParameter:
 class ForwardCallLayout:
     """Preserve positional and keyword layout for decorators that enforce call style.
 
+    Graph matching binds values to parameter names so equivalent calls share metadata. Replay needs
+    a separate layout: a decorator can reject positional arguments even when signature binding accepts
+    them. Restoring the captured layout keeps batching and export preparation valid for those wrappers.
+
     Captured paths are parameter names for ordinary arguments, ``(name, index)`` for ``*args``,
     and ``(name, key)`` for ``**kwargs``. Tuple paths therefore contain one lookup after the parameter name;
     the shared ``ForwardInputPath`` type also permits deeper paths for nested input shape definitions.
+
+    Attributes:
+        positional_paths: Argument paths in their original positional order.
+        keyword_paths: Pairs of supplied keyword names and their normalized argument paths.
+
+    Example:
+        Given ``forward(x, *extras, **options)``, a call ``module(x, bias, mask=mask)`` records
+        ``positional_paths=("x", ("extras", 0))`` and
+        ``keyword_paths=(("mask", ("options", "mask")),)``. Restoration reads current values
+        from the normalized arguments; it does not keep the original tensors.
+
+        A call ``module(x=x)`` instead records no positional paths and the keyword pair ``("x", "x")``.
+        This matters when a wrapper rejects ``module(x)`` despite exposing the same forward signature.
     """
 
     positional_paths: tuple[ForwardInputPath, ...]
