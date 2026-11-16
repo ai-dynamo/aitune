@@ -3,6 +3,7 @@
 """Build dynamic shape rules and safe example inputs for exporters."""
 
 import logging
+from collections.abc import Sequence
 from copy import deepcopy
 from typing import Any, cast
 
@@ -11,6 +12,7 @@ import torch
 from aitune.torch.dynamic_shapes import BatchDim, ShapeDefinition
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.tensor_spec import TensorSpec
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +42,12 @@ def log_dynamic_shapes(dynamic_shapes: dict[str, Any] | None) -> None:
     _print(dynamic_shapes, "dynamic_shapes")
 
 
-def make_batch_dim(tensor_specs) -> Any:
-    """Create one shared export dimension for all recorded batch axes."""
+def make_batch_dim(tensor_specs: Sequence[TensorSpec]) -> torch.export.Dim | None:
+    """Create one shared export dimension for all recorded batch axes.
+
+    Axis multipliers convert recorded sizes to logical batch sizes: axes of size B and 2*B
+    share the same batch dimension. Return None when no batch axis exists or its range is static.
+    """
     if not any(ts.has_batch_axis() for ts in tensor_specs):
         return None
     min_val = float("inf")
@@ -72,19 +78,21 @@ def axis_dims_for_tensor(
             else:
                 axis_dims[axis] = batch_dim if multiplier == 1 else multiplier * batch_dim
     for index, entry in enumerate(tensor_spec.shape):
-        if isinstance(entry, str) and entry.startswith("dim"):
-            if tensor_spec.min_shape[index] != tensor_spec.max_shape[index]:
-                if use_auto:
-                    axis_dims[index] = torch.export.Dim.AUTO
-                else:
-                    key = (tensor_spec.min_shape[index], tensor_spec.max_shape[index])
-                    if dim_cache is not None and key in dim_cache:
-                        axis_dims[index] = dim_cache[key]
-                    else:
-                        dim = torch.export.Dim(f"{tensor_name}_dim_{index}", min=key[0], max=key[1])
-                        if dim_cache is not None:
-                            dim_cache[key] = dim
-                        axis_dims[index] = dim
+        if not isinstance(entry, str) or not entry.startswith("dim"):
+            continue
+        if tensor_spec.min_shape[index] == tensor_spec.max_shape[index]:
+            continue
+        if use_auto:
+            axis_dims[index] = torch.export.Dim.AUTO
+            continue
+        key = (tensor_spec.min_shape[index], tensor_spec.max_shape[index])
+        if dim_cache is not None and key in dim_cache:
+            axis_dims[index] = dim_cache[key]
+            continue
+        dim = torch.export.Dim(f"{tensor_name}_dim_{index}", min=key[0], max=key[1])
+        if dim_cache is not None:
+            dim_cache[key] = dim
+        axis_dims[index] = dim
     return axis_dims
 
 
@@ -117,7 +125,19 @@ def build_dynamic_shapes(
     *,
     use_auto: bool = True,
 ) -> TorchDynamicShapes | None:
-    """Build constraints for the flat tensor boundary passed to ``torch.export``."""
+    """Build constraints for the flat tensor boundary passed to ``torch.export``.
+
+    One axis dictionary is emitted per recorded input tensor, including an empty dictionary for
+    a static tensor. For recorded paths ``x`` and ``("state", "bias")`` with batch axis zero,
+    the rule is ``{"flat_inputs": ({0: batch}, {0: batch})}``. The key names the adapter's
+    variadic parameter, not an original module argument. Return None when all rules are empty.
+
+    Explicit user definitions replace inferred rules for their tensor. Inferred batch axes share
+    a logical batch dimension with recorded multipliers. Other inferred dynamic axes use AUTO,
+    or named bounded dimensions when use_auto is False. Bounded inferred axes with equal min/max
+    ranges reuse a dimension, which also constrains their sizes to match. Explicit names share
+    dimensions for batch axes and, when use_auto is False, for non-batch axes.
+    """
     input_spec = graph_spec.input_spec
     inferred_tensor_specs = [
         tensor_spec
@@ -151,7 +171,14 @@ def build_dynamic_shapes(
 
 
 def prepare_export_sample(sample: Sample, graph_spec: GraphSpec) -> Sample:
-    """Prepare a sample that keeps dynamic axes visible to Torch Export."""
+    """Prepare a sample that keeps dynamic axes visible to Torch Export.
+
+    Size-one examples can cause tracing to specialize a dimension intended to vary. Choose a batch
+    above one when the recorded range permits it, and repeat size-one non-batch dynamic axes.
+    For example, an observed sequence range 1..3 uses length 2 when the sample has length 1.
+    These are tracing examples, not additional observations: recorded metadata remains unchanged,
+    and the returned call preserves the sample's positional and keyword layout.
+    """
     input_spec = graph_spec.input_spec
 
     if input_spec.has_batch_axis():

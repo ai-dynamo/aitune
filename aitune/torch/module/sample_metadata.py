@@ -227,7 +227,14 @@ class SampleMetadata:
         return [ts for _, ts in self._tensor_data]
 
     def flatten_tensors(self, value: Any) -> tuple[torch.Tensor, ...]:
-        """Read tensors from a value in the stable order recorded by this metadata."""
+        """Read tensor references in the stable order recorded by this metadata.
+
+        Export and inference must use the same recorded paths, rather than rediscovering leaves from
+        each runtime value. Otherwise a tensor can be passed to the wrong compiled input or shape rule.
+
+        Each call walks the recorded paths in Python without copying tensor data. Inference overhead
+        therefore depends on the number and depth of tensor paths, rather than tensor size.
+        """
         tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
         for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
             if not isinstance(tensor, torch.Tensor):
@@ -240,7 +247,16 @@ class SampleMetadata:
         template: Any,
         preserved_values: tuple[tuple[Locator, Any], ...] = (),
     ) -> Any:
-        """Rebuild a structured value from flat tensors and an isolated template."""
+        """Rebuild the structure, preserving explicitly supplied values by identity.
+
+        Flat backend results do not describe Python containers or input/output object identity.
+        The template supplies the structure. Preserved values let later mutation handling return a
+        caller-owned cache object instead of a copy; the caller must apply its state changes first.
+        Preserved paths take precedence over tensor replacements beneath them.
+        Containers and non-tensor data are deep-copied to isolate calls; tensor data is not copied.
+        This adds Python work on each output restoration, including ordinary tensor outputs.
+        The cost depends on the template structure and the number of replacements and preserved paths.
+        """
         if len(self._tensor_data) == 1 and isinstance(tensors, torch.Tensor):
             tensors = (tensors,)
         else:
@@ -269,7 +285,11 @@ class SampleMetadata:
         return Locator.set_values(result, (*preserved_values, *tensor_replacements))
 
     def without_tensors(self, value: Any, preserved_values: tuple[Any, ...] = ()) -> Any:
-        """Copy a structure while replacing tensors and explicitly preserved values with ``None``."""
+        """Copy a structure while replacing tensors and explicitly preserved values with ``None``.
+
+        The template retains Python structure without keeping sample tensor storage alive or invoking
+        tensor-subclass copy behavior. Preserved objects are supplied from the current call at restoration.
+        """
         memo = {id(tensor): None for tensor in self.flatten_tensors(value)}
         memo.update({id(preserved): None for preserved in preserved_values})
         return copy.deepcopy(value, memo)

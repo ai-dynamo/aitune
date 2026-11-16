@@ -20,7 +20,7 @@ from aitune.torch.utils.shapes import prepare_export_sample
 from tests.utilities.helpers import make_graph_spec
 
 
-def _require_keywords(forward):
+def require_keywords(forward):
     @functools.wraps(forward)
     def wrapped(self, *args, **kwargs):
         if args:
@@ -30,10 +30,32 @@ def _require_keywords(forward):
     return wrapped
 
 
+@wrapt.decorator
+def typed_forward(wrapped, instance, args, kwargs):
+    if args:
+        raise TypeError("All arguments must be passed by kwargs only for typed methods")
+    return wrapped(**kwargs)
+
+
 class KeywordReplayModel(torch.nn.Module):
-    @_require_keywords
+    @require_keywords
     def forward(self, x):
         return x + 1
+
+
+class SpeechReplayModel(torch.nn.Module):
+    # wrapt preserves method binding, which its decorator return annotation does not express.
+    @cast(Any, typed_forward)
+    def forward(
+        self,
+        input_signal: torch.Tensor | None = None,
+        input_signal_length: torch.Tensor | None = None,
+        processed_signal: torch.Tensor | None = None,
+        processed_signal_length: torch.Tensor | None = None,
+    ):
+        if processed_signal is not None:
+            return processed_signal + 1, processed_signal_length
+        return cast(torch.Tensor, input_signal) + 1, input_signal_length
 
 
 def test_recorded_sample_replays_keyword_decorated_module(tmp_path):
@@ -64,28 +86,6 @@ def test_tuned_dispatch_replays_keyword_decorated_module(tmp_path, check_graph):
     )
 
     torch.testing.assert_close(tuned(x=x), expected)
-
-
-@wrapt.decorator
-def _typed_forward(wrapped, instance, args, kwargs):
-    if args:
-        raise TypeError("All arguments must be passed by kwargs only for typed methods")
-    return wrapped(**kwargs)
-
-
-class SpeechReplayModel(torch.nn.Module):
-    # wrapt preserves method binding, which its decorator return annotation does not express.
-    @cast(Any, _typed_forward)
-    def forward(
-        self,
-        input_signal: torch.Tensor | None = None,
-        input_signal_length: torch.Tensor | None = None,
-        processed_signal: torch.Tensor | None = None,
-        processed_signal_length: torch.Tensor | None = None,
-    ):
-        if processed_signal is not None:
-            return processed_signal + 1, processed_signal_length
-        return cast(torch.Tensor, input_signal) + 1, input_signal_length
 
 
 @pytest.mark.parametrize("signal_kind", ["input", "processed"])
