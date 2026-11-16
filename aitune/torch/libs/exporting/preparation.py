@@ -16,7 +16,16 @@ from aitune.torch.utils.module import move_tensors_to_device
 
 @dataclass(frozen=True)
 class TensorExportPreparation:
-    """Tensor-only module adapter and example inputs prepared for export."""
+    """Tensor-only module adapter and example inputs prepared for export.
+
+    The fields form a matched pair: ``adapter(*flat_inputs)`` reconstructs the prepared sample call
+    and returns its recorded tensor outputs. Preparation may resize sample tensors to make dynamic
+    axes visible, so the flat inputs need not have the original sample shapes.
+
+    Attributes:
+        adapter: Module that rebuilds the Python call using recorded tensor paths and non-tensor values.
+        flat_inputs: Prepared example tensors in the adapter's recorded input order.
+    """
 
     adapter: TensorExportAdapter
     flat_inputs: tuple[torch.Tensor, ...]
@@ -30,6 +39,13 @@ def prepare_tensor_export(
     device: torch.device | str | None = None,
 ) -> TensorExportPreparation:
     """Prepare a structured module call for a tensor-only exporter.
+
+    Uses recorded metadata without executing the module. Device placement applies
+    only to sample tensors.
+
+    For ``module(x, state={"bias": bias, "scale": 2})``, the pair contains an adapter that
+    retains scale 2 and flat inputs ``(prepared_x, prepared_bias)``. The caller is responsible
+    for placing the module on the appropriate device before export.
 
     Args:
         module: Module to prepare.

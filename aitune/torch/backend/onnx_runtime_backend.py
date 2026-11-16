@@ -362,14 +362,23 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         return inputs
 
     def _prepare_outputs(self, outputs: dict[str, torch.Tensor], arguments: dict[str, Any]) -> Any:
-        """Rebuild user outputs and apply input changes returned by ONNX Runtime."""
+        """Rebuild user outputs and apply input changes returned by ONNX Runtime.
+
+        Order named results as user outputs followed by internal state outputs. REPLACE_INPUT requests
+        that returned ORT buffers become current state where a caller-owned mutable container permits
+        assignment, avoiding copy-back into old leaves. For direct arguments or paths containing only
+        tuples, recorded COPY_TENSOR changes use copy-back so the caller observes the update.
+        Replacement is a restoration choice, not a requirement imposed by ORT owning the buffers.
+        Returned input containers retain their identity, but references to replaced tensor leaves
+        may not observe updates.
+        """
         graph_spec = cast(GraphSpec, self._graph_spec)
         user_output_names = tuple(
             GraphSpec.tensor_name(locator, spec, "output") for locator, spec in graph_spec.output_spec.tensor_data
         )
         state_output_names = graph_spec.output_names()[len(user_output_names) :]
         flat_outputs = tuple(outputs[name] for name in user_output_names + state_output_names)
-        # ORT owns output buffers, so changed tensor leaves must install the returned tensors.
+        # Request returned state buffers where caller-owned containers permit replacement; see above.
         mutation_policies = {
             mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
             for mutation in graph_spec.forward_contract.input_mutations

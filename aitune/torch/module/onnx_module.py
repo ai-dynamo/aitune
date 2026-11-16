@@ -19,6 +19,11 @@ class OnnxModule(nn.Module):
 
     Wrap with ``aitune.torch.Module`` to record calls and select a backend with
     ``MaxThroughputStrategy``. Inputs must match the ONNX graph's names and dtypes.
+
+    The source graph is already an export artifact. Supported backends reuse it rather than trace
+    this runtime wrapper through Torch. Recorded tensors retain source graph names for bindings,
+    while calls use the shared ONNX Runtime executor. Automatic interception permits inspection
+    of this wrapper but excludes it from tuning modes.
     """
 
     def __init__(self, path: str | Path) -> None:

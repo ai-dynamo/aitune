@@ -71,6 +71,10 @@ class RecordingModule:
 
         Before calling forward, we need to make input sample metadata and a copy of args and kwargs, since the
         forward call may have side effects on the inputs (like KV cache in LLM models).
+
+        For a new graph, capture its forward contract around this same call. Live inputs preserve
+        identity and version information; the sample copy supplies original tensor values when version
+        counters are unavailable. Later calls update shape observations without recapturing the contract.
         """
         logger.debug("Calling recording %s module.", self._name)
         forward_inputs = self._forward_signature.normalize(args, kwargs)

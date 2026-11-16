@@ -971,7 +971,17 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
             return []
 
     def _prepare_outputs_for_return(self, arguments: dict[str, Any]) -> Any:
-        """Collect TensorRT outputs, restore input changes, and rebuild the module result."""
+        """Collect TensorRT outputs, restore input changes, and rebuild the module result.
+
+        Results include allocator outputs and outputs bound directly to input buffers. REPLACE_INPUT
+        requests adoption as current state where a caller-owned mutable container permits assignment,
+        avoiding copy-back into old leaves. Direct arguments and paths containing only tuples still use
+        copy-back for COPY_TENSOR changes so the caller observes the update. Aliased results use the same
+        restoration path. Container identity is preserved; references to replaced leaves may stay unchanged.
+
+        CUDA graph results are cloned before adoption because replay reuses their output storage.
+        This protects restored state from later replay. When a leaf is replaced, its old identity is not preserved.
+        """
         graph_spec = self._graph_spec
         if graph_spec is None:
             raise RuntimeError("Graph specification is not loaded. Call build() first.")

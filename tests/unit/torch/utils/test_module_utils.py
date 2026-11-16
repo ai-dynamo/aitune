@@ -331,3 +331,46 @@ def test_offload_gpu_to_cpu_to_meta(device):
         f"After CPU: {gpu_memory_after_cpu_offload / 1e6:.2f} MB, "
         f"After meta: {gpu_memory_final / 1e6:.2f} MB"
     )
+
+
+def test_offload_leaves_kept_weights_on_their_device():
+    from aitune.torch.utils.module import clear_kept_on_device, keep_on_device, offload
+
+    head = nn.Linear(4, 4, bias=False)
+    embed = nn.Embedding(4, 4)
+    head.weight = embed.weight
+    model = nn.Sequential(head, nn.Linear(4, 4))
+    kept = embed.weight
+    keep_on_device([kept])
+    try:
+        offload(model, device="meta")
+    finally:
+        clear_kept_on_device()
+
+    assert head.weight is kept and embed.weight is kept
+    assert kept.device.type == "cpu"
+    assert model[1].weight.device.type == "meta" and model[1].bias.device.type == "meta"
+
+
+def test_offload_without_kept_weights_moves_everything():
+    from aitune.torch.utils.module import offload
+
+    model = nn.Sequential(nn.Linear(4, 4))
+    offload(model, device="meta")
+
+    assert all(p.device.type == "meta" for p in model.parameters())
+
+
+def test_a_kept_tensor_stays_kept_while_any_owner_keeps_it():
+    from aitune.torch.utils.module import is_kept_on_device, keep_on_device, release_kept_on_device
+
+    tensor, first, second = torch.ones(2), nn.Linear(1, 1), nn.Linear(1, 1)
+    keep_on_device([tensor], owner=first)
+    keep_on_device([tensor], owner=second)
+
+    release_kept_on_device(second)
+    assert is_kept_on_device(tensor) and is_kept_on_device(tensor, owner=first)
+    assert not is_kept_on_device(tensor, owner=second)
+
+    release_kept_on_device(first)
+    assert not is_kept_on_device(tensor)

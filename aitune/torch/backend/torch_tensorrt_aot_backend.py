@@ -288,7 +288,13 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
             self._opt_module = loaded.module().to(self.device)
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
-        """Run the flat Torch-TensorRT module, then restore outputs and input changes."""
+        """Run the flat Torch-TensorRT module, then restore outputs and input changes.
+
+        The forward contract consumes user and extra state tensors in recorded order. PRESERVE_INPUT
+        ensures recorded in-place changes update the original tensor and any retained references.
+        It copies values back only when the result is a different object. Recorded tensor replacements
+        still assign the result.
+        """
         if self._opt_module is None:
             raise RuntimeError("Module is not activated. Please call activate() first.")
 
@@ -390,7 +396,14 @@ def _save_compiled_model(
     dynamic_shapes: dict[str, Any] | tuple[Any, ...] | None,
     pickle_protocol: int,
 ) -> None:
-    """Save a compiled graph and retry known direct-export failures with retracing."""
+    """Save a compiled graph and retry known direct-export failures with retracing.
+
+    Prefer direct export to retain the compiled graph without another trace. Retry only specification
+    violations and the known error about enabling gradients on non-floating/non-complex tensors;
+    unrelated RuntimeError and filesystem failures propagate. The fallback uses explicit torch.export
+    with the supplied sample and dynamic_shapes, preserving keyword values and shape rules that
+    torch_tensorrt.save(retrace=True) cannot reliably handle on supported versions.
+    """
     assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
     try:
         with torch_tensorrt_errors(torch_tensorrt):
