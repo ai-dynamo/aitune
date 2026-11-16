@@ -724,3 +724,84 @@ def test_backend_added_hooks():
 
     module(1)
     assert hook_calls == ["backend pre hook", "module pre hook", "backend hook", "module hook"]
+
+
+def test_serialization_persists_kept_on_device_names(torch_device):
+    """to_dict stores kept names; from_dict re-registers them before offloading (meta keeps them)."""
+    from aitune.torch.config import config
+    from aitune.torch.utils.module import clear_kept_on_device, is_kept_on_device, keep_on_device
+
+    model = Identity()
+    kept_t = next(iter(model.parameters()))
+    keep_on_device([kept_t], owner=model)
+    module = Module(model, TEST_MODULE_NAME)
+    module(torch.ones(2, 5))
+    module.tune(strategy=_torch_inductor_strategy_for_wrapper_tests(), dry_run=False, device=torch_device)
+    state_dict = module.to_dict(prefix="test")
+    assert Module.KEPT_ON_DEVICE_KEY in state_dict["test"]
+
+    clear_kept_on_device()  # simulate a fresh process
+    old_meta = config.device_after_tuning
+    config.device_after_tuning = "meta"
+    try:
+        model2 = Identity()
+        Module.from_dict(model2, state_dict["test"], device=torch_device)
+        kept = {name for name, t in model2.named_parameters() if is_kept_on_device(t, owner=model2)}
+        expected_name = next(n for n, _ in model.named_parameters(remove_duplicate=False))
+        assert kept == {expected_name}
+    finally:
+        config.device_after_tuning = old_meta
+        clear_kept_on_device()
+
+
+def test_from_dict_without_kept_key_still_loads(torch_device):
+    """Old checkpoints without kept_on_device still load."""
+    model = Identity()
+    module = Module(model, TEST_MODULE_NAME)
+    module(torch.ones(2, 5))
+    module.tune(strategy=_torch_inductor_strategy_for_wrapper_tests(), dry_run=False, device=torch_device)
+    state_dict = module.to_dict(prefix="test")
+    del state_dict["test"][Module.KEPT_ON_DEVICE_KEY]
+    module2 = Module.from_dict(Identity(), state_dict["test"], device=torch_device)
+    assert module2.state == ModuleState.TUNED
+
+
+def test_from_dict_replaces_the_modules_kept_set(torch_device):
+    """Loading a checkpoint's kept list drops tensors the module kept but the checkpoint does not list."""
+    from aitune.torch.utils.module import clear_kept_on_device, is_kept_on_device, keep_on_device
+
+    model = Identity()
+    module = Module(model, TEST_MODULE_NAME)
+    module(torch.ones(2, 5))
+    module.tune(strategy=_torch_inductor_strategy_for_wrapper_tests(), dry_run=False, device=torch_device)
+    state_dict = module.to_dict(prefix="test")
+
+    weight, bias = model.linear.weight, model.linear.bias
+    keep_on_device([weight, bias], owner=model)
+    state_dict["test"][Module.KEPT_ON_DEVICE_KEY] = ["linear.weight"]
+    try:
+        Module.from_dict(model, state_dict["test"], device=torch_device)
+        assert is_kept_on_device(weight, owner=model)
+        assert not is_kept_on_device(bias)
+    finally:
+        clear_kept_on_device()
+
+
+def test_from_dict_without_kept_key_leaves_the_kept_set_unchanged(torch_device):
+    """Old checkpoints without kept_on_device do not touch what the module already keeps."""
+    from aitune.torch.utils.module import clear_kept_on_device, is_kept_on_device, keep_on_device
+
+    model = Identity()
+    module = Module(model, TEST_MODULE_NAME)
+    module(torch.ones(2, 5))
+    module.tune(strategy=_torch_inductor_strategy_for_wrapper_tests(), dry_run=False, device=torch_device)
+    state_dict = module.to_dict(prefix="test")
+    del state_dict["test"][Module.KEPT_ON_DEVICE_KEY]
+
+    weight = model.linear.weight
+    keep_on_device([weight], owner=model)
+    try:
+        Module.from_dict(model, state_dict["test"], device=torch_device)
+        assert is_kept_on_device(weight, owner=model)
+    finally:
+        clear_kept_on_device()

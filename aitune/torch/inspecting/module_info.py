@@ -2,11 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Module Info for inspected modules."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import torch
 
+from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.libs.onnx.onnx_model_info import ONNXModelInfo
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.utils import validation
@@ -18,7 +21,7 @@ class ModuleInfo:
 
     module: torch.nn.Module
     name: str = ""
-    parent: Optional["ModuleInfo"] = None
+    parent: ModuleInfo | None = None
     forward_called: bool = False
     execution_count: int = 0
     total_execution_time: float = 0.0
@@ -26,6 +29,8 @@ class ModuleInfo:
     output_types: list[dict[str, Any]] = field(default_factory=list)
     object_path: str | None = None
     depth: int = 0
+    # The inspection run that produced this module; set by InspectedModulesInfo.add_module.
+    inspection: InspectedModulesInfo | None = field(default=None, repr=False, compare=False)
 
     @property
     def module_type(self) -> type:
@@ -111,23 +116,36 @@ class ObjectOfModulesInfo(ModuleInfo):
 class InspectedModulesInfo:
     """Information about inspected modules."""
 
-    def __init__(self, total_execution_time: float, number_of_batches: int):
-        """Initialize the inspected modules specification."""
+    def __init__(self, total_execution_time: float, number_of_batches: int, call_tree: CallTree | None = None):
+        """Initialize the inspected modules specification.
+
+        Args:
+            total_execution_time: Total time of the inspected iterations.
+            number_of_batches: Number of inspected iterations.
+            call_tree: Call tree recorded with ``inspect(..., call_tree=True)``, if any.
+        """
         self._modules: dict[str, ModuleInfo] = {}
         self._total_execution_time = total_execution_time
         self._number_of_batches = number_of_batches
+        self._call_tree = call_tree
+
+    @property
+    def call_tree(self) -> CallTree | None:
+        """Call tree recorded with ``inspect(..., call_tree=True)``, or None."""
+        return self._call_tree
 
     def add_module(self, module: ModuleInfo):
-        """Add a module to the specification.
+        """Add a module to the specification and link it back to this inspection run.
 
         Args:
             module: ModuleInfo object.
         """
         if module.object_path in self._modules:
             raise ValueError(f"Module `{module.name}` in `{module.object_path}` already exists")
+        module.inspection = self
         self._modules[module.object_path] = module
 
-    def get_modules(self, min_execution_ratio: float | None = None, limit: int | None = None) -> list["ModuleInfo"]:
+    def get_modules(self, min_execution_ratio: float | None = None, limit: int | None = None) -> list[ModuleInfo]:
         """Get the list of modules.
 
         Args:
