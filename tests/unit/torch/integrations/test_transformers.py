@@ -8,6 +8,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from aitune.torch.config import config
 from aitune.torch.libs.exporting import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import RecordingModule
@@ -194,6 +195,20 @@ def test_static_encoder_decoder_cache_metadata_includes_both_caches_and_readines
 
     # These phases take different Python branches even when all tensor shapes are identical.
     assert before != after
+
+
+def test_static_encoder_decoder_cache_decode_graph_identity_distinguishes_readiness(monkeypatch):
+    """Validate whether readiness can select separate graphs within the decode phase."""
+    monkeypatch.setattr(config, "enable_transformers_integration", True)
+    cache = _make_encoder_decoder_cache()
+    inputs = {"cache": cache, "cache_position": torch.tensor([1])}
+    initializing = SampleMetadata.from_inputs(inputs, strict=True)
+
+    cache.is_updated[0] = True
+    ready = SampleMetadata.from_inputs(inputs, strict=True)
+
+    assert initializing.llm_phase == ready.llm_phase == "decode"
+    assert len({initializing: "initialize-cross-attention", ready: "reuse-cross-attention"}) == 2
 
 
 def test_static_encoder_decoder_cache_recording_separates_cross_attention_initialization(tmp_path):

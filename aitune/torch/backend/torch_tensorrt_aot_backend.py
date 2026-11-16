@@ -199,6 +199,13 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
         Workaround pending a ``dynamic_shapes`` passthrough on ``torch_tensorrt.compile``;
         revert to ``torch_tensorrt.compile(...)`` once that lands upstream.
+
+        Check the resulting export against requested profiles before compiling. A narrower export
+        rejects the candidate instead of shrinking the workload. Compilation receives TensorRT profile
+        descriptors, while serialization receives the actual flat tensors captured during export.
+        Its shape rules are positional: unwrap the adapter's {"flat_inputs": (...)} mapping because
+        the compiled graph has explicit tensor parameters rather than one variadic flat_inputs parameter.
+        Reload the saved artifact before returning, so subsequent checks use the deployed representation.
         """
         logger.info("Start compiling torch module with Torch-TensorRT using torch_tensorrt.dynamo.compile.")
 
@@ -403,6 +410,11 @@ def _save_compiled_model(
     unrelated RuntimeError and filesystem failures propagate. The fallback uses explicit torch.export
     with the supplied sample and dynamic_shapes, preserving keyword values and shape rules that
     torch_tensorrt.save(retrace=True) cannot reliably handle on supported versions.
+
+    sample contains real flat example tensors, not torch_tensorrt.Input profile descriptors.
+    dynamic_shapes must describe this compiled graph's positional arguments, without the adapter's
+    outer flat_inputs key. Checking profiles before compilation does not remove the need to validate
+    the saved and reloaded program.
     """
     assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
     try:

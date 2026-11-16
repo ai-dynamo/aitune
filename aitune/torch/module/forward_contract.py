@@ -94,6 +94,12 @@ class InputMutation:
 
         Rebinding a direct argument, or rebuilding only tuples above it, changes
         the normalized argument dictionary without updating the caller's state.
+
+        For a COPY_TENSOR update, state=tensor or state=(tensor,) therefore needs value copy-back.
+        With state={"cache": tensor}, assignment reaches the caller's dictionary. A tuple containing
+        that dictionary also permits replacement: the mutable ancestor, not the outer call layout,
+        determines whether the new reference reaches the caller. The normalized argument dictionary
+        itself is excluded because it is an internal binding, not caller-owned state.
         """
         steps = tuple(self.locator.path_iter())
         return any(not isinstance(Locator(steps[:depth]).get_value(arguments), tuple) for depth in range(1, len(steps)))

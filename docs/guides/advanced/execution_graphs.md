@@ -144,7 +144,10 @@ AITune's Transformers integration inspects both nested caches and preserves the 
 `is_updated` flags, which control initialization and reuse of cross-attention state. AITune does not
 change the model's cache selection.
 
-Keep `ait.config.strict_mode=True` (the default) so different readiness flags select different graphs.
+Keep `ait.config.strict_mode=True` (the default) so ordinary metadata distinguishes readiness flags.
+This does not apply when a special `cache_position` input activates LLM phase-only graph matching:
+readiness flags are then excluded from graph identity, even in strict mode. Registration alone does
+not make different readiness states within the same LLM phase select different graphs.
 Record both cross-attention initialization and subsequent decode calls; registering the cache type
 does not provide a compiled graph for a phase that was never recorded. Static cache capacity and
 encoder sequence length must cover the workload used during tuning and inference.

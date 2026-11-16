@@ -39,6 +39,12 @@ def check_dynamic_shape_boundary_inference(
 ):
     """Check dynamic-shape boundary inference.
 
+    Each boundary call receives an independent copy of its positional and keyword arguments together.
+    Copying the pair preserves shared objects across the two: if infer(state, mask=state) depends on
+    identity, separate copies would validate a different call. Copies also prevent one boundary's
+    temporary mutations from advancing the next boundary's state. These checks validate output shapes,
+    not the full sequence of state changes across repeated calls.
+
     Args:
         sample: Sample inputs used as a template for min and max shape checks.
         graph_spec: Recorded graph metadata used to construct and validate boundary inputs.
