@@ -26,7 +26,7 @@ class DummyDataset(Dataset):
     def __len__(self):
         return self.size
 
-    def __getitem__(self, idx):
+    def __getitem__(self, index):
         return torch.randn(3, 32, 32)
 
 
@@ -156,6 +156,27 @@ def test_tune_with_dataloader_factory(mocker):
 
     # then
     assert mock_module.call_count > 0
+
+
+@pytest.mark.parametrize("batch_size", [1, 2, 4])
+def test_tune_preserves_tensor_batches_from_custom_collator(batch_size):
+    dataset = [torch.tensor([index, index + 1, index + 2], dtype=torch.float32) for index in range(4)]
+    factory = DataLoaderFactory(dataset, collate_fn=torch.utils.data.default_collate)
+    model = torch.nn.Linear(3, 1)
+    received = []
+
+    def record_input(_module, args, _output):
+        received.append(args[0].clone())
+
+    handle = model.register_forward_hook(record_input)
+    try:
+        tune(model, factory, batch_sizes=[batch_size], device="cpu")
+    finally:
+        handle.remove()
+
+    assert len(received) == len(dataset) // batch_size
+    assert all(batch.shape == (batch_size, 3) for batch in received)
+    torch.testing.assert_close(torch.cat(received), torch.stack(dataset))
 
 
 def test_tune_disable_external_logging(mocker):

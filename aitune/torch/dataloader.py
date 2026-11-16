@@ -173,17 +173,18 @@ def samples_generator(
 
     if max_num_batches_per_batch_size == 0:
         return
-    if max_num_batches_per_batch_size is None:
-        max_num_batches_per_batch_size = float("inf")
+    max_batches = float("inf") if max_num_batches_per_batch_size is None else max_num_batches_per_batch_size
     dataloader_factory = _make_dataloader_factory(dataset)
     for batch_size in batch_sizes:
         dataloader = dataloader_factory.create_dataloader(batch_size)
         for i, batch in enumerate(dataloader):
-            if i >= max_num_batches_per_batch_size:
+            if i >= max_batches:
                 break
 
             args, kwargs = [], {}
-            if isinstance(batch, Mapping):
+            if isinstance(batch, torch.Tensor):
+                args = [batch]
+            elif isinstance(batch, Mapping):
                 kwargs = batch
             elif len(batch) == 2 and isinstance(batch[1], Mapping):  # support for list of samples
                 args, kwargs = batch
@@ -458,7 +459,7 @@ def _list_data_collator(features: list[list]) -> list:
     Returns:
         List of concatenated tensors.
     """
-    batch = []
+    batch: list[Any] = []
     num_inputs = len(features[0])
     for i in range(num_inputs):
         first = features[0][i]
@@ -493,7 +494,7 @@ def _map_data_collator(features: list) -> dict:
     Copy has been made to add string support and avoid dependency on transformers.
     """
     first = features[0]
-    batch = {}
+    batch: dict[str, Any] = {}
 
     # Special handling for labels.
     # Ensure that tensor is created with the correct type
