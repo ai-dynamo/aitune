@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
+from packaging.version import Version
 
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
@@ -15,6 +17,12 @@ from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
 
 requires_cuda = pytest.mark.skipif(not is_cuda_available(), reason="CUDA is not available")
+
+xfail_fullgraph_under_force_eager = pytest.mark.xfail(
+    Version("2.13.0a0") <= Version(torch.__version__) < Version("2.13.0"),
+    reason="torch 2.13.0a0 raises on fullgraph=True under force_eager (fixed by pytorch/pytorch#183623)",
+    raises=RuntimeError,
+)
 
 
 def make_sample_store(

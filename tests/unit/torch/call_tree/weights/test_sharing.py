@@ -17,6 +17,7 @@ from tests.toy_models.call_tree_models import (
     vla_inputs,
 )
 from tests.unit.torch.call_tree.helpers import invisible_to_recorder, record
+from tests.utilities.helpers import xfail_fullgraph_under_force_eager
 
 
 class _Root(torch.nn.Module):
@@ -311,6 +312,7 @@ def test_a_sparse_buffer_read_outside_is_tracked_by_identity():
     assert weight.accesses == [(infer.__qualname__, "read")]
 
 
+@xfail_fullgraph_under_force_eager
 def test_read_inside_torch_compiled_code_is_found_via_inspect():
     """``ait.inspect(call_tree=True)`` runs compiled glue code eagerly, so a read inside it is reported."""
     import aitune.torch as ait
