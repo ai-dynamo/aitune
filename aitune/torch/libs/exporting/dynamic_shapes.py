@@ -42,7 +42,7 @@ def log_dynamic_shapes(dynamic_shapes: dict[str, Any] | None) -> None:
     _print(dynamic_shapes, "dynamic_shapes")
 
 
-def make_batch_dim(tensor_specs: Sequence[TensorSpec]) -> Any:
+def make_batch_dim(tensor_specs: Sequence[TensorSpec]) -> torch.export.Dim | None:
     """Create one shared export dimension for all recorded batch axes."""
     if not any(ts.has_batch_axis() for ts in tensor_specs):
         return None
