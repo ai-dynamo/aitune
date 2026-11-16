@@ -93,7 +93,7 @@ def test_adapter_appends_mutated_tensor_state_to_graph_outputs():
     x = torch.ones(2)
     state = torch.zeros(2)
     sample = ((x, [state]), {})
-    adapter, graph_spec = _make_adapter(module, sample)
+    adapter, graph_spec = make_adapter(module, sample)
     state_locator = graph_spec.input_spec.tensor_data[1][0]
     graph_spec.forward_contract = ForwardContract(
         output_template=None,
