@@ -232,6 +232,12 @@ class ForwardContractCapture:
     RecordingModule calls before_call for a new graph, executes the original module, and passes the
     same live arguments to after_call. Capture observes that execution rather than running another call.
 
+    Capture includes registered non-tensor mutation fields, such as a static cache's is_initialized
+    flag and dimensions, without adding them to ordinary input metadata. Initialization can create
+    new fields; existing tensors can also become non-tensors hidden by tensor-only filtering. Capture
+    therefore checks paths observed on either side against the live post-call objects. Paths that no
+    longer resolve are skipped; attribute and container-entry deletion are not replayed.
+
     Tensor identity and metadata distinguish replacement from value changes. Version counters detect
     writes to ordinary tensors. Tensors created inside torch.inference_mode() have no version counter,
     even when later inspected outside the context, so those tensors require saved values instead.
@@ -248,6 +254,9 @@ class ForwardContractCapture:
         snapshot_arguments: dict[str, Any] | None = None,
     ) -> ForwardContractCapture:
         """Capture input leaves immediately before forward executes.
+
+        Include registered mutation fields so initialization metadata is observed alongside tensors.
+        Attributes created during forward are discovered by after_call instead.
 
         Args:
             arguments: Live normalized inputs that forward will receive. Keep the original references
@@ -273,9 +282,15 @@ class ForwardContractCapture:
     ) -> ForwardContract:
         """Describe supported input leaf changes observed after forward.
 
+        Traverse post-call leaves, including registered mutation fields, then revisit pre-call paths.
+        For example, keys changing from a tensor to None disappears from tensor-only traversal, but
+        its old path still resolves to None and must be restored. Conversely, a newly created dtype
+        or device field has no pre-call entry and is recorded as a constant replacement.
+
         Args:
             arguments: The same normalized argument dictionary captured before the call, now containing
-                forward's changes. Only paths present after the call are considered; deletions are not recorded.
+                forward's changes. Paths observed before or after the call are considered if they still
+                resolve on these objects; deletions are not recorded.
             output: Actual structured result from that call, used to find tensor results and input aliases.
             output_spec: Metadata for output, defining the user tensor order before mutation results are added.
 

@@ -1,14 +1,26 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Transformers integrations."""
+"""Register Transformers cache traversal and report devices for tuned modules.
+
+A StaticCache update can initialize key/value tensors and Python metadata in the same call. Restoring
+only tensor results would leave the caller's layer marked uninitialized or missing device and shape
+information. StaticLayer and StaticSlidingWindowLayer therefore register the initialization fields
+that forward-contract capture must observe in addition to tensors.
+
+For example, a fresh layer can change from keys=None and is_initialized=False to an allocated tensor
+and is_initialized=True. The compiled graph supplies the tensor; restoration assigns the recorded
+initialization fields to the caller's layer. These non-tensor fields stay out of ordinary SampleMetadata
+traversal so they do not become tensor inputs or ordinary graph-matching data. They are recorded values,
+not dynamic updates to arbitrary Python state. DynamicCache remains excluded from this traversal.
+"""
 
 try:
     from transformers import DynamicCache, StaticCache, StaticLayer, StaticSlidingWindowLayer
 
     from aitune.torch.module.locator import Locator
 
-    # Static cache layers set these fields during their first update. Record them so compiled backends restore the
-    # complete lazy-initialization state.
+    # Lazy initialization sets device/dtype and tensor dimensions as well as the readiness flag.
+    # Capture this explicit set so the next call sees a usable layer without observing unrelated Python fields.
     _STATIC_LAYER_INITIALIZATION_FIELDS = (
         "device",
         "dtype",
