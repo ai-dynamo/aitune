@@ -68,15 +68,15 @@ def test_build_dynamic_shapes_marks_varying_axes(first, second, batch_sizes, dyn
 
 
 def test_build_dynamic_shapes_allows_inferred_batch_axes_to_specialize():
-    _, graph_spec = _dynamic_graph_spec(
+    _, graph_spec = dynamic_graph_spec(
         torch.randn(2, 4),
         torch.randn(4, 4),
         first_batch_size=1,
         second_batch_size=2,
     )
 
-    (automatic_axes,) = _flat_shapes(graph_spec)
-    (bounded_axes,) = _flat_shapes(graph_spec, use_auto=False)
+    (automatic_axes,) = flat_shapes(graph_spec)
+    (bounded_axes,) = flat_shapes(graph_spec, use_auto=False)
 
     assert automatic_axes[0] is torch.export.Dim.AUTO
     assert (bounded_axes[0].min, bounded_axes[0].max) == (2, 4)
