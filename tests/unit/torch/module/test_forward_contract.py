@@ -5,6 +5,7 @@
 from copy import deepcopy
 
 import numpy as np
+import pytest
 import torch
 
 from aitune.torch.module.forward_contract import (
@@ -63,6 +64,26 @@ def test_capture_reuses_a_mutated_tensor_returned_as_output():
     mutation = contract.input_mutations[0]
     assert mutation.kind == InputMutationKind.COPY_TENSOR
     assert mutation.output_index == 0
+
+
+@pytest.mark.parametrize("initial_slot", ["pending", {"child": "before"}], ids=["ignored_leaf", "ignored_parent"])
+def test_capture_excludes_old_paths_replaced_by_an_ignored_type(initial_slot):
+    class Opaque(dict):
+        def __deepcopy__(self, memo):
+            raise AssertionError("Ignored state must not be copied during mutation capture")
+
+    class ReplaceState(torch.nn.Module):
+        def forward(self, x, state):
+            state["slot"] = Opaque(child="after")
+            return x + 1
+
+    try:
+        Locator.ignore_type(Opaque)
+        contract = _capture(ReplaceState(), (torch.zeros(2), {"slot": initial_slot}))
+
+        assert contract.input_mutations == ()
+    finally:
+        Locator.unignore_type(Opaque)
 
 
 def test_capture_and_restore_numpy_leaf_replacement_with_incompatible_shapes():
