@@ -78,3 +78,23 @@ def test_quantize():
     quantized_model = quantizer.quantize(model, sample, config)
     assert quantized_model is not None
     assert isinstance(quantized_model, torch.nn.Module)
+
+
+@requires_cuda
+def test_quantize_leaves_kept_weights_on_the_device():
+    """Offloading the original during quantization skips weights that code outside the module still uses."""
+    from aitune.torch.utils.module import clear_kept_on_device, keep_on_device
+
+    embed = torch.nn.Embedding(16, 8).cuda()
+    head = torch.nn.Linear(8, 16).cuda()
+    head.weight = embed.weight  # tied: the embedding lookup outside ``head`` reads the same parameter
+    keep_on_device([head.weight], owner=head)
+    try:
+        sample = ((torch.randn(2, 8, device="cuda"),), {})
+        TorchQuantizer().quantize(head, sample, TorchQuantizationConfig(quantization_config="INT8_DEFAULT_CFG"))
+
+        assert embed.weight.device.type == "cuda"
+        assert head.bias.device.type == "cpu"  # not kept: still offloaded to free GPU memory
+        embed(torch.randint(0, 16, (2, 4), device="cuda"))  # the outside reader still works
+    finally:
+        clear_kept_on_device()

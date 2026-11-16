@@ -13,6 +13,7 @@ from aitune.torch.jit.patcher import jit_reset
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import _active_graph, _active_module, _active_report, _run_start_ts
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
+from aitune.torch.utils.module import clear_kept_on_device
 from aitune.utils.logging import setup_logging
 
 
@@ -23,6 +24,7 @@ def module_registry_cleanup():
         yield
     finally:
         MODULE_REGISTRY.clear()
+        clear_kept_on_device()
 
 
 @pytest.fixture(autouse=True)

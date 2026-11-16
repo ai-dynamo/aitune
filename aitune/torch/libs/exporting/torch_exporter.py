@@ -25,7 +25,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class TorchExportResult:
-    """Program and dynamic-shape rules produced by Torch Export."""
+    """Program and dynamic-shape rules produced by Torch Export.
+
+    Attributes:
+        exported_program: Program accepting flat tensors and returning user tensor results followed by
+            any additional tensors required to restore input mutations.
+        dynamic_shapes: Input constraints used for export, or None when all input dimensions are static.
+    """
 
     exported_program: torch.export.ExportedProgram
     dynamic_shapes: TorchDynamicShapes | None
@@ -34,8 +40,19 @@ class TorchExportResult:
 class TorchExporter:
     """Export a module through AITune's flat tensor interface.
 
+    The returned program uses the adapter's tensor order, rather than the original Python call layout.
+    For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, its module accepts
+    ``(x, bias)`` and returns ``(result,)``. Backend integration must restore the Python output structure.
+    Mutating modules can return additional state tensors described by the graph's forward contract;
+    backends consume these internally to restore input changes before returning user outputs.
+
+    Default tracing tries strict export, then non-strict export for modules that strict tracing cannot
+    capture. Each attempt prepares fresh sample containers and an adapter; the original module is shared,
+    so this does not roll back changes to module state. An explicit strict setting disables the retry.
+
     Args:
-        use_auto: Let Torch Export infer constraints for non-batch dynamic dimensions.
+        use_auto: Let Torch Export infer relationships for non-batch dynamic dimensions. If False,
+            use named bounded dimensions; inferred dimensions with matching bounds share a dimension.
         strict: Select strict or non-strict export. ``None`` tries strict export first and then falls back.
         fallback_to_dynamic_hints: Retry rejected explicit constraints with bounded ``Dim.DYNAMIC`` hints.
     """

@@ -23,7 +23,28 @@ logger = logging.getLogger(__name__)
 
 
 class ONNXExporter:
-    """Export a module to ONNX through AITune's flat tensor interface."""
+    """Export a module to ONNX through AITune's flat tensor interface.
+
+    For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, the artifact
+    has tensor inputs for x and bias and one tensor output for result. Names come from recorded paths;
+    Python containers and non-tensor sample values are handled by the adapter during export.
+    Runtime code must supply the named tensors and restore the original output structure.
+
+    Both export modes use the same prepared adapter. Dynamo receives Torch dynamic-shape constraints;
+    the legacy tracer receives ONNX dynamic-axis annotations. The selected mode is used without fallback.
+    Export returns the artifact path after ONNX structural validation, which does not establish numerical
+    equivalence with the original module. An incomplete artifact is removed on failure when possible.
+
+    User tensor outputs precede internal mutation outputs in the graph's forward-contract order.
+    For ``cache[0] = x + 1; return x * 2``, the two outputs carry the user result and updated cache.
+    Runtime restoration consumes the second internally. Legacy tracing annotates varying state axes
+    from post-call metadata, since an update can create a tensor absent from the original inputs.
+
+    Args:
+        output_path: Destination for the ONNX artifact.
+        use_dynamo: Use Dynamo export if True; otherwise use the legacy tracer.
+        opset_version: ONNX operator-set version, or None to use Torch's default.
+    """
 
     def __init__(self, output_path: Path, use_dynamo: bool = False, opset_version: int | None = None):
         """Initialize the output path and ONNX export mode."""
@@ -40,7 +61,11 @@ class ONNXExporter:
         *,
         device: torch.device | str | None = None,
     ) -> Path:
-        """Prepare a tensor-only example call and export it to ONNX."""
+        """Prepare a tensor-only example call and export it to ONNX.
+
+        ``verbose`` controls Torch exporter output; AITune diagnostics use logger configuration.
+        ``device`` moves sample tensors only, so the caller must place the module separately.
+        """
         logger.info("Exporting PyTorch module to ONNX: %s", self.output_path)
 
         try:
@@ -73,7 +98,12 @@ class ONNXExporter:
         graph_spec: GraphSpec,
         verbose: bool | None = None,
     ) -> None:
-        """Export the prepared adapter with the Dynamo-based ONNX exporter."""
+        """Export, sort, and save the prepared adapter with Dynamo.
+
+        Request an in-memory ONNX program so dependency ordering can be repaired before serialization.
+        The existing unbind/Split optimizer workaround requires producers before their consumers.
+        Save with external tensor data enabled so large weights can be stored outside the graph file.
+        """
         dynamic_shapes = build_dynamic_shapes(graph_spec)
         log_dynamic_shapes(dynamic_shapes)
         onnx_program = torch.onnx.export(
@@ -99,6 +129,8 @@ class ONNXExporter:
         verbose: bool | None = None,
     ) -> None:
         """Export the prepared adapter with the legacy ONNX tracer."""
+        # Torch's annotation separates list and dict forms; our mapping can contain both.
+        dynamic_axes = cast(dict[str, list[int]] | dict[str, dict[int, str]], self._create_dynamic_axes(graph_spec))
         torch.onnx.export(
             preparation.adapter,
             args=preparation.flat_inputs,
@@ -108,7 +140,7 @@ class ONNXExporter:
             input_names=self._input_names(graph_spec),
             output_names=list(graph_spec.output_names()),
             opset_version=self.opset_version,
-            dynamic_axes=self._create_dynamic_axes(graph_spec),
+            dynamic_axes=dynamic_axes,
             verbose=verbose,
         )
 
@@ -118,7 +150,7 @@ class ONNXExporter:
         return [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
 
     @staticmethod
-    def _create_dynamic_axes(graph_spec: GraphSpec) -> dict:
+    def _create_dynamic_axes(graph_spec: GraphSpec) -> dict[str, list[int] | dict[int, str]]:
         """Create dynamic-axis rules for the legacy ONNX tracer."""
         # Inferred axes use index lists; explicit definitions use axis-name dictionaries.
         dynamic_axes: defaultdict[str, list[int] | dict[int, str]] = defaultdict(list)
@@ -153,7 +185,14 @@ class ONNXExporter:
 
     @staticmethod
     def _add_state_dynamic_axes(dynamic_axes: dict, graph_spec: GraphSpec) -> None:
-        """Declare dynamic axes for outputs that carry changed input tensors."""
+        """Declare dynamic axes for outputs that carry changed input tensors.
+
+        Use post-call bounds because a mutation can create or resize a tensor, for example replacing
+        a None cache slot with an input-dependent result. With observed sizes (2, 4) and (3, 4), axis
+        zero of that internal state output is dynamic even though no pre-call cache tensor existed.
+        Ignore missing post-call specifications and static axes. Only extra mutation outputs are added
+        here; a changed tensor already returned as a user output uses the ordinary output annotations.
+        """
         if graph_spec.post_input_spec is None:
             return
 

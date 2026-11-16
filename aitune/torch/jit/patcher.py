@@ -132,6 +132,11 @@ class Patcher:
 
         Built-in defaults (``_DEFAULT_PATCH_EXCLUDE``) always apply;
         user-supplied ``jit_config.patch_exclude`` entries are additive.
+
+        This gate also controls inspection interception. AITune's own modules, including export adapters,
+        must not be wrapped recursively while inspecting or compiling user modules. OnnxModule is the
+        exception in INSPECT mode so users can inspect their source ONNX graphs. It remains excluded
+        in tuning modes, and explicit exclusions take precedence over the inspection exception.
         """
         patch_exclude = _DEFAULT_PATCH_EXCLUDE + config.patch_exclude
         module_cls = module.__class__

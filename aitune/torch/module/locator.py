@@ -22,50 +22,6 @@ class ObjectType(IntEnum):
     USER_TYPE = 3
 
 
-@cache
-def get_class_data_fields_cached(cls):
-    """Inspects class ONCE. Returns a PRE-SORTED tuple."""
-    class_fields = []
-    for attr in dir(cls):
-        if attr.startswith("_"):
-            continue
-
-        # This lookup is the expensive part we want to avoid repeating
-        value = getattr(cls, attr, None)
-
-        if isinstance(value, property) or callable(value):
-            continue
-        class_fields.append(attr)
-
-    # Sort once here, so we don't have to sort later for simple objects
-    return tuple(class_fields)
-
-
-@cache
-def get_class_fields_set_cached(cls):
-    """Returns a set of class fields for fast lookup."""
-    return set(get_class_data_fields_cached(cls))
-
-
-def get_object_fields(obj):
-    """Returns SORTED public data fields."""
-    # 1. Get pre-calculated, pre-sorted fields for this Class
-    # We create a new list from the cached one to avoid modifying the cache
-    cls_fields = get_class_data_fields_cached(type(obj))
-
-    # 2. Check for dynamic instance variables (rare in strict schemas, common in loose ones)
-    obj_dict = getattr(obj, "__dict__", None)
-    if obj_dict:
-        cls_fields_set = get_class_fields_set_cached(type(obj))
-
-        new_fields = [attr for attr in obj_dict if not attr.startswith("_") and attr not in cls_fields_set]
-
-        if new_fields:
-            return sorted(itertools.chain(cls_fields, new_fields))
-
-    return cls_fields
-
-
 class Locator:
     """A path-based locator for navigating and manipulating nested data structures.
 
@@ -82,9 +38,15 @@ class Locator:
     The primary entry point for this class is the `find_leaves` method, which yields all leaves
     found within a nested structure.
 
+    Registered types can keep ordinary traversal tensor-only while exposing selected non-tensor fields
+    to mutation capture. For example, a cache's is_initialized flag must be restored after lazy
+    initialization, but does not belong in its ordinary tensor metadata. Call find_leaves with
+    include_mutation_fields=True to include those registered fields.
+
     Attributes:
         _user_types: Class-level dict of registered user-defined types that should be traversed like dataclasses.
         If the value is True, only tensors are returned, otherwise all objects are returned.
+        _mutation_fields: Non-tensor leaf names per concrete registered type, included only when requested.
         _ignored_types: Class-level set of types that should not be traversed nor returned by find_leaves.
 
     """
@@ -214,7 +176,11 @@ class Locator:
 
     @staticmethod
     def set_values(obj: object, replacements: Iterable[tuple["Locator", object]]) -> object:
-        """Replace several values while rebuilding each immutable tuple only once."""
+        """Replace values in mutable containers and rebuild each affected tuple once.
+
+        Replacing a parent takes precedence over replacements beneath it. Grouping shared paths avoids
+        repeatedly rebuilding large or nested tuples, but adds Python overhead for small mutable containers.
+        """
         return Locator._set_values_at_depth(obj, tuple(replacements), 0)
 
     @staticmethod
@@ -349,7 +315,7 @@ class Locator:
     @staticmethod
     @cache
     def _resolve_mutation_fields(obj_type: type) -> frozenset[str]:
-        """Return non-tensor fields that mutation capture should observe."""
+        """Return mutation fields registered for this concrete type, without inheriting registrations."""
         return Locator._mutation_fields.get(obj_type, frozenset())
 
     @staticmethod
@@ -366,23 +332,29 @@ class Locator:
     ) -> Generator[tuple["Locator", object], None, None]:
         """Walks the object and yields locators and their leaf values.
 
-        Leaf value is anything that is stored in a sequence, dictionary, or dataclass. If `only_tensors` is True,
-        only tensors are returned, otherwise all objects are returned.
+        Containers are traversed until a value has no traversal handler. only_tensors supplies the initial
+        filtering mode; registered user types override it for their contents. Mutation capture can also
+        request selected non-tensor leaves without changing ordinary metadata traversal.
+
+        For a type registered with only_tensors=True and mutation_fields=("is_initialized",), an object
+        containing a tensor, is_initialized=False, and a string label normally yields only the tensor.
+        With include_mutation_fields=True, it also yields is_initialized; the label remains excluded.
 
         Args:
             obj: The object to walk.
             only_tensors: Whether to only return tensors.
             is_output: Whether the locators point into forward outputs.
-            include_mutation_fields: Whether to include registered non-tensor mutation fields.
+            include_mutation_fields: Include registered field names when encountered as leaves, even
+                under tensor-only filtering. Missing attributes are not synthesized, and registering
+                a container field does not automatically include every non-tensor leaf below it.
 
         Yields:
             A tuple of (locator, value) where locator is the path to the leaf and value is the leaf value.
 
         Note:
         - if a user type is marked as ignore, it will not be traversed nor returned.
-        - if a user type is registered, it will be traversed like a dataclass. If it was registered with
-              `only_tensors=True`, only tensors are returned irrespective of method argument `only_tensors`.
-              Such a case may happen when we want to handle LLM cache and look only for tensors inside cache object.
+        - registered user types are traversed through public data fields. Their only_tensors setting
+              controls filtering, with selected mutation fields included only when explicitly requested.
         """
         if type(obj) in Locator._ignored_types:
             return
@@ -456,7 +428,18 @@ class Locator:
         only_tensors: bool = False,
         mutation_fields: tuple[str, ...] = (),
     ):
-        """Register a user type."""
+        """Register traversal rules for a concrete user type.
+
+        Args:
+            cls: Type whose public data fields should be traversed. Subclasses require their own registration.
+            only_tensors: Override filtering for this type's contents, subject to nested registrations.
+            mutation_fields: Field names included as leaves when find_leaves requests mutation fields,
+                even under tensor-only filtering. Use for recorded initialization state such as
+                is_initialized, not input-dependent Python counters; restoration assigns recorded values.
+
+        Re-registering replaces both settings and clears cached lookups. Registration also removes
+        the type from the ignored set. Unrelated non-tensor fields remain excluded under tensor-only filtering.
+        """
         Locator._user_types[cls] = only_tensors
         Locator._mutation_fields[cls] = frozenset(mutation_fields)
         Locator.unignore_type(cls)
@@ -466,7 +449,10 @@ class Locator:
 
     @staticmethod
     def unregister_user_type(cls: type):
-        """Unregister a user type."""
+        """Remove a type's traversal and mutation-field settings and invalidate cached lookups.
+
+        A later registration starts with its newly supplied settings, not the previous mutation fields.
+        """
         Locator._user_types.pop(cls, None)
         Locator._mutation_fields.pop(cls, None)
         Locator._get_iter_handler.cache_clear()
@@ -485,3 +471,47 @@ class Locator:
         """Unignore a type."""
         Locator._ignored_types.discard(cls)
         Locator._get_iter_handler.cache_clear()
+
+
+@cache
+def get_class_data_fields_cached(cls):
+    """Inspects class ONCE. Returns a PRE-SORTED tuple."""
+    class_fields = []
+    for attr in dir(cls):
+        if attr.startswith("_"):
+            continue
+
+        # This lookup is the expensive part we want to avoid repeating
+        value = getattr(cls, attr, None)
+
+        if isinstance(value, property) or callable(value):
+            continue
+        class_fields.append(attr)
+
+    # Sort once here, so we don't have to sort later for simple objects
+    return tuple(class_fields)
+
+
+@cache
+def get_class_fields_set_cached(cls):
+    """Returns a set of class fields for fast lookup."""
+    return set(get_class_data_fields_cached(cls))
+
+
+def get_object_fields(obj):
+    """Returns SORTED public data fields."""
+    # 1. Get pre-calculated, pre-sorted fields for this Class
+    # We create a new list from the cached one to avoid modifying the cache
+    cls_fields = get_class_data_fields_cached(type(obj))
+
+    # 2. Check for dynamic instance variables (rare in strict schemas, common in loose ones)
+    obj_dict = getattr(obj, "__dict__", None)
+    if obj_dict:
+        cls_fields_set = get_class_fields_set_cached(type(obj))
+
+        new_fields = [attr for attr in obj_dict if not attr.startswith("_") and attr not in cls_fields_set]
+
+        if new_fields:
+            return sorted(itertools.chain(cls_fields, new_fields))
+
+    return cls_fields
