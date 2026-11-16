@@ -28,7 +28,8 @@ class TorchExportResult:
     """Program and dynamic-shape rules produced by Torch Export.
 
     Attributes:
-        exported_program: Program accepting flat tensors and returning a tuple of recorded output tensors.
+        exported_program: Program accepting flat tensors and returning user tensor results followed by
+            any additional tensors required to restore input mutations.
         dynamic_shapes: Input constraints used for export, or None when all input dimensions are static.
     """
 
@@ -42,6 +43,8 @@ class TorchExporter:
     The returned program uses the adapter's tensor order, rather than the original Python call layout.
     For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, its module accepts
     ``(x, bias)`` and returns ``(result,)``. Backend integration must restore the Python output structure.
+    Mutating modules can return additional state tensors described by the graph's forward contract;
+    backends consume these internally to restore input changes before returning user outputs.
 
     Default tracing tries strict export, then non-strict export for modules that strict tracing cannot
     capture. Each attempt prepares fresh sample containers and an adapter; the original module is shared,

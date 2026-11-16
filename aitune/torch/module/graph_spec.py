@@ -24,6 +24,10 @@ class GraphSpec:
     graph. AITune treats each unique input specification as a separate graph which is tuned separately. This object
     represents such a computational graph with a name and input_spec information.
 
+    Input/output metadata describes tensor paths and shapes. The forward contract adds observable
+    Python behavior: input changes and outputs that reuse input objects. Export and inference share
+    the user tensor output order, followed by extra tensors needed only to restore changed inputs.
+
     Attributes:
         name (str) - symbolic name of the graph
         input_spec (SampleMetadata) - spec which describes the graph input before execution
@@ -80,7 +84,12 @@ class GraphSpec:
         arguments: dict[str, Any],
         tensor_mutation_policies: Mapping[int, TensorMutationPolicy] | None = None,
     ) -> Any:
-        """Rebuild module outputs and apply recorded input changes."""
+        """Restore input changes before rebuilding the user output through the forward contract.
+
+        flat_outputs must follow output_names(), including internal state results. arguments contains
+        the current call's normalized live inputs, not the recorded sample. Optional mutation policies
+        select copy-back or buffer replacement; see ForwardContract.restore_outputs for ownership rules.
+        """
         return self.forward_contract.restore_outputs(
             flat_outputs,
             arguments,

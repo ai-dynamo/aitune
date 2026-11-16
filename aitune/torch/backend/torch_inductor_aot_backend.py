@@ -221,6 +221,12 @@ class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with the compiled AOT Inductor runner.
 
+        Flatten current arguments in the recorded input order. The forward contract consumes extra
+        state results, applies mutations, and restores structured outputs. Keep the default PRESERVE_INPUT
+        policy so a recorded in-place update reaches the original tensor, including references held
+        outside its container. Copy-back is skipped if the runner already returned that same object.
+        Recorded REPLACE_TENSOR changes still install a new tensor, matching assignment in forward.
+
         Args:
             *args: Inference arguments.
             **kwargs: Inference keyword arguments.

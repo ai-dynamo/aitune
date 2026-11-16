@@ -1,6 +1,20 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Capture Python-side input changes that tensor backends must reproduce."""
+"""Record the Python behavior that must surround a flat compiled module call.
+
+For example, a module can update a cache without returning it::
+
+    def forward(x, state):
+        state["cache"] = state["cache"] + 1
+        return {"value": x + state["cache"]}
+
+The compiled interface returns (value, updated_cache). ForwardContract tells the backend to assign
+updated_cache to the caller's state and return {"value": value}. If forward also returns state,
+restoration reuses the caller's original container.
+
+Recording captures the contract once per graph and saves it with the graph for checkpoint reload.
+It describes observed leaf changes, not arbitrary Python code.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +31,12 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 
 
 class InputMutationKind(str, Enum):
-    """How a recorded input leaf changed during forward."""
+    """How a recorded input leaf changed during forward.
+
+    COPY_TENSOR means the same tensor was written to with unchanged metadata. REPLACE_TENSOR means
+    a new tensor appeared or tensor metadata changed, requiring assignment rather than value copying.
+    REPLACE_CONSTANT stores an observed non-tensor value; it does not evaluate an update on future inputs.
+    """
 
     COPY_TENSOR = "copy_tensor"
     REPLACE_TENSOR = "replace_tensor"
@@ -25,7 +44,23 @@ class InputMutationKind(str, Enum):
 
 
 class TensorMutationPolicy(str, Enum):
-    """How a backend result should update a changed input tensor."""
+    """How a backend result should update a changed input tensor.
+
+    PRESERVE_INPUT copies COPY_TENSOR results into the existing tensor. REPLACE_INPUT installs the
+    backend's result at the input path instead; retained references to the old tensor may stay unchanged.
+    REPLACE_TENSOR mutations always assign the result, regardless of this policy.
+
+    Mutation kind describes the recorded model behavior; this policy selects backend restoration.
+    AOT Inductor and Torch-TensorRT AOT keep the default PRESERVE_INPUT so references to an in-place
+    mutation target remain valid. ONNX Runtime and standalone TensorRT choose REPLACE_INPUT to use
+    returned buffers as the current state rather than copy values back into old leaves. That choice
+    preserves the containing object, but provides weaker tensor identity guarantees. Output-buffer
+    ownership alone does not require replacement.
+
+    For ``old_cache = state["cache"]``, preservation leaves ``state["cache"] is old_cache`` true
+    and updates its values. Replacement installs the result at ``state["cache"]``; old_cache may
+    still refer to the previous tensor. Backends must document this choice at their restoration entry point.
+    """
 
     PRESERVE_INPUT = "preserve_input"
     REPLACE_INPUT = "replace_input"
@@ -33,7 +68,14 @@ class TensorMutationPolicy(str, Enum):
 
 @dataclass(frozen=True)
 class InputMutation:
-    """One observable input change made by a module call."""
+    """One observable input change made by a module call.
+
+    Attributes:
+        locator: Path into normalized arguments where restoration applies the change.
+        kind: Whether to copy tensor values, replace a tensor, or assign a recorded non-tensor value.
+        output_index: Index in user tensor outputs followed by extra mutation outputs; None for constants.
+        value: Recorded replacement for a non-tensor leaf, copied on restoration; unused for tensor changes.
+    """
 
     locator: Locator
     kind: InputMutationKind
@@ -43,7 +85,12 @@ class InputMutation:
 
 @dataclass(frozen=True)
 class OutputInputAlias:
-    """An output path that returns the same object as an input path."""
+    """An output path that returns the same object as an input path.
+
+    Restoration reads input_locator from the current arguments and inserts that object at output_locator.
+    This records Python identity, not storage sharing between distinct tensor views. A container alias
+    covers its descendants, so a returned cache is restored as one object rather than rebuilt leaf by leaf.
+    """
 
     output_locator: Locator
     input_locator: Locator
@@ -51,14 +98,36 @@ class OutputInputAlias:
 
 @dataclass(frozen=True)
 class ForwardContract:
-    """Recorded output structure and input changes for one graph."""
+    """Recorded output structure and input changes for one graph.
+
+    Example:
+        If forward assigns ``cache[0] = x + 1`` and returns ``x * 2``, compiled execution returns
+        ``(x * 2, x + 1)``. The mutation points to output index 1. Restoration writes that tensor
+        into the current cache and returns only index 0. If forward already returns the changed tensor,
+        its user output index is reused. If it returns the cache container, an alias preserves that identity.
+
+    Assumptions:
+        The recorded mutation paths and alias relationships must apply to later calls using this graph.
+        Capture does not describe deleted leaves or arbitrary side effects on opaque objects. Non-tensor
+        replacements are recorded values: capturing ``step[0] += 1`` from 0 stores 1, not an increment
+        operation. Strict matching can reject different starting values but cannot make that update dynamic.
+
+    Attributes:
+        output_template: Python output structure with tensor and aliased-object placeholders.
+        input_mutations: Input leaf changes and the compiled output indices or constants that restore them.
+        output_input_aliases: Outputs that must reuse current input objects after their state is restored.
+    """
 
     output_template: Any
     input_mutations: tuple[InputMutation, ...] = ()
     output_input_aliases: tuple[OutputInputAlias, ...] = ()
 
     def extra_tensor_mutations(self, user_output_count: int) -> tuple[InputMutation, ...]:
-        """Return tensor changes represented by additional graph outputs."""
+        """Return tensor changes represented by additional graph outputs.
+
+        User tensor outputs occupy indices below user_output_count. Changes absent from those outputs
+        occupy the remaining indices, in capture order, so an unreturned cache update reaches the caller.
+        """
         return tuple(
             mutation
             for mutation in self.input_mutations
@@ -72,7 +141,24 @@ class ForwardContract:
         output_spec: SampleMetadata,
         tensor_mutation_policies: Mapping[int, TensorMutationPolicy] | None = None,
     ) -> Any:
-        """Apply input changes and rebuild the structured module output."""
+        """Apply input changes and rebuild the structured module output.
+
+        Restore mutations first so outputs that alias inputs see the current state. Only user outputs
+        are reconstructed; extra mutation tensors remain internal. Fresh output containers come from
+        the template, while aliased outputs reuse input objects.
+
+        Args:
+            flat_outputs: User tensor results followed by extra mutation results in recorded order.
+                A single tensor is also accepted for a one-result interface.
+            arguments: Live normalized arguments from this inference call. Recorded paths update their
+                tensors and nested containers; replacing a top-level binding only changes this dictionary.
+            output_spec: Metadata defining user tensor output paths and order, excluding extra results.
+            tensor_mutation_policies: Optional policies keyed by flat output index. Defaults to copying
+                COPY_TENSOR results into existing tensors. Backends can instead install their output buffers.
+
+        Returns:
+            The structured user output with recorded input/output identities preserved.
+        """
         flat_outputs = (flat_outputs,) if isinstance(flat_outputs, torch.Tensor) else tuple(flat_outputs)
         user_output_count = len(output_spec.tensor_data)
         expected_output_count = user_output_count + len(self.extra_tensor_mutations(user_output_count))
@@ -126,7 +212,12 @@ class _TensorMetadata:
 
 @dataclass(frozen=True)
 class _InputLeafSnapshot:
-    """Pre-call identity and value information for one input leaf."""
+    """Pre-call evidence for one leaf, retaining the live value for identity comparison.
+
+    Tensor metadata and a version number detect changes without saving tensor values. If no version
+    counter is readable, tensor_value holds an independent pre-call tensor for exact value comparison.
+    Non-tensor leaves retain their original reference; mutations inside opaque leaf objects are not copied.
+    """
 
     value: Any
     tensor_version: int | None
@@ -136,7 +227,17 @@ class _InputLeafSnapshot:
 
 @dataclass(frozen=True)
 class ForwardContractCapture:
-    """Compare normalized inputs before and after one module call."""
+    """Compare normalized inputs before and after one module call.
+
+    RecordingModule calls before_call for a new graph, executes the original module, and passes the
+    same live arguments to after_call. Capture observes that execution rather than running another call.
+
+    Tensor identity and metadata distinguish replacement from value changes. Version counters detect
+    writes to ordinary tensors. Tensors created inside torch.inference_mode() have no version counter,
+    even when later inspected outside the context, so those tensors require saved values instead.
+    Entering inference_mode alone does not remove counters from tensors created outside it.
+    Snapshot allocation and value comparison add recording cost; restoration does not repeat capture.
+    """
 
     _before: dict[Locator, _InputLeafSnapshot]
 
@@ -146,7 +247,19 @@ class ForwardContractCapture:
         arguments: dict[str, Any],
         snapshot_arguments: dict[str, Any] | None = None,
     ) -> ForwardContractCapture:
-        """Capture input leaves immediately before forward executes."""
+        """Capture input leaves immediately before forward executes.
+
+        Args:
+            arguments: Live normalized inputs that forward will receive. Keep the original references
+                so after_call can distinguish assignment from changes to an existing tensor.
+            snapshot_arguments: Optional independent pre-call copy with the same recorded paths.
+                RecordingModule already copies samples; reusing that copy avoids another tensor clone
+                when a version counter is unavailable. It must remain unchanged until after_call.
+                Without a usable snapshot tensor, capture clones the live tensor as needed.
+
+        Returns:
+            Pre-call evidence to compare against the live arguments after forward.
+        """
         return cls({
             locator: _snapshot_leaf(locator, value, snapshot_arguments)
             for locator, value in Locator.find_leaves(arguments)
@@ -158,7 +271,18 @@ class ForwardContractCapture:
         output: Any,
         output_spec: SampleMetadata,
     ) -> ForwardContract:
-        """Describe supported input leaf changes observed after forward."""
+        """Describe supported input leaf changes observed after forward.
+
+        Args:
+            arguments: The same normalized argument dictionary captured before the call, now containing
+                forward's changes. Only paths present after the call are considered; deletions are not recorded.
+            output: Actual structured result from that call, used to find tensor results and input aliases.
+            output_spec: Metadata for output, defining the user tensor order before mutation results are added.
+
+        Returns:
+            A contract that reuses user tensor outputs where possible and assigns subsequent indices
+            to changed tensors that must be returned solely to restore input state.
+        """
         output_tensors = output_spec.flatten_tensors(output)
         output_input_aliases = _find_output_input_aliases(arguments, output)
         aliased_output_values = tuple(alias.output_locator.get_value(output) for alias in output_input_aliases)
@@ -205,7 +329,11 @@ def _find_output_input_aliases(arguments: dict[str, Any], output: Any) -> tuple[
 
 
 def _tensor_version(tensor: torch.Tensor) -> int | None:
-    """Read a tensor version counter when its execution mode provides one."""
+    """Read a version counter, or return None when unavailable.
+
+    In particular, tensors created inside torch.inference_mode() do not expose a counter. The caller
+    then uses saved tensor values; the active execution context alone does not determine availability.
+    """
     try:
         return tensor._version
     except Exception:
@@ -235,7 +363,11 @@ def _snapshot_leaf(
     value: Any,
     snapshot_arguments: dict[str, Any] | None,
 ) -> _InputLeafSnapshot:
-    """Save the identity and mutation evidence for one input leaf."""
+    """Save the identity and mutation evidence for one input leaf.
+
+    Use a version counter when available. Otherwise reuse an independent tensor from snapshot_arguments,
+    or clone the live tensor, because retaining its reference alone would also observe later writes.
+    """
     if not isinstance(value, torch.Tensor):
         return _InputLeafSnapshot(value, None)
 

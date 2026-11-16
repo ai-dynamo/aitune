@@ -291,7 +291,13 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
             self._opt_module = loaded.module().to(self.device)
 
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
-        """Run the flat Torch-TensorRT module, then restore outputs and input changes."""
+        """Run the flat Torch-TensorRT module, then restore outputs and input changes.
+
+        The forward contract consumes user and extra state tensors in recorded order. PRESERVE_INPUT
+        ensures recorded in-place changes update the original tensor and any retained references.
+        It copies values back only when the result is a different object. Recorded tensor replacements
+        still assign the result.
+        """
         if self._opt_module is None:
             raise RuntimeError("Module is not activated. Please call activate() first.")
 
