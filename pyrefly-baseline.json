@@ -3305,13 +3305,6 @@
       "severity": "error"
     },
     {
-      "column": 16,
-      "path": "tests/unit/torch/module/test_sample_metadata.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `Tensor | dict[str, Tensor] | list[Tensor]` has no attribute `shape`",
-      "severity": "error"
-    },
-    {
       "column": 12,
       "path": "tests/unit/torch/module/test_sample_store.py",
       "name": "not-callable",

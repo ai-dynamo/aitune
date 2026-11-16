@@ -16,9 +16,9 @@ not dynamic updates to arbitrary Python state. DynamicCache remains excluded fro
 EncoderDecoderCache needs a different registration: its is_updated flags select whether cross-attention
 initializes or reuses its cache, so ordinary strict metadata must see those flags as well as both nested
 static caches. Registration does not select cache implementations or compile unrecorded phases.
-Calls without the special cache_position input can separate readiness states through strict metadata.
-When cache_position activates LLM phase-only matching, strict mode does not include these flags in
-graph identity; registration alone therefore does not guarantee readiness-based routing in that case.
+Strict metadata separates readiness states both with ordinary graph matching and when cache_position
+activates LLM phase matching. Phase matching ignores tensor metadata but retains strict non-tensor values,
+so cross-attention initialization and reuse can select different graphs within the same decode phase.
 """
 
 try:
@@ -51,8 +51,8 @@ try:
     )
     # Whisper's static cache wraps separate self-attention and cross-attention caches.
     # Keep the wrapper's non-tensor is_updated flags visible: they select whether
-    # cross-attention initializes its cache or reuses it. Ordinary strict metadata separates
-    # these phases; cache_position's phase-only routing does not. Nested StaticCache
+    # cross-attention initializes its cache or reuses it. Strict metadata separates these
+    # states even within the same LLM phase selected by cache_position. Nested StaticCache
     # objects retain tensor-only inspection.
     # Cache selection remains the caller's responsibility; nested DynamicCache
     # objects remain unsupported and ignored below.

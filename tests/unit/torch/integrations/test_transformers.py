@@ -2,17 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for Transformers cache integration."""
 
+from collections import OrderedDict
 from copy import deepcopy
+from unittest.mock import Mock
 
 import pytest
 import torch
 import torch.nn as nn
 
-from aitune.torch.config import config
+from aitune.torch.backend.backend import Backend
+from aitune.torch.config import AITuneConfig, config
 from aitune.torch.libs.exporting import TorchExporter
+from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.tuned_module import TunedModule
 from tests.utilities.helpers import make_graph_spec, make_recorded_graph_spec, update_input_spec
 
 transformers = pytest.importorskip("transformers")
@@ -159,8 +164,8 @@ def _make_encoder_decoder_cache(*, initialized=True):
 class _WhisperCacheUpdate(nn.Module):
     """Follow Whisper's self-attention writes and one-time cross-attention initialization."""
 
-    def forward(self, key, encoder_key, cache, position):
-        keys, _ = cache.self_attention_cache.update(key, key * 2, 0, {"cache_position": position})
+    def forward(self, key, encoder_key, cache, cache_position):
+        keys, _ = cache.self_attention_cache.update(key, key * 2, 0, {"cache_position": cache_position})
         if not cache.is_updated.get(0, False):
             cache.cross_attention_cache.update(
                 encoder_key, encoder_key * 3, 0, {"cache_position": torch.arange(encoder_key.shape[-2])}
@@ -209,15 +214,87 @@ def test_static_encoder_decoder_cache_decode_graph_identity_distinguishes_readin
 
     assert initializing.llm_phase == ready.llm_phase == "decode"
     assert len({initializing: "initialize-cross-attention", ready: "reuse-cross-attention"}) == 2
+    restored = SampleMetadata.from_dict(ready.to_dict())
+    assert restored == ready
+    assert hash(restored) == hash(ready)
+    assert restored != initializing
 
 
-def test_static_encoder_decoder_cache_recording_separates_cross_attention_initialization(tmp_path):
-    recording = RecordingModule(_WhisperCacheUpdate().eval(), "whisper-cache", cache_dir_resolver=lambda: tmp_path)
+@pytest.mark.parametrize("strict", [False, True])
+def test_static_encoder_decoder_cache_decode_reuses_graph_across_positions(monkeypatch, strict):
+    monkeypatch.setattr(config, "enable_transformers_integration", True)
+    cache = _make_encoder_decoder_cache()
+    cache.is_updated[0] = True
+    first = SampleMetadata.from_inputs({"cache": cache, "cache_position": torch.tensor([1])}, strict=strict)
+    later = SampleMetadata.from_inputs({"cache": cache, "cache_position": torch.tensor([2, 3])}, strict=strict)
+    prefill = SampleMetadata.from_inputs({"cache": cache, "cache_position": torch.tensor([0])}, strict=strict)
+
+    assert first == later
+    assert hash(first) == hash(later)
+    assert first != prefill
+    assert prefill != first
+    assert len({first, later, prefill}) == 2
+
+
+def test_static_encoder_decoder_cache_non_strict_matching_ignores_readiness(monkeypatch):
+    monkeypatch.setattr(config, "enable_transformers_integration", True)
+    cache = _make_encoder_decoder_cache()
+    inputs = {"cache": cache, "cache_position": torch.tensor([1])}
+    initializing = SampleMetadata.from_inputs(inputs, strict=False)
+    cache.is_updated[0] = True
+    ready = SampleMetadata.from_inputs(inputs, strict=False)
+
+    assert initializing == ready
+    assert hash(initializing) == hash(ready)
+
+
+@pytest.mark.parametrize("check_graph", [False, True])
+def test_static_encoder_decoder_cache_dispatch_distinguishes_decode_readiness(monkeypatch, check_graph):
+    monkeypatch.setattr(config, "enable_transformers_integration", True)
+    signature = ForwardSignature.from_callable(_WhisperCacheUpdate().forward)
+    cache = _make_encoder_decoder_cache()
+    key = torch.ones(1, 2, 1, 4)
+    encoder_key = torch.ones(1, 2, 4, 4)
+    args = (key, encoder_key, cache, torch.tensor([1]))
+    inputs = signature.normalize(args, {}).arguments
+    initializing = SampleMetadata.from_inputs(inputs, strict=True)
+    cache.is_updated[0] = True
+    ready = SampleMetadata.from_inputs(inputs, strict=True)
+    initialize_backend = Mock(spec=Backend)
+    initialize_backend.infer.return_value = "initialize-cross-attention"
+    reuse_backend = Mock(spec=Backend)
+    reuse_backend.infer.return_value = "reuse-cross-attention"
+    module_config = AITuneConfig()
+    module_config.strict_mode = True
+    backends: OrderedDict[SampleMetadata, Backend] = OrderedDict([
+        (SampleMetadata.from_dict(initializing.to_dict()), initialize_backend),
+        (SampleMetadata.from_dict(ready.to_dict()), reuse_backend),
+    ])
+    tuned = TunedModule(backends, "whisper-cache", signature, check_graph=check_graph, config=module_config)
+
+    for readiness, expected in ((False, "initialize-cross-attention"), (True, "reuse-cross-attention")):
+        cache.is_updated[0] = readiness
+        assert tuned(*args) == expected
+        assert tuned(key, encoder_key, cache, cache_position=torch.tensor([2])) == expected
+
+    assert initialize_backend.infer.call_count == reuse_backend.infer.call_count == 2
+
+
+@pytest.mark.parametrize("positions", [(0, 1, 2), (1, 2, 3)], ids=["prefill-then-decode", "decode-only"])
+def test_static_encoder_decoder_cache_recording_separates_cross_attention_initialization(
+    tmp_path, monkeypatch, positions
+):
+    monkeypatch.setattr(config, "enable_transformers_integration", True)
+    module_config = AITuneConfig()
+    module_config.strict_mode = True
+    recording = RecordingModule(
+        _WhisperCacheUpdate().eval(), "whisper-cache", cache_dir_resolver=lambda: tmp_path, config=module_config
+    )
     cache = _make_encoder_decoder_cache()
     key = torch.ones(1, 2, 1, 4)
     encoder_key = torch.full((1, 2, 4, 4), 7.0)
 
-    for position in (0, 1, 2):
+    for position in positions:
         recording(key, encoder_key, cache, torch.tensor([position]))
 
     assert len(recording.graph_specs) == 2
@@ -226,6 +303,10 @@ def test_static_encoder_decoder_cache_recording_separates_cross_attention_initia
         for graph in recording.graph_specs
     ]
     assert phase_flags == [False, True]
+    assert [graph.input_spec.llm_phase for graph in recording.graph_specs] == [
+        "prefill" if positions[0] == 0 else "decode",
+        "decode",
+    ]
     assert cache.is_updated[0] is True
     torch.testing.assert_close(cache.cross_attention_cache.layers[0].keys, encoder_key)
 
