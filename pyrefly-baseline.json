@@ -722,20 +722,6 @@
       "severity": "error"
     },
     {
-      "column": 42,
-      "path": "aitune/torch/dataloader.py",
-      "name": "bad-assignment",
-      "concise_description": "`float` is not assignable to variable `max_num_batches_per_batch_size` with type `int | None`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/dataloader.py",
-      "name": "unsupported-operation",
-      "concise_description": "`>=` is not supported between `int` and `None`",
-      "severity": "error"
-    },
-    {
       "column": 19,
       "path": "aitune/torch/dataloader.py",
       "name": "invalid-yield",
@@ -754,27 +740,6 @@
       "path": "aitune/torch/dataloader.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Dataset[Unknown] | Sequence[Unknown]` is not assignable to parameter `obj` with type `Sized` in function `len`",
-      "severity": "error"
-    },
-    {
-      "column": 26,
-      "path": "aitune/torch/dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[Unknown]` is not assignable to parameter `object` with type `Tensor` in function `list.append`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/dataloader.py",
-      "name": "unsupported-operation",
-      "concise_description": "Cannot set item in `dict[str, Tensor]`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/dataloader.py",
-      "name": "unsupported-operation",
-      "concise_description": "Cannot set item in `dict[str, Tensor]`",
       "severity": "error"
     },
     {
@@ -4513,13 +4478,6 @@
       "path": "tests/unit/torch/test_torch_llm_support.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `BaseKVCache` is not assignable to parameter `obj` with type `Sized` in function `len`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/test_tuning.py",
-      "name": "bad-override-param-name",
-      "concise_description": "Class member `DummyDataset.__getitem__` overrides parent class `Dataset` in an inconsistent manner",
       "severity": "error"
     },
     {
