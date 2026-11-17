@@ -9,6 +9,7 @@ import pytest
 import torch
 from packaging.version import Version
 from torch import nn
+from torch._dynamo.exc import BackendCompilerFailed
 
 import aitune.torch as ait
 from aitune.torch.dynamic_shapes import DynamicShapes
@@ -207,8 +208,11 @@ def test_spatial_dims_export_retry(device: torch.device):
             strict=True,
         ),
         "torch-tensorrt-jit": pytest.mark.xfail(
-            reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
-            raises=AssertionError,
+            reason=(
+                "Torch-TensorRT JIT index_put conversion fails broadcasting after index_copy_ (aitune#190); "
+                "input writes can also be dropped (pytorch/TensorRT#4894)"
+            ),
+            raises=(AssertionError, BackendCompilerFailed),
             strict=True,
         ),
     },
