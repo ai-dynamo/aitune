@@ -14,7 +14,7 @@ dependencies = [
     "diffusers>=0.25.0,<0.35",
     "transformers<5",
     "pillow",
-    "sentencepiece",
+    "sentencepiece<0.2.3",
     "protobuf",
     "timm",
 ]
