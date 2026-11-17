@@ -203,6 +203,51 @@ def test_parse_args_accepts_comma_separated_only_tags(monkeypatch) -> None:
     assert generate.parse_args().only_tags == {"gpu/4", "gpu/8"}
 
 
+@pytest.mark.parametrize(("test_id", "expected"), [(None, [0, 1, 2]), ("0", [0]), ("2", [2])])
+def test_main_selects_example_variants(monkeypatch, capsys, tmp_path: Path, test_id, expected) -> None:
+    monkeypatch.chdir(REPO_ROOT)
+    output = tmp_path / "github-output"
+    argv = [
+        "generate.py",
+        "--projects-path",
+        "examples",
+        "--test",
+        "./examples/FLUX/",
+        "--stdout",
+        "--github-output",
+        str(output),
+    ]
+    if test_id is not None:
+        argv.extend(["--test-id", test_id])
+    monkeypatch.setattr(sys, "argv", argv)
+
+    generate.main()
+
+    matrix = json.loads(capsys.readouterr().out)
+    assert [job["test_number"] for job in matrix] == expected
+    assert {job["path"] for job in matrix} == {"examples/FLUX"}
+    assert f"matrix_count={len(expected)}" in output.read_text()
+
+
+@pytest.mark.parametrize("selection", [["--test-id", "0"], ["--test", "examples/FLUX", "--test-id", "-1"]])
+def test_parse_args_rejects_invalid_variant_selection(monkeypatch, capsys, selection) -> None:
+    monkeypatch.setattr(sys, "argv", ["generate.py", *selection])
+
+    with pytest.raises(SystemExit, match="2"):
+        generate.parse_args()
+
+    assert "--test-id requires --test and must be >= 0" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("selection", [["--test", "examples/missing"], ["--test", "examples/FLUX", "--test-id", "3"]])
+def test_main_rejects_unmatched_selection(monkeypatch, selection) -> None:
+    monkeypatch.chdir(REPO_ROOT)
+    monkeypatch.setattr(sys, "argv", ["generate.py", "--projects-path", "examples", *selection])
+
+    with pytest.raises(ValueError, match="No jobs match"):
+        generate.main()
+
+
 def test_custom_docker_image_is_marked_for_wheel_install() -> None:
     jobs = generate._make_script_entries(
         "pytorch",
