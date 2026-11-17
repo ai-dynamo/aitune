@@ -286,6 +286,7 @@ class ForwardContractCapture:
         For example, keys changing from a tensor to None disappears from tensor-only traversal, but
         its old path still resolves to None and must be restored. Conversely, a newly created dtype
         or device field has no pre-call entry and is recorded as a constant replacement.
+        Revisited paths exclude ignored objects and their descendants, just like post-call traversal.
 
         Args:
             arguments: The same normalized argument dictionary captured before the call, now containing
@@ -306,12 +307,14 @@ class ForwardContractCapture:
         mutations = []
 
         after = dict(Locator.find_leaves(arguments, include_mutation_fields=True))
-        locators = dict.fromkeys((*after, *self._before))
-        for locator in locators:
-            try:
-                value = locator.get_value(arguments)
-            except (AttributeError, IndexError, KeyError, TypeError):
-                continue
+        # Node traversal retains tensor-to-None changes while excluding ignored replacements and
+        # their descendants. Reading old paths directly would bypass those ignored-type rules.
+        post_call_nodes = dict(Locator.find_nodes(arguments))
+        for locator in self._before:
+            if locator not in after and locator in post_call_nodes:
+                after[locator] = post_call_nodes[locator]
+
+        for locator, value in after.items():
             kind = _mutation_kind(self._before.get(locator), value)
             if kind is None:
                 continue
