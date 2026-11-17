@@ -1198,13 +1198,6 @@
       "severity": "error"
     },
     {
-      "column": 42,
-      "path": "aitune/torch/utils/module.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `to`",
-      "severity": "error"
-    },
-    {
       "column": 40,
       "path": "aitune/torch/utils/shapes.py",
       "name": "bad-assignment",
