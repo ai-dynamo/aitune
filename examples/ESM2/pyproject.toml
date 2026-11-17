@@ -13,7 +13,7 @@ dependencies = [
     "aitune",
     "aitune-examples-common",
     "transformers<5",
-    "sentencepiece",
+    "sentencepiece<0.2.3",
     "protobuf",
     "colored",
 ]
