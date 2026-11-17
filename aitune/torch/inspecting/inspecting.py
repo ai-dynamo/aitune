@@ -50,7 +50,8 @@ def inspect(
         call_tree: Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran
             inside which, keyed by their chain of callers. Per node it records times and tensor bytes in and out,
             plus deduplicated ``signatures``: the dtypes and shapes of the tensors and the types of
-            other objects passed in and returned, each signature listing which calls had it. It also records the
+            other objects passed in and returned, each signature listing which calls had it and, for each tensor or
+            object, where it last appeared in a recorded call (``source``). It also records the
             reads and device lookups code outside a module makes on its weights. This runs one more pass of
             ``number_of_iterations`` without per-module synchronization, so inspection takes longer. Parts compiled
             with ``torch.compile`` run compiled in the per-module pass, so calls inside them are not measured there;
