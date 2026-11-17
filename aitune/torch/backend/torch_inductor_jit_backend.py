@@ -16,7 +16,7 @@ from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.memory import gc_collect
-from aitune.torch.utils.module import load_state_dict, move_module_to_device
+from aitune.torch.utils.module import load_state_dict, move_module_to_device, state_dict_with_buffers
 
 logger = getLogger(__name__)
 
@@ -270,7 +270,7 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_OUTPUT_DTYPE: self._required_casting_dtype,
             self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
-            self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
+            self.STATE_ORIG_MODULE: state_dict_with_buffers(self._orig_module),
             self.STATE_DEVICE: self._device,
             self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
         }

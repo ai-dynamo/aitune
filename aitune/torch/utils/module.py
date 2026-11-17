@@ -23,11 +23,42 @@ if TYPE_CHECKING:
     from aitune.torch.backend.backend import Backend
 
 
+def non_persistent_buffers(module: nn.Module, prefix: str = "") -> dict[str, torch.Tensor]:
+    """Buffers of `module` itself (not its children) that `state_dict` skips."""
+    return {
+        f"{prefix}{name}": buffer.detach()
+        for name in module._non_persistent_buffers_set
+        if (buffer := module._buffers.get(name)) is not None
+    }
+
+
+def state_dict_with_buffers(module: nn.Module) -> dict[str, Any]:
+    """`module.state_dict()` plus non-persistent buffers, so a module built on meta can be fully loaded."""
+    state = module.state_dict()
+    for name, child in module.named_modules():
+        state.update(non_persistent_buffers(child, f"{name}." if name else ""))
+    return state
+
+
+def _restore_non_persistent_buffers(module: nn.Module, state_dict: dict) -> None:
+    modules = dict(module.named_modules())
+    for key, value in state_dict.items():
+        path, _, name = key.rpartition(".")
+        child = modules.get(path)
+        if child is None or name not in child._non_persistent_buffers_set:
+            continue
+        buffer = child._buffers[name]
+        if buffer is not None and buffer.is_meta:
+            child._buffers[name] = value
+
+
 def load_state_dict(module: nn.Module, state_dict: dict) -> None:
     """Load `state_dict` with `strict=False`; take the checkpoint tensors in place of meta tensors."""
     tensors = dict(itertools.chain(module.named_parameters(), module.named_buffers()))
     assign = any(tensors[key].is_meta for key in state_dict if key in tensors)
     module.load_state_dict(state_dict, strict=False, assign=assign)
+    # load_state_dict skips non-persistent buffers.
+    _restore_non_persistent_buffers(module, state_dict)
 
 
 def format_num_parameters(num: int) -> str:

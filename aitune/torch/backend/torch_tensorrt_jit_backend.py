@@ -20,7 +20,7 @@ from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.memory import gc_collect
-from aitune.torch.utils.module import load_state_dict, move_module_to_device
+from aitune.torch.utils.module import load_state_dict, move_module_to_device, state_dict_with_buffers
 
 try:
     import torch_tensorrt
@@ -279,7 +279,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
-            self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
+            self.STATE_ORIG_MODULE: state_dict_with_buffers(self._orig_module),
             self.STATE_DEVICE: self._device,
             self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,
         }
