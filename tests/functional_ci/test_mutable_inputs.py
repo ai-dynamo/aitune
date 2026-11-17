@@ -288,8 +288,10 @@ def test_replacing_mutable_input_lifecycle(case: BackendCase, device: torch.devi
 @with_backends(
     "base",
     marks={
-        "torch-tensorrt-jit": pytest.mark.skip(
+        "torch-tensorrt-jit": pytest.mark.xfail(
             reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
+            raises=AssertionError,
+            strict=True,
         ),
     },
 )

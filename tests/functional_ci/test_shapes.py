@@ -206,8 +206,10 @@ def test_spatial_dims_export_retry(device: torch.device):
             raises=AssertionError,
             strict=True,
         ),
-        "torch-tensorrt-jit": pytest.mark.skip(
+        "torch-tensorrt-jit": pytest.mark.xfail(
             reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
+            raises=AssertionError,
+            strict=True,
         ),
     },
 )
