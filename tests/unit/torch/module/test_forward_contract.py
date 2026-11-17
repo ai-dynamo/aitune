@@ -66,7 +66,11 @@ def test_capture_reuses_a_mutated_tensor_returned_as_output():
     assert mutation.output_index == 0
 
 
-@pytest.mark.parametrize("initial_slot", ["pending", {"child": "before"}], ids=["ignored_leaf", "ignored_parent"])
+@pytest.mark.parametrize(
+    "initial_slot",
+    ["pending", {"child": "before"}, {"child": {"value": "before"}}],
+    ids=["ignored_leaf", "ignored_parent", "ignored_ancestor"],
+)
 def test_capture_excludes_old_paths_replaced_by_an_ignored_type(initial_slot):
     class Opaque(dict):
         def __deepcopy__(self, memo):
@@ -74,14 +78,20 @@ def test_capture_excludes_old_paths_replaced_by_an_ignored_type(initial_slot):
 
     class ReplaceState(torch.nn.Module):
         def forward(self, x, state):
-            state["slot"] = Opaque(child="after")
+            state["slot"] = Opaque(child={"value": "after"})
+            state["visible"] = "after"
             return x + 1
 
     try:
         Locator.ignore_type(Opaque)
-        contract = _capture(ReplaceState(), (torch.zeros(2), {"slot": initial_slot}))
+        contract = _capture(ReplaceState(), (torch.zeros(2), {"slot": initial_slot, "visible": "before"}))
 
-        assert contract.input_mutations == ()
+        # Ignoring the replacement also excludes old descendant paths, but not sibling changes.
+        assert len(contract.input_mutations) == 1
+        mutation = contract.input_mutations[0]
+        assert mutation.locator.path == ("state", "visible")
+        assert mutation.kind == InputMutationKind.REPLACE_CONSTANT
+        assert mutation.value == "after"
     finally:
         Locator.unignore_type(Opaque)
 
