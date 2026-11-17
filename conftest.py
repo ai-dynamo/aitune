@@ -13,6 +13,7 @@ from aitune.torch.jit.patcher import jit_reset
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_data.reporting import _active_graph, _active_module, _active_report, _run_start_ts
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
+from aitune.torch.utils.module import clear_kept_on_device
 from aitune.utils.logging import setup_logging
 
 
@@ -23,6 +24,7 @@ def module_registry_cleanup():
         yield
     finally:
         MODULE_REGISTRY.clear()
+        clear_kept_on_device()
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +38,8 @@ def aitune_cache_dir(mocker, tmp_path):
 
     cache_dir = tmp_path / "aitune_cache"
     mocker.patch.object(config_module, "_AITUNE_CACHE_DIR", cache_dir)
+    # Reset an explicitly configured cache dir so config.cache_dir resolves to the temporary one.
+    mocker.patch.object(config_module.config, "_cache_dir", None)
     return cache_dir
 
 

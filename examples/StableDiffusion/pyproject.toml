@@ -16,7 +16,7 @@ dependencies = [
     "torch>=2.0.0",
     "transformers<5",
     "pillow",
-    "sentencepiece",
+    "sentencepiece<0.2.3",
     "protobuf",
 ]
 

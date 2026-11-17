@@ -16,3 +16,13 @@ try:
     Locator.ignore_type(DynamicCache)
 except ImportError:
     pass
+
+try:
+    from transformers.modeling_utils import ModuleUtilsMixin
+
+    from aitune.torch.integrations.device import patch_device_property
+
+    # report the execution device of tuned submodules instead of meta
+    patch_device_property(ModuleUtilsMixin)
+except ImportError:
+    pass

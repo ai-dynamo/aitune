@@ -77,14 +77,20 @@ def pytest_collection_modifyitems(config, items):
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item, call):
     report = yield
-    if report.when == "call" or report.outcome != "passed":
-        for cell_id in _item_cells.get(item.nodeid, []):
-            cell = _cells.setdefault(cell_id, {"state": "passed", "tests": set()})
-            cell["tests"].add(item.nodeid)
-            if _RANK[report.outcome] > _RANK[cell["state"]]:
-                cell["state"], cell["culprit"] = report.outcome, item.nodeid.split("/")[-1]
-                cell["reason"] = _reason(report, call)
+    # Plain attributes travel with the report from pytest-xdist workers to the controller.
+    report.matrix_cells = _item_cells.get(item.nodeid, [])
+    report.matrix_reason = _reason(report, call) if report.outcome != "passed" else None
     return report
+
+
+def pytest_runtest_logreport(report):
+    if report.when == "call" or report.outcome != "passed":
+        for cell_id in getattr(report, "matrix_cells", []):
+            cell = _cells.setdefault(cell_id, {"state": "passed", "tests": set()})
+            cell["tests"].add(report.nodeid)
+            if _RANK[report.outcome] > _RANK[cell["state"]]:
+                cell["state"], cell["culprit"] = report.outcome, report.nodeid.split("/")[-1]
+                cell["reason"] = report.matrix_reason
 
 
 def _reason(report, call) -> str:
@@ -99,7 +105,7 @@ def _reason(report, call) -> str:
 
 def pytest_sessionfinish(session):
     path = os.environ.get("AITUNE_MATRIX_RESULTS")
-    if not path or not _cells:
+    if not path or not _cells or hasattr(session.config, "workerinput"):
         return
     run_url = os.environ.get("GITHUB_RUN_ID") and (
         "{GITHUB_SERVER_URL}/{GITHUB_REPOSITORY}/actions/runs/{GITHUB_RUN_ID}".format(**os.environ)

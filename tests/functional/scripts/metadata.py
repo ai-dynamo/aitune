@@ -21,6 +21,9 @@ logger = logging.getLogger("metadata")
 
 DEFAULT_DOCKER_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
 DEFAULT_RUNNER = "prod-aitune-tester-rtx-pro-4500-v1"
+GB200_RUNNER_GROUP = "ai-dynamo-gb200"
+GB200_RUNNER = "ai-dynamo-gb200-1-gpu"
+GB200_4_RUNNER = "ai-dynamo-gb200-4-gpu"
 RUNNERS_BY_TAG = {
     "gpu": DEFAULT_RUNNER,
     "sm120": DEFAULT_RUNNER,
@@ -28,9 +31,11 @@ RUNNERS_BY_TAG = {
     "gpu/2": "prod-aitune-tester-rtx-pro-4500-4-v1",
     "gpu/4": "prod-aitune-tester-rtx-pro-4500-4-v1",
     "gpu/8": "prod-aitune-tester-rtx-pro-4500-8-v1",
+    "gpu/gb200": GB200_RUNNER,
+    "gpu/gb200/4": GB200_4_RUNNER,
 }
 
-RUNNER_TAG_PRIORITY = ("gpu/8", "gpu/4", "gpu/2", "gpu/sm/120", "sm120", "gpu")
+RUNNER_TAG_PRIORITY = ("gpu/gb200/4", "gpu/8", "gpu/4", "gpu/2", "gpu/gb200", "gpu/sm/120", "sm120", "gpu")
 SUPPORTED_PROJECT_WORKFLOWS = ("dynamo", "triton")
 
 try:
@@ -72,9 +77,25 @@ def get_scope(metadata: dict[str, Any], default_scope: str = "L0") -> Scope:
 
 
 def get_runner(tags: list[str]) -> str:
-    """Get the runner for the most specific tag, defaulting to one GPU."""
+    """Get the runner for the most specific tag, defaulting to one GPU.
+
+    The GB200 pool has a 1-GPU runner and a 4-GPU runner. A count tag on a
+    ``gpu/gb200`` job selects the 4-GPU runner instead of the RTX pool.
+    """
     tag_set = set(tags)
+    if "gpu/gb200" in tag_set and tag_set.intersection(("gpu/2", "gpu/4", "gpu/8")):
+        return GB200_4_RUNNER
     return next((RUNNERS_BY_TAG[tag] for tag in RUNNER_TAG_PRIORITY if tag in tag_set), DEFAULT_RUNNER)
+
+
+def runs_on(runner: str) -> str | dict[str, str]:
+    """Return the GitHub Actions ``runs-on`` value for a runner label.
+
+    GB200 runners are targeted by runner group and label. Other runners remain a label string.
+    """
+    if runner in {GB200_RUNNER, GB200_4_RUNNER}:
+        return {"group": GB200_RUNNER_GROUP, "labels": runner}
+    return runner
 
 
 def read_script_metadata(script: str, path: Path | None = None) -> dict[str, Any]:

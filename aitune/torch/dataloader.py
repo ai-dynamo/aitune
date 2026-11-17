@@ -52,6 +52,7 @@ Non-batchable inputs should be handled by the user on module level.
 
 """
 
+import copy
 import itertools
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -172,17 +173,18 @@ def samples_generator(
 
     if max_num_batches_per_batch_size == 0:
         return
-    if max_num_batches_per_batch_size is None:
-        max_num_batches_per_batch_size = float("inf")
+    max_batches = float("inf") if max_num_batches_per_batch_size is None else max_num_batches_per_batch_size
     dataloader_factory = _make_dataloader_factory(dataset)
     for batch_size in batch_sizes:
         dataloader = dataloader_factory.create_dataloader(batch_size)
         for i, batch in enumerate(dataloader):
-            if i >= max_num_batches_per_batch_size:
+            if i >= max_batches:
                 break
 
             args, kwargs = [], {}
-            if isinstance(batch, Mapping):
+            if isinstance(batch, torch.Tensor):
+                args = [batch]
+            elif isinstance(batch, Mapping):
                 kwargs = batch
             elif len(batch) == 2 and isinstance(batch[1], Mapping):  # support for list of samples
                 args, kwargs = batch
@@ -289,15 +291,13 @@ class MinMaxRandomDataset(DynamicShapeDataset):
         self.input_configs = input_configs
         self.include_min_max_shapes = include_min_max_shapes
         self.is_dict = self._validate_names()
-        self.samples = self._generate_samples()
+        # The list storage is the only copy of the samples, so indexing, iteration and assignment agree.
+        super().__init__(self._generate_samples())
 
-    def __len__(self):
-        """Return the number of samples in the dataset."""
-        return self.num_samples
-
-    def __getitem__(self, index):
-        """Get a sample from the dataset."""
-        return self.samples[index]
+    @property
+    def samples(self):
+        """The generated samples, i.e. the dataset itself."""
+        return self
 
     def _validate_names(self):
         all_has_name = all(cfg.kwarg_name is not None for cfg in self.input_configs)
@@ -459,7 +459,7 @@ def _list_data_collator(features: list[list]) -> list:
     Returns:
         List of concatenated tensors.
     """
-    batch = []
+    batch: list[Any] = []
     num_inputs = len(features[0])
     for i in range(num_inputs):
         first = features[0][i]
@@ -494,7 +494,7 @@ def _map_data_collator(features: list) -> dict:
     Copy has been made to add string support and avoid dependency on transformers.
     """
     first = features[0]
-    batch = {}
+    batch: dict[str, Any] = {}
 
     # Special handling for labels.
     # Ensure that tensor is created with the correct type
@@ -535,6 +535,7 @@ def ensure_enough_samples(
     """Ensures there is enough samples in the dataset to run the model for the given number of iterations.
 
     NOTE: This function trims the dataset to the given number of samples.
+    A DataLoaderFactory is returned as a shallow copy holding the trimmed dataset; the one passed in is not modified.
 
     Args:
         dataset: The dataset to make iterable.
@@ -568,5 +569,7 @@ def ensure_enough_samples(
         return limited_dataset
 
     if isinstance(dataset, DataLoaderFactory):
-        dataset.dataset = ensure_enough_samples(dataset.dataset, number_of_samples)
-        return dataset
+        # Work on a copy so the caller's factory keeps its original dataset, e.g. for a later tune().
+        factory = copy.copy(dataset)
+        factory.dataset = ensure_enough_samples(dataset.dataset, number_of_samples)
+        return factory

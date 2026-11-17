@@ -114,7 +114,8 @@ class Patcher:
             unpatch_modules: if True, unpatch all modules, otherwise only torch.nn.Module
         """
         if unpatch_modules:
-            for patched_module in cls._patched_modules:
+            # _unpatch() removes the module from _patched_modules, so iterate over a copy
+            for patched_module in list(cls._patched_modules):
                 patched_module._unpatch()
             cls._patched_modules.clear()
             cls._intercepted_classes.clear()

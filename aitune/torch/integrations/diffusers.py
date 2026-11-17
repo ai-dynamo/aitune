@@ -20,3 +20,13 @@ try:
     register_distributed_module_detector("diffusers_context_parallel", _is_context_parallel_module)
 except ImportError:
     pass
+
+try:
+    from diffusers import ModelMixin
+
+    from aitune.torch.integrations.device import patch_device_property
+
+    # report the execution device of tuned submodules instead of meta
+    patch_device_property(ModelMixin)
+except ImportError:
+    pass

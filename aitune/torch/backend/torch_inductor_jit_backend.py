@@ -101,7 +101,6 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
     STATE_TYPE = "type"
     STATE_CONFIG = "config"
     STATE_ORIG_MODULE = "orig_module"
-    STATE_DATA = "data"
     STATE_SAMPLES = "samples"
     STATE_OUTPUT_DTYPE = "output_dtype"
     STATE_DEVICE = "device"
@@ -123,8 +122,6 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
         self._orig_module = None
         self._required_casting_dtype = None
         self._samples: SampleStore | None = None
-        # Kept only for loading checkpoints written before samples became disk-backed.
-        self._data = None
         self._compile_dynamic = self._config.dynamic
         self._infer_impl = self._infer_no_autocast
 
@@ -179,6 +176,8 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
         return self
 
     def _compile(self):
+        if self._samples is None:
+            raise RuntimeError("Backend has no warmup samples. Please call build() first.")
         logger.info("Start compiling torch module.")
         move_module_to_device(self._orig_module, self.device)
 
@@ -191,7 +190,7 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
         )
 
         self._select_infer_impl()
-        for args, kwargs in self._iter_samples():
+        for args, kwargs in self._samples.iter_samples(self.device):
             self._infer_impl(*args, **kwargs)
         logger.info("Module has been compiled.")
 
@@ -259,17 +258,7 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
     def _deploy(self):
         """Deploys the backend."""
         self._activate()
-        self._samples = None
-        self._data = None
         gc_collect()
-
-    def _iter_samples(self):
-        """Iterate persisted samples, with support for legacy inline checkpoint data."""
-        if self._samples is not None:
-            return self._samples.iter_samples(self.device)
-        if self._data is not None:
-            return iter(self._data)
-        raise RuntimeError("Backend has no warmup data. Please call build() first.")
 
     def to_dict(self):
         """Returns the state_dict of the backend."""
@@ -299,9 +288,7 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
 
         backend = cls(config=config)
         backend._required_casting_dtype = state_dict[cls.STATE_OUTPUT_DTYPE]
-        samples_state = state_dict.get(cls.STATE_SAMPLES)
-        backend._samples = SampleStore.from_dict(samples_state) if samples_state is not None else None
-        backend._data = state_dict.get(cls.STATE_DATA)
+        backend._samples = SampleStore.from_dict(state_dict[cls.STATE_SAMPLES])
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module

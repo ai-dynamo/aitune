@@ -561,27 +561,6 @@
       "severity": "error"
     },
     {
-      "column": 22,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `load`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `save`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `save`",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
@@ -666,13 +645,6 @@
       "severity": "error"
     },
     {
-      "column": 20,
-      "path": "aitune/torch/backend/torchao_backend.py",
-      "name": "no-matching-overload",
-      "concise_description": "No matching overload found for function `iter` called with arguments: (Unknown | None)",
-      "severity": "error"
-    },
-    {
       "column": 24,
       "path": "aitune/torch/checkpoint/local_torch_storage.py",
       "name": "bad-argument-type",
@@ -736,20 +708,6 @@
       "severity": "error"
     },
     {
-      "column": 42,
-      "path": "aitune/torch/dataloader.py",
-      "name": "bad-assignment",
-      "concise_description": "`float` is not assignable to variable `max_num_batches_per_batch_size` with type `int | None`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "aitune/torch/dataloader.py",
-      "name": "unsupported-operation",
-      "concise_description": "`>=` is not supported between `int` and `None`",
-      "severity": "error"
-    },
-    {
       "column": 19,
       "path": "aitune/torch/dataloader.py",
       "name": "invalid-yield",
@@ -768,27 +726,6 @@
       "path": "aitune/torch/dataloader.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Dataset[Unknown] | Sequence[Unknown]` is not assignable to parameter `obj` with type `Sized` in function `len`",
-      "severity": "error"
-    },
-    {
-      "column": 26,
-      "path": "aitune/torch/dataloader.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[Unknown]` is not assignable to parameter `object` with type `Tensor` in function `list.append`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/dataloader.py",
-      "name": "unsupported-operation",
-      "concise_description": "Cannot set item in `dict[str, Tensor]`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/dataloader.py",
-      "name": "unsupported-operation",
-      "concise_description": "Cannot set item in `dict[str, Tensor]`",
       "severity": "error"
     },
     {
@@ -859,20 +796,6 @@
       "path": "aitune/torch/inspecting/module_inspector.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Module | dict[Unknown, Unknown] | list[Unknown] | Any` is not assignable to parameter `module` with type `OnnxModule` in function `aitune.torch.inspecting.module_info.OnnxModuleInfo.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 47,
-      "path": "aitune/torch/inspecting/module_inspector.py",
-      "name": "unsupported-operation",
-      "concise_description": "`+` is not supported between `LiteralString` and `None`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "aitune/torch/inspecting/module_inspector.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.inspecting.module_info.ModuleInfo.__init__`",
       "severity": "error"
     },
     {
@@ -4541,13 +4464,6 @@
       "path": "tests/unit/torch/test_torch_llm_support.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `BaseKVCache` is not assignable to parameter `obj` with type `Sized` in function `len`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/unit/torch/test_tuning.py",
-      "name": "bad-override-param-name",
-      "concise_description": "Class member `DummyDataset.__getitem__` overrides parent class `Dataset` in an inconsistent manner",
       "severity": "error"
     },
     {
