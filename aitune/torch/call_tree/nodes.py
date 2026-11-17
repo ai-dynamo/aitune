@@ -7,6 +7,7 @@ module called from two places therefore gives two nodes (for example an LLM used
 Labels come from the adapter that installed the wrappers: object paths in AOT mode.
 """
 
+import functools
 from dataclasses import dataclass, field
 
 from torch import nn
@@ -49,7 +50,8 @@ class CallNode:
     0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache``, including the tensors they hold.
 
     Attributes:
-        key: Labels of the calling chain, outermost first. Identifies the node.
+        key: Labels of the calling chain, outermost first. Identifies the node and must not change after creation:
+            ``path`` is cached from it.
         label: Adapter name of this call, for example ``root.vlm.model.visual.forward``.
         owner_class: Class name of the object the method belongs to.
         method: Name of the called method (``forward`` for module calls).
@@ -87,7 +89,7 @@ class CallNode:
         """Key of the calling node; empty for outermost calls."""
         return self.key[:-1]
 
-    @property
+    @functools.cached_property
     def path(self) -> str:
         """The node key in written form (``forward > dit_forward``): its call labels, outermost first."""
         return key_path(self.key)

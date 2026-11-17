@@ -412,7 +412,7 @@ def test_flush_synchronizes_every_end_event(mocker):
         recorder.end_iteration()
         recorder.flush()
 
-    assert recorder._ms[("root.forward",)] == 2.0
+    assert recorder._nodes[("root.forward",)].time_ms == 2.0
     cuda_synchronize.assert_not_called()
 
 
