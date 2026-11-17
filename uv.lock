@@ -324,7 +324,7 @@ functional-test = [
     { name = "fire" },
     { name = "kernels", specifier = ">=0.12" },
     { name = "sageattention" },
-    { name = "sentencepiece", specifier = ">=0.2.0" },
+    { name = "sentencepiece", specifier = ">=0.2.0,<0.2.3" },
     { name = "timm" },
     { name = "transformers", specifier = ">=4.57.6,<5" },
     { name = "urllib3", specifier = ">=2.6.3" },

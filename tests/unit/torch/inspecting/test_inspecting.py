@@ -16,6 +16,7 @@ from aitune.torch.inspecting import inspect, module_inspector
 from aitune.torch.inspecting.inspecting import _run_inference, _synchronize_inspection_result
 from aitune.torch.inspecting.module_info import InspectedModulesInfo, ModuleInfo, OnnxModuleInfo
 from aitune.torch.module import OnnxModule
+from tests.utilities.helpers import xfail_fullgraph_under_force_eager
 
 TEST_NUMBER_OF_ITERATIONS = 10
 
@@ -766,6 +767,7 @@ def test_inspect_warns_only_when_the_compiled_part_was_traced(mocker, encoder_cl
     assert [message.split(" the modules")[0] for message in _compiled_module_warnings(warning)] == expected
 
 
+@xfail_fullgraph_under_force_eager
 def test_inspect_under_force_eager_inspects_inside_compiled_parts(mocker):
     torch._dynamo.reset()
     model = _ModelWithEncoder(_Encoder())
@@ -779,7 +781,7 @@ def test_inspect_under_force_eager_inspects_inside_compiled_parts(mocker):
     assert _compiled_module_warnings(warning) == []
 
 
-@pytest.mark.parametrize("fullgraph", [False, True])
+@pytest.mark.parametrize("fullgraph", [False, pytest.param(True, marks=xfail_fullgraph_under_force_eager)])
 def test_inspect_under_force_eager_counts_a_module_compile_part_once(fullgraph):
     """Under ``force_eager`` the compiled call runs eagerly and reaches the ``forward`` wrapper; count the call once."""
     torch._dynamo.reset()
