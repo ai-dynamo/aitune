@@ -85,13 +85,14 @@ def test_ignored_cache_state_lifecycle(
         ignore_failing_modules=False,
     )
 
+    # Recording metadata is available on the tuned module, but is not retained by checkpoint reload.
+    assert len(tuned.graph_specs) == 1
+    assert [mutation.locator.path for mutation in tuned.graph_specs[0].forward_contract.input_mutations] == [
+        ("cache", "values")
+    ]
+
     def check_cache_updates(model):
         selected_backend(model, type(backend))
-        assert len(model.graph_specs) == 1
-        # Ignored descendant values can be copyable; check the recorded contract as well as copy failures.
-        assert [mutation.locator.path for mutation in model.graph_specs[0].forward_contract.input_mutations] == [
-            ("cache", "values")
-        ]
         reference = CacheModel(device)
         cache = CustomCache(torch.full((2, FEATURES), 0.25, device=device), None)
         reference_cache = CustomCache(cache.values.clone(), None)

@@ -319,6 +319,11 @@ class Locator:
         return Locator._mutation_fields.get(obj_type, frozenset())
 
     @staticmethod
+    def is_ignored(value: object) -> bool:
+        """Return whether this concrete type is excluded from traversal and leaf capture."""
+        return type(value) in Locator._ignored_types
+
+    @staticmethod
     def is_traversable(value: object) -> bool:
         """Return whether this locator can visit children of ``value``."""
         return Locator._get_iter_handler(type(value)) is not None
@@ -407,12 +412,20 @@ class Locator:
                     path.pop()
 
     @staticmethod
-    def find_nodes(obj: object, is_output: bool = False) -> Generator[tuple["Locator", object], None, None]:
-        """Yield the root and every value contained in ``obj``."""
+    def find_nodes(
+        obj: object, is_output: bool = False, *, include_ignored: bool = False
+    ) -> Generator[tuple["Locator", object], None, None]:
+        """Yield the root and every traversable descendant.
+
+        Ignored objects are normally excluded. include_ignored yields their paths so mutation capture
+        can record validation exclusions, but never traverses their contents.
+        """
         stack = [(Locator((), is_output), obj)]
         while stack:
             locator, value = stack.pop()
-            if type(value) in Locator._ignored_types:
+            if Locator.is_ignored(value):
+                if include_ignored:
+                    yield locator, value
                 continue
             yield locator, value
 

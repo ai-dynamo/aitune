@@ -92,6 +92,7 @@ def test_capture_excludes_old_paths_replaced_by_an_ignored_type(initial_slot):
         assert mutation.locator.path == ("state", "visible")
         assert mutation.kind == InputMutationKind.REPLACE_CONSTANT
         assert mutation.value == "after"
+        assert [locator.path for locator in contract.ignored_input_paths] == [("state", "slot")]
     finally:
         Locator.unignore_type(Opaque)
 
