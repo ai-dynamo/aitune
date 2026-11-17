@@ -110,6 +110,11 @@ torch214 = [
     "torch-tensorrt>=2.14.0a0,<2.15",
     "torchao>=0.17",
 ]
+torch215 = [ # nvcr.io/nvidia/pytorch:26.10-py3 is based on 2.15.0a0+875d815502.
+    "torch>=2.15.0a0,<2.16",
+    "torch-tensorrt>=2.15.0a0,<2.16",
+    "torchao>=0.17",
+]
 
 onnxruntime-gpu-cuda13 = ["onnxruntime-gpu"]
 onnxruntime-gpu-cuda12 = ["onnxruntime-gpu; python_version < '3.14' and platform_machine != 'aarch64'"]
@@ -191,6 +196,7 @@ conflicts = [
         { extra = "torch212" },
         { extra = "torch213" },
         { extra = "torch214" },
+        { extra = "torch215" },
     ],
     [
         { extra = "onnxruntime-gpu-cuda13" },
