@@ -10,6 +10,7 @@ from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 
 import aitune.torch as ait
 from aitune.torch.backend import (
+    Backend,
     TorchAOBackend,
     TorchAOBackendConfig,
     TorchInductorJitBackend,
@@ -57,7 +58,7 @@ def _transformer_strategy(
     quantization=False,
 ):
     dynamic = len(sizes) > 1
-    backends = []
+    backends: list[Backend] = []
     if quantization:
         backends = [
             TorchAOBackend(config=TorchAOBackendConfig(quantization="nvfp4dq", filter_fn=filter_fn)),
