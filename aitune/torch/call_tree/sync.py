@@ -7,26 +7,38 @@ from aitune.torch.distributed import coordinator
 
 
 def synchronize_call_tree(tree: CallTree) -> CallTree:
-    """Apply rank zero's call counts, timings and byte totals to the local call tree.
+    """Apply rank zero's call counts, timings, byte totals and recorded signatures to the local call tree.
 
-    Every rank must have recorded the same tree: the same call paths (adapter names), with the same owner class and
-    call count per node. Times and tensor bytes are taken from rank zero so that every rank reports the same values;
-    the bytes are not compared, because tensor-parallel ranks can hold differently sized shards. Sequences,
-    ``.to()`` callers and recorded weight accesses stay local; they follow from the verified structure.
+    Every rank must have recorded the same tree: the same call paths (adapter names), with the same owner class,
+    call count and ``CallTree.iteration_starts`` per node, so each node's calls fall into the same iterations on
+    every rank. Times, tensor bytes and the per-node signatures are taken from rank zero so that every rank reports
+    the same values; the bytes and signatures are not compared, because tensor-parallel ranks can hold differently
+    sized shards. Sequences, ``.to()`` callers and recorded weight accesses stay local; they follow from the
+    verified structure, so rank zero's signature call indices map to the same iterations on every rank.
 
     Args:
         tree: The local call tree.
 
     Returns:
-        The same tree with rank zero's times.
+        The same tree with rank zero's times, byte totals and signatures.
 
     Raises:
         RuntimeError: If the local tree differs from rank zero's.
     """
+    iteration_starts = tree.iteration_starts()
     local = (
         tree.iterations,
         tuple(
-            (path, node.owner_class, node.calls, node.time_ms, node.bytes_in, node.bytes_out)
+            (
+                path,
+                node.owner_class,
+                node.calls,
+                iteration_starts[path],
+                node.time_ms,
+                node.bytes_in,
+                node.bytes_out,
+                node.signatures,
+            )
             for path, node in tree.nodes.items()
         ),
     )
@@ -41,14 +53,18 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
                 f"Local call tree differs from rank zero: missing={missing!r}, unexpected={unexpected!r}, "
                 f"iterations local={tree.iterations} rank zero={rank_zero_iterations}"
             )
-        for path, owner_class, calls, time_ms, bytes_in, bytes_out in rank_zero_records:
+        for path, owner_class, calls, starts, *_ in rank_zero_records:
             node = tree.nodes[path]
-            if (node.owner_class, node.calls) != (owner_class, calls):
+            local_structure = (node.owner_class, node.calls, iteration_starts[path])
+            if local_structure != (owner_class, calls, starts):
                 raise RuntimeError(
-                    f"Local call {path[-1]!r} differs from rank zero: "
-                    f"local={(node.owner_class, node.calls)!r}, rank zero={(owner_class, calls)!r}"
+                    f"Local call {path[-1]!r} differs from rank zero: (owner class, calls, iteration starts) "
+                    f"local={local_structure!r}, rank zero={(owner_class, calls, starts)!r}"
                 )
-            node.time_ms = time_ms
-            node.bytes_in = bytes_in
-            node.bytes_out = bytes_out
+    for path, _, _, _, time_ms, bytes_in, bytes_out, signatures in rank_zero_records:
+        node = tree.nodes[path]
+        node.time_ms = time_ms
+        node.bytes_in = bytes_in
+        node.bytes_out = bytes_out
+        node.signatures = list(signatures)
     return tree

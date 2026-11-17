@@ -11,6 +11,7 @@ from torch import nn
 
 from aitune.torch.call_tree.callers import OUTSIDE_ANY_CALL
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container, user_defined_methods
+from aitune.torch.call_tree.nodes import CallSignature, Leaf, TensorLeaf
 from aitune.torch.call_tree.recorder import CallRecorder
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, storage_key
 from tests.toy_models.call_tree_models import (
@@ -1047,3 +1048,867 @@ def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
 
     assert tree.nodes[("root.forward",)].bytes_in == x.numel() * x.element_size()
     assert reads == []
+
+
+def _t(arg: Leaf) -> TensorLeaf:
+    assert isinstance(arg, TensorLeaf)
+    return arg
+
+
+def test_signatures_name_inputs_after_the_bound_parameters():
+    class Model(nn.Module):
+        def forward(self, x, extra=None):
+            return x
+
+    model = Model()
+    t, u = torch.randn(4, 8), torch.randn(2)
+
+    tree = record(model, lambda: model(t, extra=u), iterations=1)
+
+    entry = tree.nodes[("root.forward",)].signatures[0]
+    assert set(entry.inputs) == {"x", "extra"}
+    assert entry.outputs is not None
+    assert set(entry.outputs) == {"output"}
+
+
+def test_signatures_name_positional_and_keyword_arguments_the_same():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    t = torch.randn(4, 8)
+
+    tree = record(model, lambda: (model(t), model(x=t)), iterations=1)
+
+    signature = tree.nodes[("root.forward",)].signatures[0]
+    assert set(signature.inputs) == {"x"}
+
+
+def test_signatures_of_a_kwargs_only_call():
+    class Model(nn.Module):
+        def forward(self, *, x):
+            return x
+
+    model = Model()
+    t = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(x=t), iterations=1)
+
+    assert set(tree.nodes[("root.forward",)].signatures[0].inputs) == {"x"}
+
+
+def test_signatures_name_varargs_and_kwargs():
+    class Model(nn.Module):
+        def forward(self, *args, **kwargs):
+            return args[0]
+
+    model = Model()
+    t, u, v = torch.randn(4, 8), torch.randn(2), torch.randn(1)
+
+    tree = record(model, lambda: model(t, u, w=v), iterations=1)
+
+    assert set(tree.nodes[("root.forward",)].signatures[0].inputs) == {
+        "args[0]",
+        "args[1]",
+        "kwargs['w']",
+    }
+
+
+def test_signatures_fall_back_to_arg_positions_when_the_signature_cannot_be_bound():
+    model = nn.Linear(2, 2)
+    t = torch.randn(1, 2)
+
+    recorder = CallRecorder()
+    with recorder:
+        recorder.begin_iteration()
+        frame = recorder.begin_call("root.forward", model, "missing", (t,))
+        recorder.end_call(frame, t)
+        recorder.end_iteration()
+
+    entry = recorder.result().nodes[("root.forward",)].signatures[0]
+    assert set(entry.inputs) == {"args[0]"}
+
+
+def test_signatures_of_a_plain_object_method():
+    class Pipe:
+        def run(self, x):
+            return x
+
+    pipe = Pipe()
+    t = torch.randn(4, 8)
+
+    tree = record(pipe, lambda: pipe.run(t), iterations=1)
+
+    entry = tree.nodes[("root.run",)].signatures[0]
+    assert set(entry.inputs) == {"x"}
+
+
+def test_signatures_split_calls_with_a_changing_dimension():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    a, b = torch.randn(1, 4, 8), torch.randn(1, 5, 8)
+
+    tree = record(model, lambda: (model(a), model(b)), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert [sig.call_indices for sig in node.signatures] == [[0], [1]]
+    assert node.shapes("x") == [(1, 4, 8), (1, 5, 8)]
+
+
+def test_signatures_reuse_the_argument_when_shapes_do_not_change():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    tree = record(model, lambda: (model(x), model(x), model(x)), iterations=1)
+
+    # identical calls intern into one signature
+    node = tree.nodes[("root.forward",)]
+    assert [sig.call_indices for sig in node.signatures] == [[0, 1, 2]]
+    arg = tree.nodes[("root.forward",)].signatures[0].inputs["x"]
+    assert isinstance(arg, TensorLeaf) and arg.shape == (4, 8)
+
+
+def test_a_rank_change_at_a_path_is_a_separate_signature():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+
+    tree = record(
+        model,
+        lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8, 2)), model(torch.randn(4, 8, 3))),
+        iterations=1,
+    )
+
+    node = tree.nodes[("root.forward",)]
+    assert [sig.call_indices for sig in node.signatures] == [[0], [1], [2]]
+    assert node.shapes("x") == [(4, 8), (4, 8, 2), (4, 8, 3)]
+
+
+def test_a_rank_change_in_the_output_is_a_separate_signature():
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.batched = True
+
+        def forward(self, x):
+            self.batched = not self.batched
+            return x[None] if self.batched else x
+
+    model = Model()
+
+    tree = record(model, lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8))), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert [sig.call_indices for sig in node.signatures] == [[0], [1]]
+    assert node.shapes("output", "outputs") == [(4, 8), (1, 4, 8)]
+
+
+def test_a_dtype_change_at_a_path_is_a_separate_signature():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+
+    tree = record(
+        model,
+        lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8, dtype=torch.bfloat16))),
+        iterations=1,
+    )
+
+    node = tree.nodes[("root.forward",)]
+    assert [sig.call_indices for sig in node.signatures] == [[0], [1]]
+    assert _t(node.signatures[0].inputs["x"]).dtype == torch.float32
+    assert _t(node.signatures[1].inputs["x"]).dtype == torch.bfloat16
+
+
+def test_signatures_split_prefill_and_decode_calls():
+    class Model(nn.Module):
+        def forward(self, x, cache_position=None):
+            return x
+
+    model = Model()
+
+    tree = record(
+        model,
+        lambda: (
+            model(torch.randn(1, 4, 8), cache_position=torch.arange(4)),  # prefill-like
+            model(torch.randn(1, 1, 8), cache_position=torch.tensor([4])),  # decode-like
+        ),
+        iterations=1,
+    )
+
+    node = tree.nodes[("root.forward",)]
+    assert node.shapes("x") == [(1, 4, 8), (1, 1, 8)]
+    assert node.shapes("cache_position") == [(4,), (1,)]
+
+
+def test_signatures_walk_nested_containers_a_model_output_and_a_batch_feature():
+    from transformers.feature_extraction_utils import BatchFeature
+    from transformers.modeling_outputs import BaseModelOutputWithPast
+
+    class Model(nn.Module):
+        def forward(self, x, features):
+            return BaseModelOutputWithPast(last_hidden_state=x)
+
+    model = Model()
+    t, u, v, w = torch.randn(4, 8), torch.randn(2), torch.randn(1), torch.randn(3)
+
+    call = lambda: model([t, (u, {"k": v})], features=BatchFeature({"f": w}))  # noqa: E731
+    tree = record(model, call, iterations=1)
+
+    entry = tree.nodes[("root.forward",)].signatures[0]
+    assert set(entry.inputs) == {"x[0]", "x[1][0]", "x[1][1]['k']", "features['f']"}
+    outputs = entry.outputs
+    assert outputs is not None
+    assert set(outputs) == {
+        "output['last_hidden_state'][0]",
+        "output['last_hidden_state'][1][0]",
+        "output['last_hidden_state'][1][1]['k']",
+    }
+
+
+def test_signatures_list_tensors_in_container_order():
+    from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
+
+    class Model(nn.Module):
+        def forward(self, x):
+            return BaseModelOutputWithPastAndCrossAttentions(
+                last_hidden_state=x["b"], hidden_states=(x["a"][0], x["a"][1][0])
+            )
+
+    model = Model()
+    tensors = [torch.randn(1), torch.randn(2), torch.randn(3), torch.randn(4)]
+    nested = {"a": [tensors[0], (tensors[1], tensors[2])], "b": tensors[3]}
+
+    tree = record(model, lambda: model(nested), iterations=1)
+
+    entry = tree.nodes[("root.forward",)].signatures[0]
+    outputs = entry.outputs
+    assert outputs is not None
+    assert list(entry.inputs) == ["x['a'][0]", "x['a'][1][0]", "x['a'][1][1]", "x['b']"]
+    assert list(outputs) == [
+        "output['last_hidden_state']",
+        "output['hidden_states'][0]",
+        "output['hidden_states'][1]",
+    ]
+    entries = tree.to_dict()["nodes"][0]
+    exported = entries["signatures"][0]
+    assert list(exported["inputs"]) == list(entry.inputs)
+    assert list(exported["outputs"]) == list(outputs)
+
+
+def test_bytes_skip_and_signatures_list_a_static_cache_by_type_name():
+    from transformers import LlamaConfig
+    from transformers.cache_utils import StaticCache
+
+    class Model(nn.Module):
+        def forward(self, x, past_key_values):
+            return x
+
+    config = LlamaConfig(
+        hidden_size=8,
+        intermediate_size=8,
+        num_hidden_layers=2,
+        num_attention_heads=2,
+        num_key_value_heads=2,
+        max_position_embeddings=64,
+    )
+    cache = StaticCache(config=config, max_cache_len=16)
+    for layer in range(2):
+        cache.update(torch.randn(1, 2, 4, 4), torch.randn(1, 2, 4, 4), layer)
+    model = Model()
+    x = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(x, cache), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    # a StaticCache is a leaf to the walk: passed by reference, not as data crossing the call
+    assert node.signatures[0].inputs["past_key_values"].type == "transformers.cache_utils.StaticCache"
+    assert node.bytes_in == x.numel() * x.element_size()
+
+
+def test_bytes_skip_and_signatures_list_a_dynamic_cache_by_type_name():
+    from transformers.cache_utils import DynamicCache
+
+    class Model(nn.Module):
+        def forward(self, x, past_key_values):
+            return x
+
+    cache = DynamicCache()
+    cache.update(torch.randn(1, 2, 4, 4), torch.randn(1, 2, 4, 4), 0)
+    model = Model()
+    x = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(x, cache), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.signatures[0].inputs["past_key_values"].type == "transformers.cache_utils.DynamicCache"
+    assert node.bytes_in == x.numel() * x.element_size()
+
+
+def test_signatures_list_a_dict_subclass_by_type_name_and_walk_a_dataclass_into_its_fields():
+    class Box(dict):
+        pass
+
+    import dataclasses
+
+    @dataclasses.dataclass
+    class Pack:
+        x: torch.Tensor
+        y: torch.Tensor
+
+    class Model(nn.Module):
+        def forward(self, box, pack):
+            return box["a"]
+
+    model = Model()
+    a, b, c = torch.randn(4, 8), torch.randn(2), torch.randn(1)
+
+    tree = record(model, lambda: model(Box(a=a), Pack(x=b, y=c)), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    # a dict subclass is an opaque leaf to the walk; a dataclass is walked into its fields
+    assert node.bytes_in == b.numel() * b.element_size() + c.numel() * c.element_size()
+    inputs = node.signatures[0].inputs
+    assert inputs["box"].type == f"{Box.__module__}.{Box.__qualname__}"
+    assert [(name, _t(inputs[name]).shape) for name in ("pack.x", "pack.y")] == [("pack.x", (2,)), ("pack.y", (1,))]
+    assert "pack" not in inputs
+    outputs = node.signatures[0].outputs
+    assert outputs is not None
+    assert set(outputs) == {"output"}
+    assert node.bytes_out == a.numel() * a.element_size()
+
+
+def test_bytes_and_shapes_count_a_tensor_inside_a_deque():
+    from collections import deque
+
+    class Model(nn.Module):
+        def forward(self, x, items):
+            return x
+
+    model = Model()
+    x, t = torch.randn(4, 8), torch.randn(2)
+
+    tree = record(model, lambda: model(x, deque([t])), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    # pytree flattens a deque, so it is a container to bytes and shapes alike
+    assert node.bytes_in == (x.numel() + t.numel()) * x.element_size()
+    assert set(node.signatures[0].inputs) == {"x", "items[0]"}
+
+
+def test_result_snapshots_the_signature():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+
+    recorder = CallRecorder()
+    with instrumented(recorder, model), recorder:
+        recorder.begin_iteration()
+        model(torch.randn(1, 2))
+        recorder.end_iteration()
+        tree = recorder.result()
+        recorder.begin_iteration()
+        model(torch.randn(1, 3))  # adds a second signature to the live recorder only
+        model(torch.randn(1, 2))  # adds a call to the first signature in the live recorder only
+        recorder.end_iteration()
+
+    snapshot = tree.nodes[("root.forward",)]
+    assert [sig.call_indices for sig in snapshot.signatures] == [[0]]
+    assert _t(snapshot.signatures[0].inputs["x"]).shape == (1, 2)
+    live = recorder.result().nodes[("root.forward",)]
+    assert [sig.call_indices for sig in live.signatures] == [[0, 2], [1]]
+
+
+def test_result_snapshots_the_signature_mappings_too():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+
+    recorder = CallRecorder()
+    with instrumented(recorder, model), recorder:
+        recorder.begin_iteration()
+        model(torch.randn(1, 2))
+        recorder.end_iteration()
+
+    first = recorder.result().nodes[("root.forward",)].signatures[0]
+    assert first.outputs is not None
+    first.inputs.pop("x")
+    first.outputs.pop("output")
+
+    with instrumented(recorder, model), recorder:
+        recorder.begin_iteration()
+        model(torch.randn(1, 2))  # same signature
+        recorder.end_iteration()
+
+    second = recorder.result().nodes[("root.forward",)].signatures[0]
+    assert second.outputs is not None
+    assert set(second.inputs) == {"x"}
+    assert set(second.outputs) == {"output"}
+    assert second.call_indices == [0, 1]
+
+
+def test_signatures_record_objects_by_type_name_only():
+    reads = []
+
+    class Guarded:
+        def __getattribute__(self, name):
+            if name != "__class__":
+                reads.append(name)
+            return object.__getattribute__(self, name)
+
+    class Model(nn.Module):
+        def forward(self, x, obj):
+            return x
+
+    model = Model()
+
+    tree = record(model, lambda: model(torch.randn(2), Guarded()), iterations=1)
+
+    leaf = tree.nodes[("root.forward",)].signatures[0].inputs["obj"]
+    assert leaf.type == f"{Guarded.__module__}.{Guarded.__qualname__}"
+    assert not isinstance(leaf, TensorLeaf)
+    assert reads == []
+
+
+def test_a_tensor_and_an_object_at_the_same_path_give_separate_signatures():
+    class Marker:
+        pass
+
+    class Model(nn.Module):
+        def forward(self, x):
+            return None
+
+    model = Model()
+
+    tree = record(model, lambda: (model(torch.randn(2)), model(Marker())), iterations=1)
+
+    signatures = tree.nodes[("root.forward",)].signatures
+    assert [sig.call_indices for sig in signatures] == [[0], [1]]
+    assert isinstance(signatures[0].inputs["x"], TensorLeaf)
+    assert type(signatures[1].inputs["x"]) is Leaf
+
+
+def test_argument_names_are_the_signature_keys():
+    class Model(nn.Module):
+        def forward(self, inputs):
+            return {"logits": inputs["input_ids"].float()}
+
+    model = Model()
+
+    tree = record(model, lambda: model({"input_ids": torch.zeros(1, 3, dtype=torch.long)}), iterations=1)
+
+    signature = tree.nodes[("root.forward",)].signatures[0]
+    assert list(signature.inputs) == ["inputs['input_ids']"]
+    assert list(signature.outputs or {}) == ["output['logits']"]
+    for arguments in (signature.inputs, signature.outputs or {}):
+        assert all(arg.name == name for name, arg in arguments.items())
+
+
+def test_signatures_do_not_record_primitives():
+    import enum
+
+    class Mode(enum.Enum):
+        FAST = "fast"
+
+    class Model(nn.Module):
+        def forward(self, x, flag, n, s, d, e, m):
+            return x
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    tree = record(
+        model,
+        lambda: (
+            model(x, True, 3, "x", torch.bfloat16, Mode.FAST, None),
+            model(x, False, 9, "other", torch.float32, Mode.FAST, 0),
+        ),
+        iterations=1,
+    )
+
+    signature = tree.nodes[("root.forward",)].signatures[0]
+    assert set(signature.inputs) == {"x"}
+
+
+def test_signature_counts_the_calls_each_path_was_passed():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+
+    tree = record(model, lambda: (model(object()), model(None)), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.calls == 2
+    assert node.calls_passing("x") == [0]
+
+
+def test_signatures_record_a_non_tensor_result():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x, object(), None
+
+    model = Model()
+
+    tree = record(model, lambda: model(torch.randn(2, 3)), iterations=1)
+
+    outputs = tree.nodes[("root.forward",)].signatures[0].outputs
+    assert outputs is not None
+    assert isinstance(outputs["output[0]"], TensorLeaf)
+    assert outputs["output[1]"].type == "object"
+    assert "output[2]" not in outputs
+
+
+def test_bytes_do_not_count_objects_or_primitives():
+    class Model(nn.Module):
+        def forward(self, x, flag, note, obj):
+            return x
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(x, True, "note", object()), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == x.numel() * x.element_size()
+    assert set(node.signatures[0].inputs) == {"x", "obj"}
+
+
+def test_signatures_walk_terminates_on_a_self_referential_list():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    t = torch.randn(4, 8)
+    items: list = [t]
+    items.append(items)
+
+    tree = record(model, lambda: model(items), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == t.numel() * t.element_size()
+    assert list(node.signatures[0].inputs) == ["x[0]"]
+
+
+def test_signatures_walk_terminates_on_a_self_referential_dict():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    t = torch.randn(4, 8)
+    box: dict = {"t": t}
+    box["self"] = box
+
+    tree = record(model, lambda: model(box), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == t.numel() * t.element_size()
+    assert list(node.signatures[0].inputs) == ["x['t']"]
+
+
+def test_signatures_walk_terminates_on_an_indirect_cycle():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    t = torch.randn(4, 8)
+    a: dict = {"t": t}
+    b = [a]
+    a["b"] = b
+
+    tree = record(model, lambda: model(a), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == t.numel() * t.element_size()
+    assert list(node.signatures[0].inputs) == ["x['t']"]
+
+
+def test_a_container_shared_between_arguments_is_walked_under_its_first_path():
+    class Model(nn.Module):
+        def forward(self, x, y):
+            return x
+
+    model = Model()
+    t = torch.randn(4, 8)
+    shared = (t, t)
+
+    tree = record(model, lambda: model(shared, shared), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == t.numel() * t.element_size()
+    assert list(node.signatures[0].inputs) == ["x[0]", "x[1]"]
+
+
+def test_signatures_record_a_parameters_class():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    weight = nn.Parameter(torch.randn(4, 8))
+
+    tree = record(model, lambda: model(weight), iterations=1)
+
+    arg = tree.nodes[("root.forward",)].signatures[0].inputs["x"]
+    assert arg.type == "torch.nn.parameter.Parameter"
+    assert isinstance(arg, TensorLeaf) and arg.shape == (4, 8)
+
+
+def test_a_tensor_and_a_parameter_at_one_path_are_two_signatures():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+
+    tree = record(model, lambda: (model(torch.randn(4, 8)), model(nn.Parameter(torch.randn(4, 8)))), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert [sig.call_indices for sig in node.signatures] == [[0], [1]]
+    assert node.signatures[0].inputs["x"].type == "torch.Tensor"
+    assert node.signatures[1].inputs["x"].type == "torch.nn.parameter.Parameter"
+
+
+def _x(signature: CallSignature) -> TensorLeaf:
+    arg = signature.inputs["x"]
+    assert isinstance(arg, TensorLeaf)
+    return arg
+
+
+def test_calls_passing_and_shapes_cover_inputs_and_outputs():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+
+    tree = record(
+        model,
+        lambda: (model(torch.randn(4, 8)), model(torch.randn(2, 8)), model(torch.randn(4, 8))),
+        iterations=1,
+    )
+
+    node = tree.nodes[("root.forward",)]
+    assert node.calls_passing("x") == [0, 1, 2]
+    assert node.shapes("x") == [(4, 8), (2, 8)]
+    assert node.calls_passing("output", "outputs") == [0, 1, 2]
+    assert node.shapes("output", "outputs") == [(4, 8), (2, 8)]
+    assert node.calls_passing("missing") == []
+
+
+def test_calls_passing_skips_signatures_whose_calls_raised():
+    class Model(nn.Module):
+        def forward(self, x):
+            if x.ndim > 2:
+                raise ValueError("too many dims")
+            return x
+
+    model = Model()
+
+    recorder = CallRecorder()
+    with instrumented(recorder, model), recorder:
+        recorder.begin_iteration()
+        model(torch.randn(4, 8))
+        with pytest.raises(ValueError):
+            model(torch.randn(1, 4, 8))
+        recorder.end_iteration()
+
+    node = recorder.result().nodes[("root.forward",)]
+    assert node.calls_passing("x") == [0, 1]
+    assert node.calls_passing("output", "outputs") == [0]  # the raised call passed no result
+
+
+def test_iteration_starts_count_calls_before_each_iteration():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    recorder = CallRecorder()
+    with instrumented(recorder, model), recorder:
+        recorder.begin_iteration()
+        model(x)
+        model(x)
+        recorder.end_iteration()
+        recorder.begin_iteration()  # no call in this iteration
+        recorder.end_iteration()
+        recorder.begin_iteration()
+        model(x)
+        recorder.end_iteration()
+
+    tree = recorder.result()
+    assert tree.iteration_starts()[("root.forward",)] == [0, 2, 2]
+
+
+def test_call_indices_continue_across_iterations():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    recorder = CallRecorder()
+    with instrumented(recorder, model), recorder:
+        recorder.begin_iteration()
+        model(x)
+        recorder.end_iteration()
+        recorder.begin_iteration()
+        model(torch.randn(2, 8))
+        model(x)
+        recorder.end_iteration()
+
+    node = recorder.result().nodes[("root.forward",)]
+    assert [sig.call_indices for sig in node.signatures] == [[0, 2], [1]]
+    assert node.calls == 3
+
+
+def test_signatures_fall_back_to_arg_positions_when_the_call_does_not_bind():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    t, u = torch.randn(1, 2), torch.randn(1, 3)
+
+    recorder = CallRecorder()
+    with recorder:
+        recorder.begin_iteration()
+        frame = recorder.begin_call("root.forward", model, "forward", (t, u))
+        recorder.end_call(frame, t)
+        recorder.end_iteration()
+
+    node = recorder.result().nodes[("root.forward",)]
+    assert set(node.signatures[0].inputs) == {"args[0]", "args[1]"}
+
+
+def test_names_use_positional_steps_for_a_non_string_pytree_context():
+    class Pair:
+        def __init__(self, a, b):
+            self.a = a
+            self.b = b
+
+    torch.utils._pytree.register_pytree_node(
+        Pair,
+        lambda pair: ([pair.a, pair.b], [0, 1]),
+        lambda values, context: Pair(*values),
+    )
+    try:
+
+        class Model(nn.Module):
+            def forward(self, x):
+                return x
+
+        model = Model()
+
+        tree = record(model, lambda: model(Pair(torch.randn(2), torch.randn(3))), iterations=1)
+
+        node = tree.nodes[("root.forward",)]
+        assert list(node.signatures[0].inputs) == ["x[0]", "x[1]"]
+    finally:
+        torch.utils._pytree._deregister_pytree_node(Pair)
+
+
+def test_names_use_positional_steps_for_a_repeated_pytree_context_name():
+    class Pair:
+        def __init__(self, a, b):
+            self.a = a
+            self.b = b
+
+    torch.utils._pytree.register_pytree_node(
+        Pair,
+        lambda pair: ([pair.a, pair.b], ["batch", "batch"]),
+        lambda values, context: Pair(*values),
+    )
+    try:
+
+        class Model(nn.Module):
+            def forward(self, x):
+                return x
+
+        model = Model()
+
+        tree = record(model, lambda: model(Pair(torch.randn(2), torch.randn(3))), iterations=1)
+
+        node = tree.nodes[("root.forward",)]
+        assert list(node.signatures[0].inputs) == ["x[0]", "x[1]"]
+    finally:
+        torch.utils._pytree._deregister_pytree_node(Pair)
+
+
+def test_signatures_fall_back_without_losing_positional_arguments_to_a_kwarg_named_args():
+    model = nn.Linear(2, 2)
+    t, u = torch.randn(1, 2), torch.randn(1, 3)
+
+    recorder = CallRecorder()
+    with recorder:
+        recorder.begin_iteration()
+        frame = recorder.begin_call("root.forward", model, "missing", (t,), {"args": u})
+        recorder.end_call(frame, t)
+        recorder.end_iteration()
+
+    node = recorder.result().nodes[("root.forward",)]
+    assert set(node.signatures[0].inputs) == {"args[0]", "kwargs['args']"}
+
+
+def test_signatures_bind_each_instance_with_its_own_method():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    plain, patched = Model(), Model()
+    # an instance-level replacement with another parameter name
+    patched.forward = lambda y: y  # type: ignore[assignment]
+    t = torch.randn(1, 2)
+
+    recorder = CallRecorder()
+    with recorder:
+        recorder.begin_iteration()
+        for label, model in (("root.plain.forward", plain), ("root.patched.forward", patched)):
+            frame = recorder.begin_call(label, model, "forward", (t,))
+            recorder.end_call(frame, t)
+        recorder.end_iteration()
+
+    nodes = recorder.result().nodes
+    assert set(nodes[("root.plain.forward",)].signatures[0].inputs) == {"x"}
+    assert set(nodes[("root.patched.forward",)].signatures[0].inputs) == {"y"}
+
+
+def test_recording_a_call_dispatches_no_torch_function_for_its_leaves(mocker):
+    class Model(nn.Module):
+        def forward(self, x, items):
+            return x
+
+    model = Model()
+    t, u, v = torch.randn(4, 8), torch.randn(2), torch.randn(3)
+
+    spy = mocker.spy(
+        __import__("aitune.torch.call_tree.weights.accesses", fromlist=["WeightAccessMode"]).WeightAccessMode,
+        "__torch_function__",
+    )
+    tree = record(model, lambda: model(t, items=[u, {"k": v}]), iterations=1)
+
+    spy.assert_not_called()
+    assert tree.nodes[("root.forward",)].bytes_in > 0
