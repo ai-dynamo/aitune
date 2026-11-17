@@ -225,14 +225,15 @@ modules_info = ait.inspect(model, input_data, inference_function=run_chunk, min_
 tree = modules_info.call_tree
 
 for node in tree.find("dit"):    # recorded calls whose label contains "dit"
-    print(node.path, node.calls, node.time_ms, node.bytes_in, node.bytes_out)
+    print(node.path_str, node.calls, node.time_ms, node.bytes_in, node.bytes_out)
 # forward > dit_forward 10 ...
 # forward > dit_forward > dit.forward 10 ...
 ```
 
-A node's **path** is its chain of callers, outermost first, joined by ` > `. Each part is an object path from the
-inspected object plus a method name: `forward > dit_forward` is `model.dit_forward` called from `model.forward`. The
-same module called from two places gives two nodes, for example an LLM used for prefill and for generation.
+A node's **path** is its chain of callers, outermost first; `path_str` joins it with ` > `. Each part is an object
+path from the inspected object plus a method name: `forward > dit_forward` is `model.dit_forward` called from
+`model.forward`. The same module called from two places gives two nodes, for example an LLM used for prefill and for
+generation.
 `tree.nodes_of(model.dit)` returns the nodes of a module's `forward`, one per place it was called from, and
 `tree.nodes_of(model, "dit_forward")` those of another method.
 

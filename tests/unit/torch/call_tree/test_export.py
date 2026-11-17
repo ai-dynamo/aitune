@@ -33,7 +33,7 @@ def test_to_dict_exports_the_whole_tree():
     assert len(nodes) == len(tree.nodes)
     paths = {n["call_path"] for n in nodes}
     for exported, node in zip(nodes, sorted(tree.nodes.values(), key=lambda n: n.first_seen), strict=True):
-        assert exported["call_path"] == node.path
+        assert exported["call_path"] == node.path_str
         assert exported["owner_class"] == node.owner_class
         assert exported["call_path"].rpartition(" > ")[2].rpartition(".")[2] == node.method
         assert _object_path(exported["call_path"]) == node.label.removesuffix(f".{node.method}").removeprefix(

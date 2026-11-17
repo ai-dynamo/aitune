@@ -35,7 +35,7 @@ from torch import nn
 from aitune.torch.call_tree.call_tree import CallNode, CallTree
 from aitune.torch.call_tree.callers import unrecorded_caller
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container
-from aitune.torch.call_tree.nodes import NodeKey
+from aitune.torch.call_tree.nodes import CallPath
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, WeightAccessMode, storage_key
 
 _NO_RESULT = object()
@@ -62,11 +62,11 @@ class CallRecorder:
 
     def __init__(self) -> None:
         """Create an empty recorder."""
-        self._nodes: dict[NodeKey, CallNode] = {}
+        self._nodes: dict[CallPath, CallNode] = {}
         self._stack: list[CallNode] = []
         self._events: list[tuple[CallNode, Any, Any]] = []
-        self._sequences: list[list[NodeKey]] = []
-        self._current_sequence: list[NodeKey] | None = None
+        self._sequences: list[list[CallPath]] = []
+        self._current_sequence: list[CallPath] | None = None
         self._apply_depth = 0
         self._original_apply: Callable[..., Any] | None = None
         self._weight_access_log = WeightAccessLog()
@@ -85,7 +85,7 @@ class CallRecorder:
             nn.Module._apply = self._make_apply_probe(self._original_apply)
             self._weight_access_log.start(self._modules.values())
             weight_access_mode = WeightAccessMode(
-                self._weight_access_log, lambda: self._stack[-1].path if self._stack else ""
+                self._weight_access_log, lambda: self._stack[-1].path_str if self._stack else ""
             )
             weight_access_mode.__enter__()
             self._weight_access_mode = weight_access_mode
@@ -140,25 +140,25 @@ class CallRecorder:
         """
         if not self._active or is_transparent_container(obj) or is_transparent_call(args, kwargs):
             return None
-        parent = self._stack[-1].key if self._stack else ()
-        key = (*parent, label)
-        node = self._nodes.get(key)
+        parent_path = self._stack[-1].path if self._stack else ()
+        path = (*parent_path, label)
+        node = self._nodes.get(path)
         if node is None:
             node = CallNode(
-                key=key,
+                path=path,
                 label=label,
                 owner_class=type(obj).__name__,
                 method=method,
                 module=obj if isinstance(obj, nn.Module) else None,
                 first_seen=len(self._nodes),
             )
-            self._nodes[key] = node
+            self._nodes[path] = node
             if self._stack:
-                self._stack[-1].children.append(key)
+                self._stack[-1].children.append(path)
         node.calls += 1
         node.bytes_in += _tensor_bytes((args, kwargs))
         if self._current_sequence is not None:
-            self._current_sequence.append(key)
+            self._current_sequence.append(path)
         self._stack.append(node)
         start, device = self._start_timer()
         return _Frame(node=node, start=start, device=device)
@@ -196,7 +196,7 @@ class CallRecorder:
         are copies, so later recording does not change it.
         """
         self.flush()
-        nodes = {key: replace(node, children=list(node.children)) for key, node in self._nodes.items()}
+        nodes = {path: replace(node, children=list(node.children)) for path, node in self._nodes.items()}
         return CallTree(
             nodes=nodes,
             iterations=len(self._sequences),
@@ -248,7 +248,7 @@ class CallRecorder:
         ``nn.Module._apply`` is the method that ``.to()``, ``.cuda()``, ``.half()`` and similar calls use to convert a
         module's parameters and buffers. The replacement runs ``original_apply`` unchanged. While the recorder is
         recording, it first records a ``"move"`` access on every tracked weight of the module and, unless
-        ``recurse=False``, of all its submodules: the innermost recorded call's key, or the code found by
+        ``recurse=False``, of all its submodules: the innermost recorded call's path, or the code found by
         ``unrecorded_caller`` if no recorded call is running. Only the outermost ``_apply`` of a conversion records,
         because ``_apply`` calls itself on each child. Recording goes through the storage map before
         ``original_apply`` runs, so a tied alias outside the moved subtree is moved as well, and the storage reads
@@ -265,7 +265,7 @@ class CallRecorder:
         def _apply(module: nn.Module, fn: Callable, *args: Any, **kwargs: Any) -> Any:
             # ``nn.Module._apply`` recurses through child ``_apply`` calls; only the outermost one records.
             if recorder._active and recorder._apply_depth == 0:
-                caller = recorder._stack[-1].path if recorder._stack else unrecorded_caller()
+                caller = recorder._stack[-1].path_str if recorder._stack else unrecorded_caller()
                 recurse = kwargs.get("recurse", args[0] if args else True)
                 with torch._C.DisableTorchFunction():
                     for submodule in module.modules() if recurse else [module]:

@@ -762,7 +762,7 @@ def test_wrap_uses_object_path_names():
     for original, wrapped_module in zip(original_modules, wrapped_modules, strict=True):
         nodes = tree.nodes_of(original)
         assert nodes
-        assert wrapped_module.name == nodes[0].path.rpartition(" > ")[2].rpartition(".")[0]
+        assert wrapped_module.name == nodes[0].path_str.rpartition(" > ")[2].rpartition(".")[0]
 
 
 def test_wrap_tunes_all_same_short_name_modules():

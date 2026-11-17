@@ -90,7 +90,7 @@ def test_call_tree_adds_one_broadcast(mocker, dataset):
     assert broadcast.call_count == 2
     iterations, records = broadcast.call_args_list[1].args[0]
     assert iterations == 3
-    assert {key for key, *_ in records} == set(_tree(info).nodes)
+    assert {path for path, *_ in records} == set(_tree(info).nodes)
 
 
 def test_wrappers_and_apply_are_restored(dataset):
@@ -361,7 +361,7 @@ def test_call_tree_after_tune_matches_eager_call_paths():
     from aitune.torch.tuning import tune
 
     def call_paths(info):
-        return {n.path for n in info.call_tree.nodes.values()}
+        return {n.path_str for n in info.call_tree.nodes.values()}
 
     model = _TunedBlocksModel()
     x = torch.randn(4, 8)
