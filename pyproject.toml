@@ -149,7 +149,7 @@ functional-test = [
     "diffusers>=0.35.0,!=0.37.1",
     "datasets>=3.3.2",
     "transformers>=4.57.6,<5",
-    "sentencepiece>=0.2.0",
+    "sentencepiece>=0.2.0,<0.2.3", # 0.2.3 needs protobuf>=7, but protobuf is pinned <7 above.
     "urllib3>=2.6.3", # sec
     "kernels>=0.12",
     "sageattention",

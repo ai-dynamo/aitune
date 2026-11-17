@@ -5,12 +5,18 @@
 from collections.abc import Callable
 from dataclasses import replace
 from functools import partial, wraps
+from typing import cast
 
 import pytest
 import torch
 from torch import nn
 
 import aitune.torch as ait
+from aitune.torch.jit.config import JITMode
+from aitune.torch.jit.config import config as jit_config
+from aitune.torch.jit.patched_module import ModuleState, PatchedModule
+from aitune.torch.jit.patcher import prepare_for_jit_tuning
+from aitune.torch.module.tuned_module import TunedModule
 from tests.functional_ci.backends import BACKENDS, BackendCase, with_backends
 from tests.functional_ci.lifecycle import assert_matches_eager, pinned_strategy, selected_backend
 from tests.functional_ci.models import IN_FEATURES, make_input, make_mlp
@@ -166,6 +172,45 @@ def test_structured_io(case: BackendCase, device: torch.device, tmp_path):
     assert output["metadata"]["mask"] is None
     assert type(output["metadata"]["scale"]) is float
     assert output["metadata"]["enabled"] is True
+
+
+@pytest.mark.matrix(
+    "jit_tuning.models.non-tensor-inputs",
+    "jit_tuning.models.nested-inputs",
+    "jit_tuning.models.structured-outputs",
+)
+@with_backends("base")
+def test_structured_io_jit(case: BackendCase, device: torch.device):
+    """Preserve nested inputs, scalar and optional arguments, and structured outputs through JIT tuning."""
+    backend = case.factory()
+    jit_config.mode = JITMode.TUNE_EAGER
+    jit_config.device = device
+    jit_config.min_samples = 2
+    jit_config.strategy = pinned_strategy(backend)
+    tolerance = replace(case.tolerance, atol=5 * case.tolerance.atol)
+    bias = torch.linspace(-1, 1, IN_FEATURES, device=device)
+    residuals = [bias.flip(0), 0.5 * bias]
+    reference = StructuredModel(make_mlp(device))
+    with prepare_for_jit_tuning():
+        model = StructuredModel(make_mlp(device))
+
+    def pipeline(model: Callable) -> Callable:
+        return lambda x: model(
+            x,
+            {"bias": bias.repeat(x.shape[0], 1)},
+            [residual.repeat(x.shape[0], 1) for residual in residuals],
+            scale=2.0,
+            mask=None,
+        )
+
+    with torch.no_grad():
+        pipeline(model)(make_input(device, batch_size=1))
+        pipeline(model)(make_input(device, batch_size=4))
+    (head,) = PatchedModule.heads
+    assert head._state == ModuleState.TUNED
+    (selected,) = cast(TunedModule, head._wrapper).backends.values()
+    assert type(selected) is type(backend)
+    assert_matches_eager(pipeline(model), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
 
 
 @pytest.mark.matrix("aot_tuning.models.nested-inputs/torch-tensorrt-aot")
