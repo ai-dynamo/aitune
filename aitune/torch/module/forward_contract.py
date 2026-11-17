@@ -154,11 +154,15 @@ class ForwardContract:
         output_template: Python output structure with tensor and aliased-object placeholders.
         input_mutations: Input leaf changes and the compiled output indices or constants that restore them.
         output_input_aliases: Outputs that must reuse current input objects after their state is restored.
+        ignored_input_paths: Post-call ignored objects whose paths and descendants are excluded from
+            mutation validation. Compiled execution does not replay their Python replacements, so the
+            caller may retain the original values at these paths. Other input state remains validated.
     """
 
     output_template: Any
     input_mutations: tuple[InputMutation, ...] = ()
     output_input_aliases: tuple[OutputInputAlias, ...] = ()
+    ignored_input_paths: tuple[Locator, ...] = ()
 
     def extra_tensor_mutations(self, user_output_count: int) -> tuple[InputMutation, ...]:
         """Return tensor changes represented by additional graph outputs.
@@ -327,6 +331,7 @@ class ForwardContractCapture:
         For example, keys changing from a tensor to None disappears from tensor-only traversal, but
         its old path still resolves to None and must be restored. Conversely, a newly created dtype
         or device field has no pre-call entry and is recorded as a constant replacement.
+        Revisited paths exclude ignored objects and their descendants, just like post-call traversal.
 
         Args:
             arguments: The same normalized argument dictionary captured before the call, now containing
@@ -347,12 +352,16 @@ class ForwardContractCapture:
         mutations = []
 
         after = dict(Locator.find_leaves(arguments, include_mutation_fields=True))
-        locators = dict.fromkeys((*after, *self._before))
-        for locator in locators:
-            try:
-                value = locator.get_value(arguments)
-            except (AttributeError, IndexError, KeyError, TypeError):
-                continue
+        # Node traversal retains tensor-to-None changes while excluding ignored replacements and
+        # their descendants. Reading old paths directly would bypass those ignored-type rules.
+        nodes = tuple(Locator.find_nodes(arguments, include_ignored=True))
+        ignored_input_paths = tuple(locator for locator, value in nodes if Locator.is_ignored(value))
+        post_call_nodes = {locator: value for locator, value in nodes if not Locator.is_ignored(value)}
+        for locator in self._before:
+            if locator not in after and locator in post_call_nodes:
+                after[locator] = post_call_nodes[locator]
+
+        for locator, value in after.items():
             kind = _mutation_kind(self._before.get(locator), value)
             if kind is None:
                 continue
@@ -370,6 +379,7 @@ class ForwardContractCapture:
             output_template=output_spec.without_tensors(output, aliased_output_values),
             input_mutations=tuple(mutations),
             output_input_aliases=output_input_aliases,
+            ignored_input_paths=ignored_input_paths,
         )
 
 
