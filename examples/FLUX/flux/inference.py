@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Compare original and AITune-tuned FLUX image generation."""
 
+import gc
 import os
 import time
 from logging import basicConfig, getLogger
@@ -103,8 +104,18 @@ def do_inference(
         _save_images(output_path, prompt, "orig", original_images)
     synchronize()
 
+    del pipeline
+    gc.collect()
+    torch.cuda.empty_cache()
+
     if is_rank_zero():
         logger.info("Loading tuned pipeline")
+    pipeline = get_pipeline(
+        model_name=model_name,
+        device="meta",
+        multi_gpu=multi_gpu,
+        context_parallel=context_parallel,
+    )
     pipeline = ait.load(pipeline, tuned_model_path)
 
     if is_rank_zero():
