@@ -15,7 +15,7 @@ from aitune.torch.checkpoint.storage import Storage
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module.wrapper_module import Module as WrapperModule
 from aitune.torch.utils.device import get_device
-from aitune.torch.utils.module import load_state_dict
+from aitune.torch.utils.module import load_state_dict, non_persistent_buffers
 
 logger = getLogger(__name__)
 
@@ -185,6 +185,7 @@ class TorchCheckpoint(Checkpoint):
                     relative_path = path[len(name) :].lstrip(".")
                     prefix = f"{relative_path}." if relative_path else ""
                     child._save_to_state_dict(weights, prefix, keep_vars=False)
+                    weights.update(non_persistent_buffers(child, prefix))
             if weights:
                 state_dict[name] = weights
                 saved_module_ids.add(id(module))

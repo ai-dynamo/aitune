@@ -399,17 +399,35 @@ def test_load_state_dict_for_pipeline(pipeline_factory):
 
 
 def test_pipeline_meta_device_load_restores_all_weights(checkpoint):
+    class TextEncoder(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(3, 3)
+            self.register_buffer("position_ids", torch.arange(3), persistent=False)
+
+        def forward(self, value):
+            return self.linear(value) + self.position_ids
+
+    class Decoder(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(3, 3)
+            self.register_buffer("position_ids", torch.arange(3), persistent=False)
+
+        def forward(self, value):
+            return self.linear(value) + self.position_ids
+
     class Vae(torch.nn.Module):
         decoder: Any
 
         def __init__(self):
             super().__init__()
             self.post = torch.nn.Linear(3, 3)
-            self.decoder = torch.nn.Linear(3, 3)
+            self.decoder = Decoder()
 
     class Pipeline:
         def __init__(self):
-            self.text_encoder = torch.nn.Linear(3, 3)
+            self.text_encoder = TextEncoder()
             self.vae = Vae()
 
     def inference(pipeline, value):
@@ -433,6 +451,11 @@ def test_pipeline_meta_device_load_restores_all_weights(checkpoint):
         not parameter.is_meta
         for module in TorchCheckpoint.get_pipeline_modules(restored).values()
         for parameter in module.parameters()
+    )
+    assert all(
+        not buffer.is_meta
+        for module in TorchCheckpoint.get_pipeline_modules(restored).values()
+        for buffer in module.buffers()
     )
     torch.testing.assert_close(inference(restored, sample), expected)
 

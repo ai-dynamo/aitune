@@ -39,7 +39,7 @@ from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, B
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.memory import gc_collect
-from aitune.torch.utils.module import load_state_dict, move_module_to_device, offload
+from aitune.torch.utils.module import load_state_dict, move_module_to_device, offload, state_dict_with_buffers
 from aitune.torch.utils.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
@@ -284,7 +284,7 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
-            self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
+            self.STATE_ORIG_MODULE: state_dict_with_buffers(self._orig_module),
             self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
             self.STATE_DEVICE: self._device,
             self.STATE_COMPILE_DYNAMIC: self._compile_dynamic,

@@ -61,8 +61,8 @@ with torch.device("meta"):
 model = ait.load(model, "model.ait")
 ```
 
-Non-persistent buffers are not in `state_dict` and remain on meta. `device_map` applies only to tuned modules;
-untuned weights load to the device on which they were saved.
+Checkpoints also store non-persistent buffers, so they are restored when loading a pipeline built on meta.
+`device_map` applies only to tuned modules; untuned weights load to the device on which they were saved.
 
 ## Use another storage directory
 

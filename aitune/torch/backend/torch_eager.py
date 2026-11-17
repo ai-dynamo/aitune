@@ -15,7 +15,7 @@ import torch.nn as nn
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
-from aitune.torch.utils.module import load_state_dict, move_module_to_device
+from aitune.torch.utils.module import load_state_dict, move_module_to_device, state_dict_with_buffers
 
 
 @dataclass
@@ -168,7 +168,7 @@ class TorchEagerBackend(Backend[TorchEagerBackendConfig]):
         return {
             self.STATE_TYPE: self.__class__.__name__,
             self.STATE_CONFIG: self._config.to_dict(),
-            self.STATE_ORIG_MODULE: self._orig_module.state_dict(),
+            self.STATE_ORIG_MODULE: state_dict_with_buffers(self._orig_module),
             self.STATE_OUTPUT_DTYPE: self._required_casting_dtype,
             self.STATE_DEVICE: self.device,
         }
