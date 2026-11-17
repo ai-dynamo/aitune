@@ -64,17 +64,17 @@ def _transformer_strategy(
             TorchAOBackend(config=TorchAOBackendConfig(quantization="fp8dq", filter_fn=filter_fn)),
         ]
 
-    backends += [
-        TorchTensorRTJitBackend(
-            config=TorchTensorRTJitBackendConfig(
-                dynamic=dynamic,
-                compile_config=TorchTensorRTConfig(
-                    use_distributed_mode_trace=multi_gpu, min_block_size=50, truncate_double=True
-                ),
+    # Torch-TensorRT compilation on every context-parallel rank exceeds the CI pod memory limit.
+    if not multi_gpu:
+        backends.append(
+            TorchTensorRTJitBackend(
+                config=TorchTensorRTJitBackendConfig(
+                    dynamic=dynamic,
+                    compile_config=TorchTensorRTConfig(min_block_size=50, truncate_double=True),
+                )
             )
-        ),
-        TorchInductorJitBackend(config=TorchInductorJitBackendConfig(dynamic=dynamic)),
-    ]
+        )
+    backends.append(TorchInductorJitBackend(config=TorchInductorJitBackendConfig(dynamic=dynamic)))
 
     strategy = ait.MaxThroughputStrategy(backends=backends)
     return strategy
