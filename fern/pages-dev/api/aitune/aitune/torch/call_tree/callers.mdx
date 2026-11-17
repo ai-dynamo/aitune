@@ -41,7 +41,7 @@ Name the code that is running when no recorded call is, for example the code tha
 
 Code that moves modules is often not a recorded call: a pipeline function outside the model, or library code
 such as ``SentenceTransformer.encode``, which calls ``self.to(device)`` on every call. Instead of reporting all
-of these as ``&lt;outside any call&gt;``, this names the code, e.g. ``&lt;unrecorded: SentenceTransformer.encode&gt;``.
+of these as ``<outside any call>``, this names the code, e.g. ``<unrecorded: SentenceTransformer.encode>``.
 
 It walks up the stack from its caller and skips frames:
 
@@ -53,7 +53,7 @@ It walks up the stack from its caller and skips frames:
 
 **Returns:** `str`
 
-``&lt;unrecorded: qualname&gt;`` of the first frame left, or ``&lt;outside any call&gt;`` if every frame is skipped.
+``<unrecorded: qualname>`` of the first frame left, or ``<outside any call>`` if every frame is skipped.
 
 
 </Indent>

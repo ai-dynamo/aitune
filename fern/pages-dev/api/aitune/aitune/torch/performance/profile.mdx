@@ -138,7 +138,7 @@ Return region metadata records for both AOT-managed and untuned regions.
 AOT entries carry ``wrapper_state``; untuned entries omit it (the field is
 AOT-specific). Both share the same shape otherwise.
 
-Method-wrapped region paths look like ``&lt;module_path&gt;.&lt;method_name&gt;``
+Method-wrapped region paths look like ``<module_path>.<method_name>``
 (e.g. ``vae.decode``). For ``module_type`` lookup, if the full path is not in
 the metadata dict the parent path (with the trailing ``.method`` stripped) is
 tried — that's where the underlying module's type is recorded.
@@ -166,7 +166,7 @@ Look up ``module_type`` for a region path, falling back to the parent path.
 
 Used for method-wrapped regions like ``vae.decode`` whose full path is not in
 ``types`` (which is keyed by discovered module paths). Strips the trailing
-``.&lt;method_name&gt;`` and retries once.
+``.<method_name>`` and retries once.
 
 
 </Indent>

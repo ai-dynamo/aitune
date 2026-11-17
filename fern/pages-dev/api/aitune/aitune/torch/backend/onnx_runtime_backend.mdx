@@ -324,9 +324,9 @@ aitune.torch.backend.ONNXRuntimeBackend._get_execution_providers() -> list[str |
 
 Return execution providers based on config (no automatic CPU fallback).
 
-* ``CUDA`` → ``[("CUDAExecutionProvider", &#123;"device_id": ...&#125;)]``
+* ``CUDA`` → ``[("CUDAExecutionProvider", {"device_id": ...})]``
 * ``TENSORRT`` → ``["TensorrtExecutionProvider",
-  ("CUDAExecutionProvider", &#123;"device_id": ...&#125;)]``
+  ("CUDAExecutionProvider", {"device_id": ...})]``
 
 
 </Indent>

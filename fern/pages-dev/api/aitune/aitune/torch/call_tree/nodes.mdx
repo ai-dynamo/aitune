@@ -124,7 +124,7 @@ Key of the calling node; empty for outermost calls.
 </ParamField>
 
 <ParamField path="path" type="str">
-The node key in written form (``forward &gt; dit_forward``): its call labels, outermost first.
+The node key in written form (``forward > dit_forward``): its call labels, outermost first.
 </ParamField>
 
 <ParamField path="time_ms" type="float = 0.0">
@@ -147,7 +147,7 @@ aitune.torch.call_tree.nodes.key_path(
 
 <Indent>
 
-The written form of a node key: its labels without ``root.``, outermost first, joined by `` &gt; ``.
+The written form of a node key: its labels without ``root.``, outermost first, joined by `` > ``.
 
 Example:
     &gt;&gt;&gt; key_path(("root.forward", "root.vlm.forward", "root.vlm.lm_head.forward"))

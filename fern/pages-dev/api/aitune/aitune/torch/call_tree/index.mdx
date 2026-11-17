@@ -129,7 +129,7 @@ Key of the calling node; empty for outermost calls.
 </ParamField>
 
 <ParamField path="path" type="str">
-The node key in written form (``forward &gt; dit_forward``): its call labels, outermost first.
+The node key in written form (``forward > dit_forward``): its call labels, outermost first.
 </ParamField>
 
 <ParamField path="time_ms" type="float = 0.0">
@@ -651,7 +651,7 @@ aitune.torch.CallTree.nodes_of(
 
 <Indent>
 
-Nodes recorded for calls of ``module.&lt;method&gt;``.
+Nodes recorded for calls of ``module.<method>``.
 
 A node is one chain of callers, so a module called from one place has one node, however often it ran there.
 A module called from several places (e.g. an LLM used by both ``prefill`` and ``generate``) has one node per
@@ -674,6 +674,47 @@ Name of the recorded method.
 **Returns:** `list[` [`CallNode`](./nodes.mdx#aitune-torch-call_tree-nodes-CallNode) `]`
 
 The matching nodes in first-call order; empty if the module was not recorded. Methods of objects that
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The call tree as plain JSON data, for tools that read it without torch or aitune.
+
+Node values are totals over ``iterations``: divide by ``iterations`` for per iteration, by ``calls`` for
+per call.
+
+**Example**
+
+&gt;&gt;&gt; node = CallNode(
+...     key=("root.forward", "root.dit.forward"),
+...     label="root.dit.forward",
+...     owner_class="Dit",
+...     method="forward",
+...     first_seen=1,
+... )
+&gt;&gt;&gt; outer = CallNode(key=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, node)&#125;, iterations=2)
+&gt;&gt;&gt; exported = tree.to_dict()["nodes"][1]
+&gt;&gt;&gt; exported["call_path"], exported["owner_class"]
+('forward &gt; dit.forward', 'Dit')
+&gt;&gt;&gt; exported["call_path"].rpartition(" &gt; ")[2].rpartition(".")
+('dit', '.', 'forward')
+
+**Returns:** `dict[str, Any]`
+
+A dict of str, int, float, list and dict values with these keys:
 
 
 </Indent>
@@ -739,9 +780,9 @@ One access to a weight: which call or code did it, and how.
 
 
 <ParamField path="by" type="str">
-The path of the recorded call it ran in (``forward &gt; llm.embed.forward``, see ``CallNode.path``); outside
-any recorded call, the code found by ``unrecorded_caller()`` (``&lt;unrecorded: Pipe.encode&gt;``) or
-``&lt;outside any call&gt;``. ``shared_weights_of`` reports unrecorded code by its qualified name
+The path of the recorded call it ran in (``forward > llm.embed.forward``, see ``CallNode.path``); outside
+any recorded call, the code found by ``unrecorded_caller()`` (``<unrecorded: Pipe.encode>``) or
+``<outside any call>``. ``shared_weights_of`` reports unrecorded code by its qualified name
 (``Pipe.encode``).
 </ParamField>
 
@@ -782,7 +823,7 @@ ops recorded by ``WeightAccessMode`` during the call-tree pass; moves are record
 </ParamField>
 
 <ParamField path="unit" type="UnitSpec">
-[`UnitSpec`](./units.mdx#aitune-torch-call_tree-units-UnitSpec) — A node path (``"forward &gt; dit_forward"``, see ``CallNode.path``), a module (all its recorded
+[`UnitSpec`](./units.mdx#aitune-torch-call_tree-units-UnitSpec) — A node path (``"forward > dit_forward"``, see ``CallNode.path``), a module (all its recorded
 ``forward`` calls), or a list of them as one unit.
 </ParamField>
 

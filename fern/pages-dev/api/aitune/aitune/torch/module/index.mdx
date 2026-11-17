@@ -108,7 +108,7 @@ Example:
 <ParamField path="_self_orig_forward" type="= module.forward">
 </ParamField>
 
-<ParamField path="_self_proxy_forward" type="= wrapt.decorator(self._forward)(module.forward)">
+<ParamField path="_self_proxy_forward" type="Callable = wrapt.decorator(self._forward)(module.forward)">
 </ParamField>
 
 <ParamField path="_self_state" type="= ModuleState.INIT">
@@ -576,6 +576,31 @@ aitune.torch.Module.is_state_dict_valid(
 <Badge>staticmethod</Badge>
 
 Check if the state dictionary has a wrapper module.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-set_proxy_forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.Module.set_proxy_forward(
+    forward: collections.abc.Callable
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Install ``forward`` as the wrapped module's ``forward``; the wrapper reinstalls it after every call.
+
+**Parameters:**
+
+<ParamField path="forward" type="Callable">
+The forward to proxy calls through between calls to the wrapper.
+</ParamField>
 
 
 </Indent>

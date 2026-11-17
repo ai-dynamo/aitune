@@ -244,7 +244,9 @@ recorded a call tree (``call_tree=True``), weights of a wrapped module that code
 checks the device of, or moves stay on the device when tuning offloads the module (see
 ``aitune.torch.call_tree.shared_weights_of``), and each kept weight is logged. Wrapping a module again
 replaces the weights it keeps; a weight stays kept while any wrapped module keeps it. A ``ModuleInfo``
-without ``inspection``, such as one built by hand, keeps nothing.
+without ``inspection``, such as one built by hand, keeps nothing. Each wrapped submodule is named by its
+object path (``blocks.0.attn``), which is also the object path of its call-tree nodes; a ``ModuleInfo``
+without ``object_path`` keeps its ``name``, and the root module is named by its class.
 </ParamField>
 
 <ParamField path="strategy" type="StrategyOption | None" default="None">

@@ -193,7 +193,7 @@ Key of the calling node; empty for outermost calls.
 </ParamField>
 
 <ParamField path="path" type="str">
-The node key in written form (``forward &gt; dit_forward``): its call labels, outermost first.
+The node key in written form (``forward > dit_forward``): its call labels, outermost first.
 </ParamField>
 
 <ParamField path="time_ms" type="float = 0.0">
@@ -336,7 +336,7 @@ aitune.torch.CallTree.nodes_of(
 
 <Indent>
 
-Nodes recorded for calls of ``module.&lt;method&gt;``.
+Nodes recorded for calls of ``module.<method>``.
 
 A node is one chain of callers, so a module called from one place has one node, however often it ran there.
 A module called from several places (e.g. an LLM used by both ``prefill`` and ``generate``) has one node per
@@ -359,6 +359,47 @@ Name of the recorded method.
 **Returns:** `list[` [`CallNode`](./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-CallNode) `]`
 
 The matching nodes in first-call order; empty if the module was not recorded. Methods of objects that
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The call tree as plain JSON data, for tools that read it without torch or aitune.
+
+Node values are totals over ``iterations``: divide by ``iterations`` for per iteration, by ``calls`` for
+per call.
+
+**Example**
+
+&gt;&gt;&gt; node = CallNode(
+...     key=("root.forward", "root.dit.forward"),
+...     label="root.dit.forward",
+...     owner_class="Dit",
+...     method="forward",
+...     first_seen=1,
+... )
+&gt;&gt;&gt; outer = CallNode(key=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, node)&#125;, iterations=2)
+&gt;&gt;&gt; exported = tree.to_dict()["nodes"][1]
+&gt;&gt;&gt; exported["call_path"], exported["owner_class"]
+('forward &gt; dit.forward', 'Dit')
+&gt;&gt;&gt; exported["call_path"].rpartition(" &gt; ")[2].rpartition(".")
+('dit', '.', 'forward')
+
+**Returns:** `dict[str, Any]`
+
+A dict of str, int, float, list and dict values with these keys:
 
 
 </Indent>
@@ -1155,7 +1196,7 @@ Example:
 <ParamField path="_self_orig_forward" type="= module.forward">
 </ParamField>
 
-<ParamField path="_self_proxy_forward" type="= wrapt.decorator(self._forward)(module.forward)">
+<ParamField path="_self_proxy_forward" type="Callable = wrapt.decorator(self._forward)(module.forward)">
 </ParamField>
 
 <ParamField path="_self_state" type="= ModuleState.INIT">
@@ -1623,6 +1664,31 @@ aitune.torch.Module.is_state_dict_valid(
 <Badge>staticmethod</Badge>
 
 Check if the state dictionary has a wrapper module.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-wrapper_module-Module-set_proxy_forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.Module.set_proxy_forward(
+    forward: collections.abc.Callable
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Install ``forward`` as the wrapped module's ``forward``; the wrapper reinstalls it after every call.
+
+**Parameters:**
+
+<ParamField path="forward" type="Callable">
+The forward to proxy calls through between calls to the wrapper.
+</ParamField>
 
 
 </Indent>
@@ -3656,9 +3722,9 @@ One access to a weight: which call or code did it, and how.
 
 
 <ParamField path="by" type="str">
-The path of the recorded call it ran in (``forward &gt; llm.embed.forward``, see ``CallNode.path``); outside
-any recorded call, the code found by ``unrecorded_caller()`` (``&lt;unrecorded: Pipe.encode&gt;``) or
-``&lt;outside any call&gt;``. ``shared_weights_of`` reports unrecorded code by its qualified name
+The path of the recorded call it ran in (``forward > llm.embed.forward``, see ``CallNode.path``); outside
+any recorded call, the code found by ``unrecorded_caller()`` (``<unrecorded: Pipe.encode>``) or
+``<outside any call>``. ``shared_weights_of`` reports unrecorded code by its qualified name
 (``Pipe.encode``).
 </ParamField>
 
@@ -4062,7 +4128,9 @@ recorded a call tree (``call_tree=True``), weights of a wrapped module that code
 checks the device of, or moves stay on the device when tuning offloads the module (see
 ``aitune.torch.call_tree.shared_weights_of``), and each kept weight is logged. Wrapping a module again
 replaces the weights it keeps; a weight stays kept while any wrapped module keeps it. A ``ModuleInfo``
-without ``inspection``, such as one built by hand, keeps nothing.
+without ``inspection``, such as one built by hand, keeps nothing. Each wrapped submodule is named by its
+object path (``blocks.0.attn``), which is also the object path of its call-tree nodes; a ``ModuleInfo``
+without ``object_path`` keeps its ``name``, and the root module is named by its class.
 </ParamField>
 
 <ParamField path="strategy" type="StrategyOption | None" default="None">

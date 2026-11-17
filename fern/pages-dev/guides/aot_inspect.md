@@ -263,6 +263,74 @@ argument (a checkpoint helper) is skipped the same way; free functions are not r
 events on the device that was current when a call started, so work that a call runs on other GPUs is not fully
 counted.
 
+### Export the call tree
+
+`tree.to_dict()` returns a JSON-serializable dict. To write it to a file for tools outside the inspecting process
+(no torch, no aitune), use Python's `json` module:
+
+```python
+import json
+
+with open("call_tree.json", "w", encoding="utf-8") as f:
+    json.dump(tree.to_dict(), f, indent=2)
+```
+
+The exported data has this structure:
+
+```json
+{
+  "schema_version": 1,
+  "iterations": 2,
+  "total_ms": 30.0,
+  "nodes": [
+    {"call_path": "forward", "owner_class": "Vla", "calls": 2, "time_ms": 30.0, ...},
+    {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
+     "calls": 10, "time_ms": 25.0, "bytes_in": 2560, "bytes_out": 2560, ...}
+  ],
+  "modules": {"dit": {"class": "my_pkg.Dit", "parameter_bytes": 8192}},
+  "weights": {"dit.proj.weight": [{"by": "forward > dit_forward", "kind": "read"}]}
+}
+```
+
+`iterations` is the number of recorded iterations and all node values (`calls`, `time_ms`, `bytes_in`,
+`bytes_out`) are totals over them — divide by `iterations` for per-iteration values, by `calls` for per-call.
+`nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
+that led to the node and identifies it; the rest follows from it:
+
+```python
+parent = call_path.rpartition(" > ")[0]                  # "" for outermost nodes
+object_path, _, method = call_path.rpartition(" > ")[2].rpartition(".")
+```
+
+The object path is the attribute path from the inspected object to the object whose method was called, the same as
+`ModuleInfo.object_path`: when you inspect `model`, `model.visual` is `model.model.visual`, `language_model.layers.0`
+is `model.language_model.layers[0]`, and `""` is `model` itself (also for its own methods such as `dit_forward`).
+Split at the last dot: method names never contain one, object paths can. The keys of `modules` are object paths, so
+`modules[object_path]` gives a module node's class name and parameter bytes. `weights` lists the recorded accesses
+(reads, device lookups, moves) per weight. In distributed runs write the file on one rank.
+
+Later versions may add fields without changing `schema_version`, so readers should ignore keys they don't know.
+`schema_version` changes when a field is removed, renamed or changes its meaning.
+
+### Match wrapped modules to call-tree nodes
+
+`ait.wrap` names each wrapped module by its object path — `model.blocks[0].attn` is wrapped as `blocks.0.attn` —
+so its name is the `object_path` of its call-tree nodes:
+
+```python
+wrapped_name = call_path.rpartition(" > ")[2].rpartition(".")[0]   # "blocks.0.attn"
+```
+
+Every node below it is covered by that wrapped module. The same name is the module's `module_name` in the tuning
+report and is stored in its checkpoint, so the match also works after `ait.save` and `ait.load`. The root module keeps
+its class name and covers the whole tree. A module reachable under two paths appears under the one the inspector
+found first.
+
+You can run `inspect(..., call_tree=True)` again after `ait.tune` or `ait.load`. A wrapped module's node keeps its
+`call_path`, so the two saved trees can be joined by `call_path` to compare eager and tuned time per node inside the
+pipeline. Nodes inside a module tuned with a compiling backend do not appear, because the compiled module runs as
+one call.
+
 ## Shared weights and wrap
 
 After tuning, AITune offloads a module's original weights (`device_after_tuning`, `"meta"` by default). That breaks a

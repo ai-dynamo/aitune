@@ -14,6 +14,16 @@ The context-keyed call tree recorded by the call recorder.
 |------|-------------|
 | [`CallTree`](#aitune-torch-call_tree-call_tree-CallTree) | Call tree of one recording. |
 
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_object_path`](#aitune-torch-call_tree-call_tree-_object_path) | The object path of a module's label prefix: ``root`` gives ``""``, ``root.vlm.lm_head`` gives ``vlm.lm_head``. |
+
+### Data
+
+[`SCHEMA_VERSION`](#aitune-torch-call_tree-call_tree-SCHEMA_VERSION)
+
 ### API
 
 <Anchor id="aitune-torch-call_tree-call_tree-CallTree">
@@ -151,7 +161,7 @@ aitune.torch.CallTree.nodes_of(
 
 <Indent>
 
-Nodes recorded for calls of ``module.&lt;method&gt;``.
+Nodes recorded for calls of ``module.<method>``.
 
 A node is one chain of callers, so a module called from one place has one node, however often it ran there.
 A module called from several places (e.g. an LLM used by both ``prefill`` and ``generate``) has one node per
@@ -177,4 +187,77 @@ The matching nodes in first-call order; empty if the module was not recorded. Me
 
 
 </Indent>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-to_dict">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.to_dict() -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The call tree as plain JSON data, for tools that read it without torch or aitune.
+
+Node values are totals over ``iterations``: divide by ``iterations`` for per iteration, by ``calls`` for
+per call.
+
+**Example**
+
+&gt;&gt;&gt; node = CallNode(
+...     key=("root.forward", "root.dit.forward"),
+...     label="root.dit.forward",
+...     owner_class="Dit",
+...     method="forward",
+...     first_seen=1,
+... )
+&gt;&gt;&gt; outer = CallNode(key=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, node)&#125;, iterations=2)
+&gt;&gt;&gt; exported = tree.to_dict()["nodes"][1]
+&gt;&gt;&gt; exported["call_path"], exported["owner_class"]
+('forward &gt; dit.forward', 'Dit')
+&gt;&gt;&gt; exported["call_path"].rpartition(" &gt; ")[2].rpartition(".")
+('dit', '.', 'forward')
+
+**Returns:** `dict[str, Any]`
+
+A dict of str, int, float, list and dict values with these keys:
+
+
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-call_tree-_object_path">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.call_tree._object_path(
+    label_prefix: str
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The object path of a module's label prefix: ``root`` gives ``""``, ``root.vlm.lm_head`` gives ``vlm.lm_head``.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-call_tree-SCHEMA_VERSION">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.call_tree.SCHEMA_VERSION = 1
+```
+
+</CodeBlock>
+</Anchor>
+

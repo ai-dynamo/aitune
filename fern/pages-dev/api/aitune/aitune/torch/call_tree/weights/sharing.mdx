@@ -100,7 +100,7 @@ For each owned weight, the accesses from outside the unit.
 
 An access inside the unit — ``by`` is a unit node's path or below one — does not count; an access from an
 ancestor (a caller of the unit, e.g. its forward doing ``F.linear(x, unit.weight)``) is outside and counts.
-Unrecorded and outside-any-call markers start with ``&lt;`` so they never match a unit path.
+Unrecorded and outside-any-call markers start with ``<`` so they never match a unit path.
 
 
 </Indent>
@@ -206,7 +206,7 @@ ops recorded by ``WeightAccessMode`` during the call-tree pass; moves are record
 </ParamField>
 
 <ParamField path="unit" type="UnitSpec">
-[`UnitSpec`](../units.mdx#aitune-torch-call_tree-units-UnitSpec) — A node path (``"forward &gt; dit_forward"``, see ``CallNode.path``), a module (all its recorded
+[`UnitSpec`](../units.mdx#aitune-torch-call_tree-units-UnitSpec) — A node path (``"forward > dit_forward"``, see ``CallNode.path``), a module (all its recorded
 ``forward`` calls), or a list of them as one unit.
 </ParamField>
 

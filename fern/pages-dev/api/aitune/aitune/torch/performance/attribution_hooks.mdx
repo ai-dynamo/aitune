@@ -282,7 +282,7 @@ One module to instrument with a record_function annotation during capture.
 ``annotation_prefix`` distinguishes the kind of region: AOT-managed modules
 use `AOT_MODULE_REGION_PREFIX`, top-level untuned modules use
 `UNTUNED_MODULE_REGION_PREFIX`. The full annotation name is
-``f"&#123;annotation_prefix&#125;&#123;path&#125;"``.
+``f"{annotation_prefix}{path}"``.
 
 
 <ParamField path="annotation_prefix" type="str">

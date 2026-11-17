@@ -1816,9 +1816,9 @@ aitune.torch.backend.ONNXRuntimeBackend._get_execution_providers() -> list[str |
 
 Return execution providers based on config (no automatic CPU fallback).
 
-* ``CUDA`` → ``[("CUDAExecutionProvider", &#123;"device_id": ...&#125;)]``
+* ``CUDA`` → ``[("CUDAExecutionProvider", {"device_id": ...})]``
 * ``TENSORRT`` → ``["TensorrtExecutionProvider",
-  ("CUDAExecutionProvider", &#123;"device_id": ...&#125;)]``
+  ("CUDAExecutionProvider", {"device_id": ...})]``
 
 
 </Indent>
@@ -4194,9 +4194,9 @@ Initialise config from a plain dict (e.g. parsed from YAML).
 
 Supports two forms:
 
-- ``&#123;"quantization": "int8wo"&#125;`` — user-facing YAML form; ``quantization``
+- ``{"quantization": "int8wo"}`` — user-facing YAML form; ``quantization``
   must be one of the supported ``QuantizationType`` literals.
-- ``&#123;"quantization_config": &lt;bytes&gt;&#125;`` — internal checkpoint form produced
+- ``{"quantization_config": <bytes>}`` — internal checkpoint form produced
   by ``to_dict()``, where ``quantization_config`` is pickle-serialised.
 
 
@@ -4938,7 +4938,7 @@ Configuration for TorchInductorAotBackend.
 Mapping of ``torch._inductor.config`` attribute names to values,
 passed to ``torch._inductor.aoti_compile_and_package()``.
 Call ``torch._inductor.list_options()`` to see all available keys.
-Example: ``&#123;"max_autotune": True, "coordinate_descent_tuning": True&#125;``
+Example: ``{"max_autotune": True, "coordinate_descent_tuning": True}``
 </ParamField>
 
 
