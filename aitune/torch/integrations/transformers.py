@@ -21,13 +21,18 @@ try:
 
     # Lazy initialization sets device/dtype and tensor dimensions as well as the readiness flag.
     # Capture this explicit set so the next call sees a usable layer without observing unrelated Python fields.
+    # Transformers 4.x uses head_dim; 5.x uses k_head_dim/v_head_dim and later replaces max_batch_size
+    # with batch_size. Traversal captures only fields present on the installed version's layer.
     _STATIC_LAYER_INITIALIZATION_FIELDS = (
+        "batch_size",
         "device",
         "dtype",
         "head_dim",
         "is_initialized",
+        "k_head_dim",
         "max_batch_size",
         "num_heads",
+        "v_head_dim",
     )
 
     # enable static cache support

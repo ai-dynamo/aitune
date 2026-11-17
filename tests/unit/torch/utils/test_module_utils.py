@@ -12,6 +12,7 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
 
 from aitune.torch.backend.backend import BuildMode
+from aitune.torch.module.locator import Locator
 from aitune.torch.utils.module import (
     count_parameters,
     format_num_parameters,
@@ -133,6 +134,33 @@ def test_move_tensors_moves_tensors_in_user_dict():
 
     assert result is value
     assert result["tensor"].device.type == "meta"
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    ["pending", {"child": "pending"}, {"child": {"step": 0, "ready": False, "optional": None}}],
+    ids=["primitive", "nested", "deeply_nested"],
+)
+def test_move_tensors_preserves_metadata_in_registered_cache(metadata):
+    class CacheState:
+        values: dict
+        metadata: object
+
+    cache = CacheState()
+    cache.values = {"keys": torch.ones(2), "dtype": torch.float32, "device": torch.device("cpu")}
+    cache.metadata = metadata
+    try:
+        Locator.register_user_type(CacheState, only_tensors=False)
+
+        result = move_tensors_to_device(({"cache": cache},), torch.device("meta"))
+
+        assert result[0]["cache"] is cache
+        assert cache.values["keys"].device.type == "meta"
+        assert cache.values["dtype"] is torch.float32
+        assert cache.values["device"] == torch.device("cpu")
+        assert cache.metadata is metadata
+    finally:
+        Locator.unregister_user_type(CacheState)
 
 
 @pytest.fixture
