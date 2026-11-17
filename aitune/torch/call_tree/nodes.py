@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import functools
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, NamedTuple
 
 import torch
 from torch import nn
@@ -45,18 +45,36 @@ def format_call_path(path: CallPath) -> str:
     return PATH_SEPARATOR.join(short_label(label) for label in path)
 
 
+class _Source(NamedTuple):
+    """Where a leaf's value was seen before.
+
+    A node's call path, the side of its calls the value was on and the leaf's name there, which may be in any of
+    that node's signatures.
+    """
+
+    path: CallPath
+    side: Literal["inputs", "outputs"]
+    name: str
+
+
 @dataclass(frozen=True, slots=True)
 class Leaf:
-    """A leaf of a ``CallSignature``: its name and qualified class name.
+    """A leaf of a ``CallSignature``: its name, qualified class name and source.
 
     A leaf is one argument or result of a call, or a value nested in one. Tensors are ``TensorLeaf``s, which add
     dtype and shape; any other object, such as a ``DynamicCache``, is a plain ``Leaf``. The name is the parameter
     name, or ``output`` for the result, followed by a suffix per container for nested values, such as ``x``,
     ``inputs['input_ids']`` or ``output['logits']``. It is relative to the call, not the node path.
+
+    ``source`` says where the same object was last visible before it showed up here: the ``path`` of the node
+    that had it, the ``side`` it was on there (``"inputs"`` or ``"outputs"``) and the leaf's ``name``. It is None
+    for a value not seen in a recorded call before: made in the call's own code, fetched from an attribute or
+    global, passed from outside the recorded calls, or not supporting weak references.
     """
 
     name: str
     type: str
+    source: _Source | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,11 +91,11 @@ class CallSignature:
 
     A tensor is recorded as a ``TensorLeaf`` with its dtype and exact shape, any other object as a plain ``Leaf``
     with its type; primitives (numbers, strings, ``None``, enums, and torch's ``dtype``, ``device``, ``Size``, ...)
-    are not recorded. Calls that differ in any leaf, in its type or, for a tensor, its dtype or shape, or in which
-    arguments they pass, have separate signatures. Leaves keep the order of the walk. Named parameters are always in
-    declaration order, but a dict, including ``**kwargs``, with the same entries inserted in another order gives a
-    separate signature. Leaves store class names, not classes, so signatures stay picklable for rank
-    synchronization.
+    are not recorded. Calls that differ in any leaf, in its type, its ``source`` or, for a tensor, its dtype or
+    shape, or in which arguments they pass, have separate signatures. Leaves keep the order of the walk. Named
+    parameters are always in declaration order, but a dict, including ``**kwargs``, with the same entries inserted in
+    another order gives a separate signature. Leaves store class names, not classes, so signatures stay picklable for
+    rank synchronization.
 
     Attributes:
         inputs: The signature's argument leaves by ``Leaf.name``.

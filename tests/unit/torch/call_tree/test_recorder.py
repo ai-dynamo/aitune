@@ -1165,11 +1165,11 @@ def test_signatures_reuse_the_argument_when_shapes_do_not_change():
             return x
 
     model = Model()
-    x = torch.randn(4, 8)
 
-    tree = record(model, lambda: (model(x), model(x), model(x)), iterations=1)
-
-    # identical calls intern into one signature
+    # identical calls intern into one signature (fresh tensors: reusing x would give the later calls a source)
+    tree = record(
+        model, lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8)), model(torch.randn(4, 8))), iterations=1
+    )
     node = tree.nodes[("root.forward",)]
     assert [sig.call_indices for sig in node.signatures] == [[0, 1, 2]]
     arg = tree.nodes[("root.forward",)].signatures[0].inputs["x"]
