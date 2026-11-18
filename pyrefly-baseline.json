@@ -2255,13 +2255,6 @@
       "severity": "error"
     },
     {
-      "column": 21,
-      "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `min_block_size` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 31,
       "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
       "name": "missing-attribute",
@@ -2273,13 +2266,6 @@
       "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
       "name": "missing-attribute",
       "concise_description": "Object of type `Module | Tensor | Unknown | None` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
-      "column": 17,
-      "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `min_block_size` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
       "severity": "error"
     },
     {
