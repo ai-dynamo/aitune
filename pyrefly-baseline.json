@@ -953,20 +953,6 @@
       "severity": "error"
     },
     {
-      "column": 36,
-      "path": "aitune/torch/task/correctness.py",
-      "name": "bad-assignment",
-      "concise_description": "`object` is not assignable to attribute `arguments` with type `dict[str, Any]`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/task/correctness.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `object` is not assignable to parameter `tensor` with type `Tensor` in function `_resize_tensor`",
-      "severity": "error"
-    },
-    {
       "column": 19,
       "path": "aitune/torch/task/find_max_batch_size.py",
       "name": "bad-raise",
@@ -1181,13 +1167,6 @@
       "path": "aitune/torch/utils/memory.py",
       "name": "missing-attribute",
       "concise_description": "No attribute `windll` in module `ctypes`",
-      "severity": "error"
-    },
-    {
-      "column": 42,
-      "path": "aitune/torch/utils/module.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `object` has no attribute `to`",
       "severity": "error"
     },
     {
