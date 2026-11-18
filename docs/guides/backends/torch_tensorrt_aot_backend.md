@@ -57,22 +57,25 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
 Compilation settings:
 
 ```python
-from torch_tensorrt.dynamo import CompilationSettings
+from aitune.torch.backend import TorchTensorRTConfig
 
 config = TorchTensorRTAotBackendConfig(
-    compile_config=CompilationSettings(
+    compile_config=TorchTensorRTConfig(
         workspace_size=1 << 30,
     )
 )
 ```
 
-By default, the engine matches the model's loaded dtype. With Torch-TensorRT 2.14 or earlier, you can request FP16 kernels via the legacy weak-typing path (deprecated in TensorRT 10.12). Pair `enabled_precisions` with `use_explicit_typing=False`. Torch-TensorRT 2.15 removes both settings; use `enable_autocast=True` with `autocast_low_precision_type` instead. AITune ignores removed settings when it loads a saved configuration:
+By default, the engine matches the model's loaded dtype. With Torch-TensorRT 2.14 or earlier, you can request FP16 kernels via the legacy weak-typing path (deprecated in TensorRT 10.12). Pair `enabled_precisions` with `use_explicit_typing=False`. Torch-TensorRT 2.15 removes both settings; use `enable_autocast=True` with `autocast_low_precision_type` instead, as in the example below. AITune ignores removed settings when it loads a saved configuration:
 
 ```python
 config = TorchTensorRTAotBackendConfig(
-    compile_config=CompilationSettings(
-        enabled_precisions={torch.float16},
-        use_explicit_typing=False,
+    compile_config=TorchTensorRTConfig(
+        enable_autocast=True,
+        autocast_low_precision_type=torch.float16,
+        # Deprecated: Torch-TensorRT 2.14 or earlier only; removed in 2.15.
+        # enabled_precisions={torch.float16},
+        # use_explicit_typing=False,
     )
 )
 ```
