@@ -22,7 +22,11 @@ from aitune.torch.backend.backend import (
     BuildMode,
     ExecutionMode,
 )
-from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_errors, torch_tensorrt_warnings
+from aitune.torch.backend.torch_tensorrt_logging import (
+    drop_unsupported_fields,
+    torch_tensorrt_errors,
+    torch_tensorrt_warnings,
+)
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.torch import TorchExporter
@@ -131,7 +135,9 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
         data = dict(data)
         data.pop("ir", None)
         if isinstance(data.get("compile_config"), dict):
-            data["compile_config"] = TorchTensorRTConfig(**data["compile_config"])
+            data["compile_config"] = TorchTensorRTConfig(
+                **drop_unsupported_fields(TorchTensorRTConfig, data["compile_config"])
+            )
         return cls(**data)
 
 

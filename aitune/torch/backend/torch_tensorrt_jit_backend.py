@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
-from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
+from aitune.torch.backend.torch_tensorrt_logging import drop_unsupported_fields, torch_tensorrt_warnings
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
@@ -114,7 +114,7 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         if isinstance(data.get("compile_config"), dict):
             compile_config = dict(data["compile_config"])
             compile_config.pop("device", None)
-            data["compile_config"] = TorchTensorRTConfig(**compile_config)
+            data["compile_config"] = TorchTensorRTConfig(**drop_unsupported_fields(TorchTensorRTConfig, compile_config))
         return cls(**data)
 
 

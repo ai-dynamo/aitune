@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Logging helpers shared by the Torch-TensorRT backends."""
+"""Logging and settings helpers shared by the Torch-TensorRT backends."""
 
 import logging
 import os
 import sys
 from collections.abc import Generator
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from dataclasses import fields
 from typing import Any
 
 
@@ -51,3 +52,14 @@ def torch_tensorrt_errors(torch_tensorrt_module: Any) -> Generator[None, None, N
                 os.close(fd)
         for name, level in original_levels.items():
             logging.getLogger(name).setLevel(level)
+
+
+def drop_unsupported_fields(config_class: type, config: dict[str, Any]) -> dict[str, Any]:
+    """Drop settings unknown to the installed Torch-TensorRT, e.g. ``enabled_precisions`` removed in 2.15."""
+    supported = {f.name for f in fields(config_class)}
+    unsupported = sorted(set(config) - supported)
+    if unsupported:
+        logging.getLogger(__name__).warning(
+            "Ignoring Torch-TensorRT settings not supported by the installed version: %s", unsupported
+        )
+    return {name: value for name, value in config.items() if name in supported}

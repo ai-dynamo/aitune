@@ -598,6 +598,13 @@ def test_tensorrt_aot_config_from_dict_nested_compile_config_dict():
     assert config.compile_config.workspace_size == 2048
 
 
+def test_tensorrt_aot_config_from_dict_ignores_unsupported_compile_config_fields():
+    data = {"compile_config": {"workspace_size": 2048, "removed_setting": True}}
+    config = TorchTensorRTAotBackendConfig.from_dict(data)
+    assert config.compile_config.workspace_size == 2048
+    assert not hasattr(config.compile_config, "removed_setting")
+
+
 def test_tensorrt_aot_config_from_dict_compile_config_instance_passthrough():
     config_instance = TorchTensorRTAotBackendConfig().compile_config
     config = TorchTensorRTAotBackendConfig.from_dict({"compile_config": config_instance})
