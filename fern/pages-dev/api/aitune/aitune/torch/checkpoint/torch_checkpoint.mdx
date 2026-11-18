@@ -16,6 +16,10 @@ Torch checkpoint module.
 
 ### Data
 
+[`M`](#aitune-torch-checkpoint-torch_checkpoint-M)
+
+[`T`](#aitune-torch-checkpoint-torch_checkpoint-T)
+
 [`logger`](#aitune-torch-checkpoint-torch_checkpoint-logger)
 
 ### API
@@ -76,14 +80,14 @@ WrapperModule instances.
 </Indent>
 <Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-load">
 
-<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.checkpoint.torch_checkpoint.T":"#aitune-torch-checkpoint-torch_checkpoint-T","aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.load(
-    module_or_pipeline: torch.nn.Module | typing.Any,
+    module_or_pipeline: aitune.torch.checkpoint.torch_checkpoint.T,
     path: str | pathlib.Path,
     device_map: dict[str, str | torch.device] | None = None
-) -> torch.nn.Module | aitune.torch.module.wrapper_module.Module
+) -> aitune.torch.checkpoint.torch_checkpoint.T | aitune.torch.module.wrapper_module.Module
 ```
 
 </CodeBlock>
@@ -103,8 +107,8 @@ tuned modules (WrapperModule instances).
 
 **Parameters:**
 
-<ParamField path="module_or_pipeline" type="TorchModule | Any">
-The module or pipeline to load the state into. This can be
+<ParamField path="module_or_pipeline" type="T">
+[`T`](#aitune-torch-checkpoint-torch_checkpoint-T) — The module or pipeline to load the state into. This can be
 either a torch.nn.Module or a pipeline object with module attributes.
 </ParamField>
 
@@ -116,7 +120,7 @@ The path from where the module state should be loaded.
 The device map to load module to.
 </ParamField>
 
-**Returns:** `TorchModule | WrapperModule`
+**Returns:** [`T`](#aitune-torch-checkpoint-torch_checkpoint-T) `| WrapperModule`
 
 The loaded module, which may be either the original module type or a wrapped module
 
@@ -129,15 +133,15 @@ attribute that is not a torch.nn.Module or WrapperModule.
 </Indent>
 <Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-load_state_dict_for_module">
 
-<CodeBlock links={{"aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.checkpoint.torch_checkpoint.M":"#aitune-torch-checkpoint-torch_checkpoint-M","aitune.torch.module.wrapper_module.Module":"../module/wrapper_module.mdx#aitune-torch-module-wrapper_module-Module"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.load_state_dict_for_module(
-    module: torch.nn.Module | aitune.torch.module.wrapper_module.Module,
+    module: aitune.torch.checkpoint.torch_checkpoint.M,
     state_dict: dict,
     device_map: dict[str, torch.device],
     module_name: str = ''
-) -> torch.nn.Module | aitune.torch.module.wrapper_module.Module
+) -> aitune.torch.checkpoint.torch_checkpoint.M | aitune.torch.module.wrapper_module.Module
 ```
 
 </CodeBlock>
@@ -182,7 +186,7 @@ The device map to load module to.
 The name of the module for device map matching.
 </ParamField>
 
-**Returns:** `TorchModule | WrapperModule`
+**Returns:** [`M`](#aitune-torch-checkpoint-torch_checkpoint-M) `| WrapperModule`
 
 torch.nn.Module: The module with tuned components loaded from the state dictionary.
 If the top-level module was tuned, returns the new wrapper module.
@@ -199,14 +203,14 @@ tuned versions. Original torch modules that were not tuned are preserved.
 </Indent>
 <Anchor id="aitune-torch-checkpoint-torch_checkpoint-TorchCheckpoint-load_state_dict_for_pipeline">
 
-<CodeBlock showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.checkpoint.torch_checkpoint.T":"#aitune-torch-checkpoint-torch_checkpoint-T"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.checkpoint.torch_checkpoint.TorchCheckpoint.load_state_dict_for_pipeline(
-    pipeline,
-    state_dict,
+    pipeline: aitune.torch.checkpoint.torch_checkpoint.T,
+    state_dict: dict,
     device_map: dict[str, torch.device]
-)
+) -> aitune.torch.checkpoint.torch_checkpoint.T
 ```
 
 </CodeBlock>
@@ -224,11 +228,11 @@ replaced with the tuned module.
 
 **Parameters:**
 
-<ParamField path="pipeline">
-The pipeline to load the state dictionary into.
+<ParamField path="pipeline" type="T">
+[`T`](#aitune-torch-checkpoint-torch_checkpoint-T) — The pipeline to load the state dictionary into.
 </ParamField>
 
-<ParamField path="state_dict">
+<ParamField path="state_dict" type="dict">
 The state dictionary containing the module states.
 </ParamField>
 
@@ -236,7 +240,7 @@ The state dictionary containing the module states.
 The device map to load module to.
 </ParamField>
 
-**Returns:**
+**Returns:** [`T`](#aitune-torch-checkpoint-torch_checkpoint-T)
 
 The pipeline with loaded modules.
 
@@ -320,6 +324,30 @@ The state_dict from the pipeline.
 
 </Indent>
 </Indent>
+
+<Anchor id="aitune-torch-checkpoint-torch_checkpoint-M">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.torch_checkpoint.M = TypeVar('M', bound=(TorchModule | WrapperModule))
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-checkpoint-torch_checkpoint-T">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.checkpoint.torch_checkpoint.T = TypeVar('T')
+```
+
+</CodeBlock>
+</Anchor>
+
 
 <Anchor id="aitune-torch-checkpoint-torch_checkpoint-logger">
 
