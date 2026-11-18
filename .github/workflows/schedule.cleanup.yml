@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: Clean up old AITune containers
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      older_than:
+        description: Delete images older than this interval (e.g. 2 weeks, 1 month, 3 months)
+        default: 1 month
+      dry_run:
+        description: Only log what would be deleted
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: cleanup-aitune-containers
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Clean up ghcr.io images
+    if: github.repository_owner == 'ai-dynamo'
+    runs-on: linux-amd64-cpu4
+    timeout-minutes: 30
+    permissions:
+      packages: write
+    steps:
+      # Each package must grant this repository the Admin role (Package settings → Manage Actions access).
+      - uses: dataaxiom/ghcr-cleanup-action@v1.2.2
+        with:
+          packages: >-
+            aitune,
+            aitune/nvcr-torch-25.08-py3,
+            aitune/nvcr-torch-25.10-py3,
+            aitune/nvcr-torch-26.01-py3,
+            aitune/nvcr-torch-26.03-py3,
+            aitune/nvcr-torch-26.05-py3,
+            aitune/nvcr-torch-26.06-py3,
+            aitune/nvcr-torch-26.08-py3,
+            aitune/nvcr-triton-26.05-py3,
+            aitune/cuda-12.9.2-devel-ubuntu24.04,
+            aitune/cuda-13.0.3-devel-ubuntu24.04
+          exclude-tags: latest,buildcache
+          older-than: ${{ inputs.older_than || '1 month' }}
+          keep-n-tagged: 0
+          delete-untagged: true
+          dry-run: ${{ inputs.dry_run || false }}
