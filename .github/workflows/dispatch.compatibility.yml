@@ -49,7 +49,7 @@ jobs:
     name: PyTorch GPU on nvcr ${{ matrix.nvcr }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 45
-    if: inputs.run_nvcr_container == true
+    if: github.event_name == 'merge_group' || inputs.run_nvcr_container
     strategy:
       fail-fast: false
       matrix:
@@ -77,6 +77,15 @@ jobs:
           nvidia-smi
           python .github/scripts/sanity/check_gpu_stack.py
           pytest -n 4
+
+  nvcr-compatibility:
+    name: NVCR compatibility
+    needs: pytorch-gpu-nvcr-container
+    if: always() && needs.pytorch-gpu-nvcr-container.result != 'skipped'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check result
+        run: test '${{ needs.pytorch-gpu-nvcr-container.result }}' = success
 
   pytorch-gpu-cuda-python-matrix:
     name: ${{ matrix.cuda.uv_torch_backend }} py${{ matrix.python_version }} ${{ matrix.torch }}
