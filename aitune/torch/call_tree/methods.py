@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Rules for what the call recorder instruments and what it treats as transparent."""
 
+import functools
 import inspect
 from typing import Any
 
@@ -78,6 +79,18 @@ def user_defined_methods(obj: Any) -> list[str]:
     return names
 
 
+@functools.cache
+def optimized_module_type() -> type:
+    """The ``OptimizedModule`` class that ``torch.compile(module)`` returns, imported once.
+
+    The recorders check it on every wrapped call; a function-level import there costs about 0.2 us per call, which
+    adds to the times the timing pass measures.
+    """
+    from torch._dynamo.eval_frame import OptimizedModule
+
+    return OptimizedModule
+
+
 def is_transparent_container(obj: Any) -> bool:
     """Whether ``obj`` only passes calls on, so its calls are not recorded as nodes.
 
@@ -99,9 +112,7 @@ def is_transparent_container(obj: Any) -> bool:
     """
     if type(obj) in (nn.Sequential, nn.ModuleList, nn.ModuleDict):
         return True
-    from torch._dynamo.eval_frame import OptimizedModule
-
-    return isinstance(obj, OptimizedModule)
+    return isinstance(obj, optimized_module_type())
 
 
 def is_transparent_call(args: tuple[Any, ...], kwargs: dict[str, Any] | None = None) -> bool:

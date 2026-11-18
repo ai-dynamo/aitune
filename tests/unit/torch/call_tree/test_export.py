@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.recording import StructureRecorder
 from tests.toy_models.call_tree_models import TwoRoleToy, VlaToy, vla_inputs
 from tests.unit.torch.call_tree.helpers import instrumented, record
 
@@ -46,6 +46,9 @@ def test_to_dict_exports_the_whole_tree():
             assert _object_path(exported["call_path"]) in d["modules"]
         assert exported["calls"] == node.calls
         assert exported["time_ms"] == node.time_ms
+        assert exported["timings"] == [
+            {"iteration": t.iteration, "calls": t.calls, "time_ms": t.time_ms} for t in node.timings
+        ]
         assert exported["bytes_in"] == node.bytes_in
         assert exported["bytes_out"] == node.bytes_out
         assert set(exported) == {
@@ -53,6 +56,7 @@ def test_to_dict_exports_the_whole_tree():
             "owner_class",
             "calls",
             "time_ms",
+            "timings",
             "bytes_in",
             "bytes_out",
             "signatures",
@@ -228,7 +232,7 @@ def test_to_dict_exports_signatures_and_iteration_starts():
 
     model = Model()
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
         recorder.begin_iteration()
         model(torch.randn(4, 8))

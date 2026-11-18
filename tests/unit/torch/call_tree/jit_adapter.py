@@ -14,13 +14,13 @@ from contextlib import contextmanager
 from torch import nn
 
 from aitune.torch.call_tree.methods import user_defined_methods
-from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.recording import StructureRecorder
 from aitune.torch.jit.patcher import Patcher
 from tests.unit.torch.call_tree.helpers import restore_methods, wrap_method
 
 
 @contextmanager
-def jit_recording_adapter(recorder: CallRecorder) -> Generator[None, None, None]:
+def jit_recording_adapter(recorder: StructureRecorder) -> Generator[None, None, None]:
     """Instrument every module created inside the context; restore everything on exit."""
     original_init = nn.Module.__init__
     restore: list = []
@@ -33,9 +33,9 @@ def jit_recording_adapter(recorder: CallRecorder) -> Generator[None, None, None]
         prefix = f"{type(module).__qualname__}#{created[0]}"
         created[0] += 1
         recorder.register_module(prefix, module)
-        wrap_method(recorder, module, "forward", f"{prefix}.forward", restore)
+        wrap_method(module, "forward", f"{prefix}.forward", restore)
         for name in user_defined_methods(module):
-            wrap_method(recorder, module, name, f"{prefix}.{name}", restore)
+            wrap_method(module, name, f"{prefix}.{name}", restore)
 
     nn.Module.__init__ = patched_init
     try:

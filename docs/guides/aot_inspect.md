@@ -261,12 +261,17 @@ What is recorded:
   source; neither has an object without weak-reference support, such as one whose class defines `__slots__`
   without `__weakref__`.
 
-`call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. Parts compiled with
-`torch.compile` run compiled in the per-module pass, so calls inside them are not measured there; in the call-tree
-pass they run eagerly, so their calls and weight reads are recorded too, and the call tree's
-times for them are eager times, not compiled ones. Call-tree times also include the cost of recording weight accesses
-and counting tensor bytes, which run in Python. Where the GPU waits for the CPU, this inflates times, most of all for
-calls with many recorded calls inside, so use them for a rough comparison, not as deployed latency. `get_modules()` and
+`call_tree=True` runs two more passes of `number_of_iterations`, so inspection takes longer. The structure pass
+runs eagerly — parts compiled with `torch.compile` too, so their calls and weight reads are recorded — and records
+no times. The timing pass runs without that tracking and with compiled parts compiled; each iteration times one
+call-path depth, chosen from the calls that sample made in the structure pass, so no timed call runs inside
+another and calls that only some samples make are timed too. Nodes the iterations can't cover, for example deeper
+depths with fewer iterations than depths, are not timed (`time_ms` is `null`); the timing pass logs one warning
+listing them, grouped by cause, with the `number_of_iterations` that would time every depth when that is the cause. Calls inside a compiled part get no time (`time_ms` is
+`null`). What remains
+is the wrappers' Python per call (about 2 µs), which still adds to calls with many calls inside where the GPU waits
+for the CPU — on roberta-base at batch 1 the encoder reads about 25% high, at batch 8 within a few percent — so use
+the times for a rough comparison, not as deployed latency; eager and tuned trees can be compared. `get_modules()` and
 `describe()` are unchanged: they still come from the synchronized pass. The object walk has to reach the linear
 layers, so deep models need a larger `max_depth` (8 for BAGEL-sized pipelines).
 
@@ -298,7 +303,10 @@ The exported data has this structure:
   "nodes": [
     {"call_path": "forward", "owner_class": "Vla", "calls": 2, "time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
-     "calls": 10, "time_ms": 25.0, "bytes_in": 3670056, "bytes_out": 3670016,
+     "calls": 10, "time_ms": 25.0,
+     "timings": [{"iteration": 0, "calls": 5, "time_ms": 12.5},
+                  {"iteration": 1, "calls": 5, "time_ms": 12.5}],
+     "bytes_in": 3670056, "bytes_out": 3670016,
      "signatures": [
          {"call_indices": [0, 5],
           "inputs": {"hidden_states": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
@@ -323,8 +331,12 @@ The exported data has this structure:
 }
 ```
 
-`iterations` is the number of recorded iterations and all node values (`calls`, `time_ms`, `bytes_in`,
-`bytes_out`) are totals over them — divide by `iterations` for per-iteration values, by `calls` for per-call.
+`iterations` is the number of recorded iterations and `calls`, `bytes_in` and `bytes_out` are totals over them —
+divide by `iterations` for per-iteration values, by `calls` for per-call. `time_ms` is an estimate of the same
+total from the timing pass: the median over the iterations that timed the node of its mean time per call within
+the iteration (the mean of those when fewer than three iterations timed it) times `calls`, or `null` when none
+was timed. `timings` lists what the timing pass measured, per iteration that timed the node (`iteration`, `calls`,
+`time_ms`); `time_ms` is the estimate derived from them.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
 the calls with exactly that signature, plus `inputs`/`outputs` dicts keyed by argument name (such as `x` or
 `inputs['input_ids']`), and `output` for the result, or `output[0]` and `output['logits']` for values nested in it.
