@@ -96,7 +96,7 @@ def test_recording_uses_torch_shapes_and_preserves_original_names(named_source, 
 @pytest.mark.parametrize("layout", ["positional", "named", "mixed"])
 def test_onnx_backend_skips_export_and_roundtrips_names(named_source, layout, tmp_path, monkeypatch):
     from aitune.torch.backend.onnx_runtime_backend import ONNXRuntimeBackend
-    from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
+    from aitune.torch.libs.exporting import ONNXExporter
     from aitune.torch.module.tuned_module import TunedModule
 
     recorder, graph = _record(named_source, layout, tmp_path)
@@ -182,7 +182,8 @@ def test_tensorrt_profiles_and_bindings_use_original_names(named_source, layout,
         for shapes in profiles[1].values():
             assert tuple(list(shape) for shape in shapes) == ([1, 3], [4, 3], [4, 3])
     backend._engine_info = SimpleNamespace(input_names=["input.1", "kwargs"])
-    arguments = graph.forward_signature.normalize(*_sample(layout, 2)).arguments
+    args, kwargs = _sample(layout, 2)
+    arguments = graph.forward_signature.normalize(args, kwargs).arguments
     inputs = backend._prepare_inputs(arguments)
     torch.testing.assert_close(inputs["input.1"], torch.full((2, 3), 5.0))
     torch.testing.assert_close(inputs["kwargs"], torch.ones(2, 3))
@@ -190,8 +191,9 @@ def test_tensorrt_profiles_and_bindings_use_original_names(named_source, layout,
     torch.testing.assert_close(backend._prepare_outputs_for_return(arguments)["output.1"], torch.full((2, 3), 4.0))
 
 
-def test_torch_export_uses_the_same_tensor_name_resolution(tmp_path):
-    from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
+def test_torch_export_uses_flat_tensor_names(tmp_path):
+    from aitune.torch.libs.exporting import ONNXExporter
+    from aitune.torch.utils.tensor import format_tensor_name
 
     class Double(torch.nn.Module):
         def forward(self, x):
@@ -206,8 +208,10 @@ def test_torch_export_uses_the_same_tensor_name_resolution(tmp_path):
     graph = recorder.graph_specs[0]
     graph.input_spec.tensor_specs[0].name = "original.input"
     graph.output_spec.tensor_specs[0].name = "original.output"
+    input_name = format_tensor_name(graph.input_spec.tensor_data[0][0].path, "input")
+    output_name = format_tensor_name(graph.output_spec.tensor_data[0][0].path, "output")
     exporter = ONNXExporter(tmp_path / "export.onnx", use_dynamo=False)
-    assert exporter._create_dynamic_axes(graph) == {"original.input": [0], "original.output": [0]}
+    assert exporter._create_dynamic_axes(graph) == {input_name: [0], output_name: [0]}
     exported = onnx.load(exporter.export(source, ((torch.ones(2, 3),), {}), graph))
-    assert [value.name for value in exported.graph.input] == ["original.input"]
-    assert [value.name for value in exported.graph.output] == ["original.output"]
+    assert [value.name for value in exported.graph.input] == [input_name]
+    assert [value.name for value in exported.graph.output] == [output_name]

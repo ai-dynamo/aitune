@@ -10,6 +10,10 @@ independent of the original argument structure.
 The adapter also exposes recorded tensor mutations as outputs. Backends use GraphSpec's forward
 contract to apply those changes to current inputs and restore the Python result. See
 docs/guides/advanced/execution_graphs.md for the flat interface design example.
+
+Torch and ONNX export share this implementation so argument reconstruction, tensor ordering, and
+shape rules stay aligned with inference. ONNX execution and source-model metadata live separately
+in aitune.torch.libs.runtime and aitune.torch.libs.onnx_model_info; existing ONNX artifacts bypass export.
 """
 
 from aitune.torch.libs.exporting.onnx_exporter import ONNXExporter

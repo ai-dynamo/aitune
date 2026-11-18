@@ -10,6 +10,7 @@ from typing import cast
 import onnx
 import torch
 import torch.nn as nn
+from onnx_ir.passes.common import TopologicalSortPass
 
 from aitune.torch.dynamic_shapes import DynamicDim
 from aitune.torch.libs.exporting.dynamic_shapes import build_dynamic_shapes, log_dynamic_shapes
@@ -33,6 +34,11 @@ class ONNXExporter:
     the legacy tracer receives ONNX dynamic-axis annotations. The selected mode is used without fallback.
     Export returns the artifact path after ONNX structural validation, which does not establish numerical
     equivalence with the original module. An incomplete artifact is removed on failure when possible.
+
+    User tensor outputs precede internal mutation outputs in the graph's forward-contract order.
+    For ``cache[0] = x + 1; return x * 2``, the two outputs carry the user result and updated cache.
+    Runtime restoration consumes the second internally. Legacy tracing annotates varying state axes
+    from post-call metadata, since an update can create a tensor absent from the original inputs.
 
     Args:
         output_path: Destination for the ONNX artifact.
@@ -92,14 +98,18 @@ class ONNXExporter:
         graph_spec: GraphSpec,
         verbose: bool | None = None,
     ) -> None:
-        """Export the prepared adapter with the Dynamo-based ONNX exporter."""
+        """Export, sort, and save the prepared adapter with Dynamo.
+
+        Request an in-memory ONNX program so dependency ordering can be repaired before serialization.
+        The existing unbind/Split optimizer workaround requires producers before their consumers.
+        Save with external tensor data enabled so large weights can be stored outside the graph file.
+        """
         dynamic_shapes = build_dynamic_shapes(graph_spec)
         log_dynamic_shapes(dynamic_shapes)
-        torch.onnx.export(
+        onnx_program = torch.onnx.export(
             preparation.adapter,
             args=preparation.flat_inputs,
             kwargs=None,
-            f=self.output_path.as_posix(),
             dynamo=True,
             opset_version=self.opset_version,
             input_names=self._input_names(graph_spec),
@@ -107,6 +117,10 @@ class ONNXExporter:
             dynamic_shapes=dynamic_shapes,
             verbose=verbose,
         )
+        assert onnx_program is not None
+        # onnxscript 0.5.x optimizer can emit unbind's Split after its consumers; re-sort before saving.
+        TopologicalSortPass()(onnx_program.model)
+        onnx_program.save(self.output_path, external_data=True)
 
     def _export_trace(
         self,
@@ -166,4 +180,29 @@ class ONNXExporter:
                 if min_size != max_size:
                     cast(list[int], dynamic_axes[format_tensor_name(locator.path, "output")]).append(axis)
 
+        ONNXExporter._add_state_dynamic_axes(dynamic_axes, graph_spec)
         return dynamic_axes
+
+    @staticmethod
+    def _add_state_dynamic_axes(dynamic_axes: dict, graph_spec: GraphSpec) -> None:
+        """Declare dynamic axes for outputs that carry changed input tensors.
+
+        Use post-call bounds because a mutation can create or resize a tensor, for example replacing
+        a None cache slot with an input-dependent result. With observed sizes (2, 4) and (3, 4), axis
+        zero of that internal state output is dynamic even though no pre-call cache tensor existed.
+        Ignore missing post-call specifications and static axes. Only extra mutation outputs are added
+        here; a changed tensor already returned as a user output uses the ordinary output annotations.
+        """
+        if graph_spec.post_input_spec is None:
+            return
+
+        post_tensor_specs = dict(graph_spec.post_input_spec.tensor_data)
+        for mutation in graph_spec.extra_tensor_mutations():
+            tensor_spec = post_tensor_specs.get(mutation.locator)
+            if tensor_spec is None:
+                continue
+            for axis, (min_size, max_size) in enumerate(
+                zip(tensor_spec.min_shape, tensor_spec.max_shape, strict=False)
+            ):
+                if min_size != max_size:
+                    dynamic_axes[format_tensor_name(mutation.locator.path, "state")].append(axis)

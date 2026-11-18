@@ -10,7 +10,7 @@ from typing import Any
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.libs.onnx.onnx_model_info import ONNXModelInfo
+from aitune.torch.libs.onnx_model_info import ONNXModelInfo
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.utils import validation
 
