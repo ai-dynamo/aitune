@@ -10,6 +10,7 @@ Labels come from the adapter that installed the wrappers: object paths in AOT mo
 from __future__ import annotations
 
 import functools
+import statistics
 from dataclasses import dataclass, field
 from typing import Literal, NamedTuple
 
@@ -106,12 +107,12 @@ class CallSignature:
 
     Example:
         >>> import torch
-        >>> from aitune.torch.call_tree.recorder import CallRecorder
+        >>> from aitune.torch.call_tree.recording import StructureRecorder
         >>> class Cache: ...
         >>> class Layer(torch.nn.Module):
         ...     def forward(self, x, state=None):
         ...         return x
-        >>> recorder, layer = CallRecorder(), Layer()
+        >>> recorder, layer = StructureRecorder(), Layer()
         >>> with recorder:
         ...     for args in (
         ...         ((torch.zeros(1, 4, 8),), {"state": Cache()}),
@@ -140,6 +141,21 @@ class CallSignature:
     call_indices: list[int] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class TimedIteration:
+    """What the timing pass measured for a node in one iteration: how many of its calls it timed and their time.
+
+    Attributes:
+        iteration: Index of the timing-pass iteration, the same as in ``CallTree.sequences``.
+        calls: Calls of the node timed in this iteration.
+        time_ms: Their total measured time in milliseconds.
+    """
+
+    iteration: int
+    calls: int
+    time_ms: float
+
+
 @dataclass
 class CallNode:
     """One node of the call tree.
@@ -160,7 +176,9 @@ class CallNode:
         method: Name of the called method (``forward`` for module calls).
         module: Module the method belongs to, or None for methods of plain objects.
         calls: Number of calls over all recorded iterations.
-        time_ms: Time in milliseconds over all recorded iterations.
+        timings: What the timing pass measured, one ``TimedIteration`` per iteration that timed the node.
+        time_ms: Estimated time in milliseconds over all recorded iterations, derived from ``timings``; None
+            when the node was never timed.
         bytes_in: Tensor bytes in the arguments, summed over all recorded iterations. Bytes per call:
             ``bytes_in / calls``.
         bytes_out: Tensor bytes in the results, summed over all recorded iterations.
@@ -187,12 +205,26 @@ class CallNode:
     method: str
     module: nn.Module | None = None
     calls: int = 0
-    time_ms: float = 0.0
+    timings: list[TimedIteration] = field(default_factory=list)
     bytes_in: int = 0
     bytes_out: int = 0
     signatures: list[CallSignature] = field(default_factory=list)
     children: list[CallPath] = field(default_factory=list)
     first_seen: int = 0
+
+    @property
+    def time_ms(self) -> float | None:
+        """Estimated time over all recorded iterations, derived from ``timings``; None when the node was never timed.
+
+        The median over the timed iterations of the time per call (the mean with fewer than three), times ``calls``.
+        The timing pass times each node in some iterations only, so the total is extrapolated from them; the median
+        is taken across iterations, not calls, because the calls of one iteration can differ systematically, for
+        example a prefill and the decode steps of ``generate``.
+        """
+        if not self.timings:
+            return None
+        per_call = [t.time_ms / t.calls for t in self.timings]
+        return (statistics.median(per_call) if len(per_call) >= 3 else statistics.mean(per_call)) * self.calls
 
     def calls_passing(self, name: str, side: Literal["inputs", "outputs"] = "inputs") -> list[int]:
         """The sorted indices of the calls that passed the argument ``name`` on ``side``.

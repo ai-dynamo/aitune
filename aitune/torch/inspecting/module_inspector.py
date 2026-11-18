@@ -38,9 +38,9 @@ from typing import Any
 
 import torch
 
-from aitune.torch.call_tree.methods import user_defined_methods
+from aitune.torch.call_tree.methods import optimized_module_type, user_defined_methods
 from aitune.torch.call_tree.nodes import ROOT_LABEL
-from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder
 from aitune.torch.inspecting.module_info import (
     DictOfModulesInfo,
     ListOfModulesInfo,
@@ -115,26 +115,27 @@ class InspectContext:
 class ModuleInspector:
     """Class for inspecting PyTorch modules and tracking their execution."""
 
-    def __init__(self, min_depth: int = 0, max_depth: int = 5, recorder: CallRecorder | None = None):
+    def __init__(self, min_depth: int = 0, max_depth: int = 5, recorder: StructureRecorder | None = None):
         """Initialize the module inspector.
 
         Args:
             min_depth: Minimum depth of the modules returned by ``get_modules``.
             max_depth: Maximum depth of the object walk.
-            recorder: Call recorder for the call tree. If set, the inspector also wraps user-defined methods of
-                modules and of plain objects outside modules, and reports every wrapped call to the recorder while
-                it is recording.
+            recorder: Structure recorder for the call tree. If set, the inspector also wraps user-defined
+                methods of modules and of plain objects outside modules, and reports every wrapped call to the
+                recorder while it is recording.
         """
         self._module_info: dict[Any, ModuleInfo] = {}
         self._original_forward: dict[Any, Any] = {}
         self._original_compiled_call: dict[Any, Any] = {}
-        self._timed_by_compiled_call: set[int] = set()  # ids of modules timed by their compiled-call wrapper
+        self._reported_by_outer_call: set[int] = set()  # ids of modules whose call an outer wrapper reports or times
         self._original_methods: list[tuple[Any, str, bool, Any]] = []
         self._inspected_objects: set = set()  # Track objects that have been inspected
         self._min_recursion_depth = min_depth
         self._max_recursion_depth = max_depth
         self._execution_parent_module: list[ModuleInfo] = []
         self._recorder = recorder
+        self._forward_labels: dict[torch.nn.Module, str] = {}
         if _get_inspect_debug():
             self._debug_inspecting_functions()
 
@@ -162,6 +163,7 @@ class ModuleInspector:
         self._inspected_objects.clear()  # Clear the set when starting a new inspection
 
         self._module_info.clear()
+        self._forward_labels.clear()
         self._original_forward.clear()
         self._original_compiled_call.clear()
 
@@ -191,11 +193,9 @@ class ModuleInspector:
         """Whether ``module`` is compiled with ``torch.compile`` or ``nn.Module.compile()``."""
         if not isinstance(module, torch.nn.Module):
             return False
-        from torch._dynamo.eval_frame import OptimizedModule
-
         forward = self._original_forward.get(module, module.forward)
         return (
-            isinstance(module, OptimizedModule)
+            isinstance(module, optimized_module_type())
             or getattr(module, "_compiled_call_impl", None) is not None
             or hasattr(forward, "_torchdynamo_orig_callable")
         )
@@ -391,8 +391,7 @@ class ModuleInspector:
 
     def _wrap_user_methods(self, obj: Any, object_path: str) -> None:
         """Wrap the user-defined methods of ``obj`` so that they report to the recorder while it records."""
-        recorder = self._recorder
-        if recorder is None:
+        if self._recorder is None:
             return
         prefix = _label_prefix(object_path)
         for name in user_defined_methods(obj):
@@ -404,7 +403,7 @@ class ModuleInspector:
                 continue
             if not callable(original):
                 continue
-            wrapper = _recording_wrapper(recorder, obj, name, f"{prefix}.{name}", original)
+            wrapper = _recording_wrapper(obj, name, f"{prefix}.{name}", original)
             try:
                 setattr(obj, name, wrapper)
             except Exception as e:
@@ -435,8 +434,7 @@ class ModuleInspector:
 
         original_forward = module.forward
         self._original_forward[module] = original_forward
-
-        recorder = self._recorder
+        orig_mod = module._orig_mod if isinstance(module, optimized_module_type()) else None
 
         @wraps(original_forward)
         def wrapped_forward(*args, **kwargs):
@@ -446,21 +444,36 @@ class ModuleInspector:
             # so this only applies while they actually compile.
             if torch.compiler.is_compiling():
                 return original_forward(*args, **kwargs)
-            # While the call-tree recorder records, report to it only: no per-call synchronization (it would
-            # distort the recorder's timing) and no ModuleInfo updates (the legacy pass keeps its numbers).
-            if recorder is not None and recorder.active:
-                label = f"{_label_prefix(self._module_info[module].object_path)}.forward"
-                frame = recorder.begin_call(label, module, "forward", args, kwargs)
-                try:
-                    result = original_forward(*args, **kwargs)
-                except BaseException:
-                    recorder.end_call(frame)
-                    raise
-                recorder.end_call(frame, result)
-                return result
-            # Call through while the compiled-call wrapper times this module (compiled code run eagerly).
-            if id(module) in self._timed_by_compiled_call:
+            # Call through while an outer wrapper reports this module — as a recorded call while a recorder
+            # records, or as a timed call in the per-module pass (compiled code run eagerly). Discard the mark so
+            # it suppresses only this one entry: a forward that recurses into the same module records the nested
+            # call normally.
+            if id(module) in self._reported_by_outer_call:
+                self._reported_by_outer_call.discard(id(module))
                 return original_forward(*args, **kwargs)
+            # While a call-tree recorder records, report to it only: no per-call synchronization (it would
+            # distort the recorder's timing) and no ModuleInfo updates (the legacy pass keeps its numbers).
+            if self._recorder is not None and (recorder := CallRecorder.active()) is not None:
+                # The compiled ``_orig_mod`` is only reached inside Dynamo in the timing pass, where its forward
+                # wrapper passes through; reporting here under its label gives both passes its node. The mark
+                # keeps ``_orig_mod``'s own wrapper from reporting the call again.
+                if orig_mod is not None and orig_mod in self._module_info:
+                    target = orig_mod
+                    self._reported_by_outer_call.add(id(target))
+                    try:
+                        return recorder.call(
+                            original_forward,
+                            args,
+                            kwargs,
+                            label=self._forward_label(target),
+                            obj=target,
+                            method="forward",
+                        )
+                    finally:
+                        self._reported_by_outer_call.discard(id(target))
+                return recorder.call(
+                    original_forward, args, kwargs, label=self._forward_label(module), obj=module, method="forward"
+                )
             return self._time_call(module, original_forward, args, kwargs)
 
         if isinstance(module, Module):
@@ -542,19 +555,43 @@ class ModuleInspector:
             return
         self._original_compiled_call[module] = original_compiled_call
 
-        recorder = self._recorder
-
         def wrapped_compiled_call(*args, **kwargs):
-            # While the call-tree recorder records, the forward wrapper reports the call; do not count it here.
-            if torch.compiler.is_compiling() or (recorder is not None and recorder.active):
+            # Dynamo must not trace the bookkeeping: while torch.compile traces, run the call unchanged.
+            if torch.compiler.is_compiling():
                 return original_compiled_call(*args, **kwargs)
-            self._timed_by_compiled_call.add(id(module))
+            # While a call-tree recorder records, report the compiled module as one call — in the timing pass it
+            # runs compiled, so its forward is never reached outside Dynamo — and mark it so the forward wrapper
+            # inside doesn't report it again.
+            if self._recorder is not None and (recorder := CallRecorder.active()) is not None:
+                self._reported_by_outer_call.add(id(module))
+                try:
+                    return recorder.call(
+                        original_compiled_call,
+                        args,
+                        kwargs,
+                        label=self._forward_label(module),
+                        obj=module,
+                        method="forward",
+                    )
+                finally:
+                    self._reported_by_outer_call.discard(id(module))
+            self._reported_by_outer_call.add(id(module))
             try:
                 return self._time_call(module, original_compiled_call, args, kwargs)
             finally:
-                self._timed_by_compiled_call.discard(id(module))
+                self._reported_by_outer_call.discard(id(module))
 
         module._compiled_call_impl = wrapped_compiled_call
+
+    def _forward_label(self, module: torch.nn.Module) -> str:
+        """The call label of ``module``'s ``forward``: its object-path prefix plus ``.forward``.
+
+        Built once per module: the wrappers ask for it on every call the timing pass measures.
+        """
+        label = self._forward_labels.get(module)
+        if label is None:
+            label = self._forward_labels[module] = f"{_label_prefix(self._module_info[module].object_path)}.forward"
+        return label
 
     @cache
     @staticmethod
@@ -617,21 +654,15 @@ def _outside_modules(parent: ModuleInfo | None, obj: Any) -> bool:
     return True
 
 
-def _recording_wrapper(recorder: CallRecorder, obj: Any, name: str, label: str, original: Callable) -> Callable:
-    """Wrap a method so that its calls report to ``recorder`` while it records; otherwise call it unchanged."""
+def _recording_wrapper(obj: Any, name: str, label: str, original: Callable) -> Callable:
+    """Wrap a method so that its calls report to the active recorder; otherwise call it unchanged."""
 
     @wraps(original)
     def wrapper(*args, **kwargs):
-        if not recorder.active or torch.compiler.is_compiling():
+        recorder = CallRecorder.active()
+        if recorder is None or torch.compiler.is_compiling():
             return original(*args, **kwargs)
-        frame = recorder.begin_call(label, obj, name, args, kwargs)
-        try:
-            result = original(*args, **kwargs)
-        except BaseException:
-            recorder.end_call(frame)
-            raise
-        recorder.end_call(frame, result)
-        return result
+        return recorder.call(original, args, kwargs, label=label, obj=obj, method=name)
 
     return wrapper
 

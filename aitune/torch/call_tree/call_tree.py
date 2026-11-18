@@ -3,12 +3,19 @@
 """The context-keyed call tree recorded by the call recorder."""
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from torch import nn
 
-from aitune.torch.call_tree.nodes import ROOT_LABEL, CallNode, CallPath, Leaf, TensorLeaf, format_call_path
+from aitune.torch.call_tree.nodes import (
+    ROOT_LABEL,
+    CallNode,
+    CallPath,
+    Leaf,
+    TensorLeaf,
+    format_call_path,
+)
 from aitune.torch.call_tree.weights.accesses import WeightAccess
 
 SCHEMA_VERSION = 1
@@ -52,8 +59,14 @@ class CallTree:
         modules: Label prefix and module for every instrumented module, used for parameter names and sizes.
 
     Example:
+        >>> from aitune.torch.call_tree.nodes import TimedIteration
         >>> outer = CallNode(
-        ...     path=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
+        ...     path=("root.forward",),
+        ...     label="root.forward",
+        ...     owner_class="Vla",
+        ...     method="forward",
+        ...     calls=2,
+        ...     timings=[TimedIteration(0, 2, 30.0)],
         ... )
         >>> dit_module = nn.Linear(2, 2)
         >>> dit = CallNode(
@@ -63,7 +76,7 @@ class CallTree:
         ...     method="forward",
         ...     module=dit_module,
         ...     calls=10,
-        ...     time_ms=25.0,
+        ...     timings=[TimedIteration(0, 10, 25.0)],
         ...     first_seen=1,
         ... )
         >>> outer.children.append(dit.path)
@@ -91,8 +104,8 @@ class CallTree:
 
     @property
     def total_ms(self) -> float:
-        """Time of all outermost calls over all recorded iterations."""
-        return sum(n.time_ms for n in self.roots)
+        """Time of all outermost calls over all recorded iterations; nodes with no timed calls do not count."""
+        return sum(n.time_ms for n in self.roots if n.time_ms is not None)
 
     def descendants(self, node: CallNode) -> list[CallNode]:
         """All nodes below ``node``."""
@@ -124,6 +137,49 @@ class CallTree:
         """
         return sorted(
             (n for n in self.nodes.values() if n.module is module and n.method == method), key=lambda n: n.first_seen
+        )
+
+    def copy(self) -> "CallTree":
+        """A snapshot of the tree: mutable containers are copied, immutable values shared.
+
+        Each node is replaced by a copy whose ``children``, ``timings`` and ``signatures`` are new — each signature
+        with copied ``inputs``/``outputs`` dicts and ``call_indices`` list — so later writes into them (a timing
+        pass's ``timings``, a ``synchronize_call_tree``'s values) don't reach this tree. ``sequences`` and the
+        per-weight ``WeightAccess`` sets are copied too, and the ``modules`` list. Shared: the ``nn.Module``s
+        (in ``modules`` and on the nodes), the signature leaves (``Leaf``/``TensorLeaf`` and ``TimedIteration``
+        are frozen dataclasses) and the ``WeightAccess`` records (``NamedTuple``s).
+
+        Example:
+            >>> from aitune.torch.call_tree.nodes import TimedIteration
+            >>> node = CallNode(path=("m.forward",), label="m.forward", owner_class="M", method="forward")
+            >>> tree = CallTree(nodes={("m.forward",): node})
+            >>> copied = tree.copy()
+            >>> copied.nodes[("m.forward",)].timings.append(TimedIteration(0, 1, 1.0))
+            >>> tree.nodes[("m.forward",)].time_ms is None
+            True
+        """
+        return CallTree(
+            nodes={
+                path: replace(
+                    node,
+                    children=list(node.children),
+                    timings=list(node.timings),
+                    signatures=[
+                        replace(
+                            sig,
+                            inputs=dict(sig.inputs),
+                            outputs=None if sig.outputs is None else dict(sig.outputs),
+                            call_indices=list(sig.call_indices),
+                        )
+                        for sig in node.signatures
+                    ],
+                )
+                for path, node in self.nodes.items()
+            },
+            iterations=self.iterations,
+            sequences=[list(seq) for seq in self.sequences],
+            weight_accesses={name: set(records) for name, records in self.weight_accesses.items()},
+            modules=list(self.modules),
         )
 
     def find(self, text: str) -> list[CallNode]:
@@ -170,7 +226,9 @@ class CallTree:
             - ``iterations``: number of recorded iterations.
             - ``total_ms``: time of the outermost calls over all iterations (``CallTree.total_ms``).
             - ``nodes``: one dict per node, in first-call order, with ``call_path`` (``CallNode.path_str``, which
-              identifies the node), ``owner_class``, ``calls``, ``time_ms``, ``bytes_in``, ``bytes_out`` and
+              identifies the node), ``owner_class``, ``calls``, ``timings`` (what the timing pass measured, per
+              iteration that timed the node: ``iteration``, ``calls``, ``time_ms``), ``time_ms`` (the estimate
+              derived from ``timings``, null when it is empty), ``bytes_in``, ``bytes_out`` and
               ``signatures``: the node's distinct ``CallSignature``s in first-seen order, each with its
               ``call_indices`` (the indices of the calls that had it) and ``inputs``/``outputs`` dicts of leaves
               by path — ``outputs`` is null for a signature whose calls raised. Every leaf has ``type``; tensors
@@ -244,6 +302,9 @@ class CallTree:
                     "owner_class": node.owner_class,
                     "calls": node.calls,
                     "time_ms": node.time_ms,
+                    "timings": [
+                        {"iteration": t.iteration, "calls": t.calls, "time_ms": t.time_ms} for t in node.timings
+                    ],
                     "bytes_in": node.bytes_in,
                     "bytes_out": node.bytes_out,
                     "signatures": [
