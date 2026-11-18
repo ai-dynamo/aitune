@@ -287,7 +287,7 @@ def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(datase
         call_tree=True,
     )
 
-    paths = {n.path: n.calls for n in _tree(info).nodes.values()}
+    paths = {n.path_str: n.calls for n in _tree(info).nodes.values()}
     assert paths == {
         "forward": ITERATIONS,
         "forward > child._orig_mod.forward": ITERATIONS,
