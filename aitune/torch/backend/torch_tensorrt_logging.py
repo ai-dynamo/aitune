@@ -55,7 +55,7 @@ def torch_tensorrt_errors(torch_tensorrt_module: Any) -> Generator[None, None, N
 
 
 def drop_unsupported_fields(config_class: type, config: dict[str, Any]) -> dict[str, Any]:
-    """Drop settings unknown to the installed Torch-TensorRT, e.g. ``enabled_precisions`` removed in 2.15."""
+    """Drop settings unknown to the installed Torch-TensorRT, e.g. ``enabled_precisions`` rejected since 2.15."""
     supported = {f.name for f in fields(config_class)}
     unsupported = sorted(set(config) - supported)
     if unsupported:
