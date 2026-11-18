@@ -15,9 +15,6 @@ ARG FRAMEWORK_VERSION=26.01
 ARG ONNXRUNTIME_VERSION=1.26.0 # only supports CUDA 13 for arm64
 ENV ONNXRUNTIME_VERSION=${ONNXRUNTIME_VERSION}
 
-# onnxruntime-gpu links its TensorRT provider against TensorRT 10; images with another TensorRT major get TensorRT 10 libs.
-ARG ORT_TENSORRT_LIBS_VERSION=10.16.1.11
-
 ARG ADDITIONAL_PACKAGES
 ENV ADDITIONAL_PACKAGES=${ADDITIONAL_PACKAGES}
 
@@ -46,13 +43,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install onnxruntime-gpu==$ONNXRUNTIME_VERSION \
         --no-deps --force-reinstall --break-system-packages \
         --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/ && \
-    if ! ldconfig -p | grep -q "libnvinfer.so.10 "; then \
-        pip install tensorrt-cu13-libs==$ORT_TENSORRT_LIBS_VERSION \
-            --no-deps --break-system-packages --extra-index-url https://pypi.nvidia.com && \
-        python -c "import importlib.util, os; print(os.path.dirname(importlib.util.find_spec('tensorrt_libs').origin))" \
-            > /etc/ld.so.conf.d/onnxruntime-tensorrt.conf && \
-        ldconfig; \
-    fi && \
     { groupadd -g $_GROUP_ID runner -f && useradd -m -u $_USER_ID -g $_GROUP_ID runner || true; } && \
     chown -R runner:runner ${AIT_DIR} && \
     chmod -R ug+rw ${AIT_DIR}

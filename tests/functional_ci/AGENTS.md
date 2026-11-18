@@ -77,7 +77,6 @@ The backend id is the pytest parametrize id and the feature-matrix column.
 | `torch-tensorrt-aot` | `TorchTensorRTAotBackend` | `TENSORRT_FP32` | - |
 | `tensorrt` | `TensorRTBackend` | `TENSORRT_FP32` | `export` (`tensorrt_plan`), `onnx_input` |
 | `onnxruntime-cuda` | `ONNXRuntimeBackend` (CUDA EP) | `TENSORRT_FP32` | `export` (`onnx`), `onnx_input` |
-| `onnxruntime-tensorrt` | `ONNXRuntimeBackend` (TensorRT EP) | `TENSORRT_FP32` | - |
 | `torchao-int8wo` | `TorchAOBackend` (`int8wo`) | `rtol=atol=5e-2` | - |
 | `inductor-jit` | `TorchInductorJitBackend` | default | - |
 | `torch-tensorrt-jit` | `TorchTensorRTJitBackend` | `TENSORRT_FP32` | - |
