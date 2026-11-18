@@ -53,7 +53,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
             > /etc/ld.so.conf.d/onnxruntime-tensorrt.conf && \
         ldconfig; \
     fi && \
-    groupadd -g $_GROUP_ID runner -f && useradd -m -u $_USER_ID -g $_GROUP_ID runner || true && \
+    { groupadd -g $_GROUP_ID runner -f && useradd -m -u $_USER_ID -g $_GROUP_ID runner || true; } && \
     chown -R runner:runner ${AIT_DIR} && \
     chmod -R ug+rw ${AIT_DIR}
 
