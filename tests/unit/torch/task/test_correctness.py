@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from aitune.torch.distributed import DistributedOutcome
+from aitune.torch.module.forward_contract import ForwardContract
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -42,6 +43,7 @@ def make_graph_spec(input_spec: SampleMetadata, output_spec: SampleMetadata | No
         input_spec=input_spec,
         output_spec=output_spec or SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2),
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
 
 
@@ -129,6 +131,7 @@ def test_check_inference_correctness_accepts_matching_input_mutations():
         input_spec=pre_call,
         output_spec=SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2),
         forward_signature=forward_signature,
+        forward_contract=ForwardContract(None),
         post_input_spec=post_call,
     )
 
@@ -154,6 +157,7 @@ def test_check_inference_correctness_rejects_missing_input_mutations():
         input_spec=pre_call,
         output_spec=SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2),
         forward_signature=forward_signature,
+        forward_contract=ForwardContract(None),
         post_input_spec=post_call,
     )
 

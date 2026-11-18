@@ -120,13 +120,6 @@
       "severity": "error"
     },
     {
-      "column": 26,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `forward_signature`",
-      "severity": "error"
-    },
-    {
       "column": 37,
       "path": "aitune/torch/backend/onnx_runtime_backend.py",
       "name": "missing-attribute",
@@ -138,13 +131,6 @@
       "path": "aitune/torch/backend/onnx_runtime_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `output_spec`",
-      "severity": "error"
-    },
-    {
-      "column": 47,
-      "path": "aitune/torch/backend/onnx_runtime_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `InferenceSession | None` is not assignable to parameter `session` with type `InferenceSession` in function `aitune.torch.libs.onnx.runtime.run_onnx`",
       "severity": "error"
     },
     {
@@ -222,13 +208,6 @@
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `input_names`",
-      "severity": "error"
-    },
-    {
-      "column": 26,
-      "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `forward_signature`",
       "severity": "error"
     },
     {
@@ -491,13 +470,6 @@
       "severity": "error"
     },
     {
-      "column": 20,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `None`",
-      "severity": "error"
-    },
-    {
       "column": 31,
       "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
       "name": "bad-argument-type",
@@ -565,13 +537,6 @@
       "path": "aitune/torch/backend/torch_tensorrt_aot_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `TorchTensorRTConfig` has no attribute `device`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "aitune/torch/backend/torch_tensorrt_jit_backend.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `module` with type `Module` in function `aitune.torch.utils.module.move_module_to_device`",
       "severity": "error"
     },
     {
