@@ -24,7 +24,7 @@ concurrency:
 jobs:
   cleanup:
     name: Clean up ghcr.io images
-    if: github.repository_owner == 'ai-dynamo'
+    if: github.repository == 'ai-dynamo/aitune'
     runs-on: linux-amd64-cpu4
     timeout-minutes: 30
     steps:
