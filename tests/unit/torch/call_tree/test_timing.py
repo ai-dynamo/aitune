@@ -27,11 +27,24 @@ def _tree_of(sequences: list[list[tuple[str, ...]]]) -> CallTree:
     return CallTree(nodes=nodes, iterations=len(sequences), sequences=sequences)
 
 
+def _boom() -> None:
+    raise RuntimeError("boom")
+
+
 def test_every_iteration_times_the_shallowest_untimed_depth():
     paths: list[tuple[str, ...]] = [("a",), ("a", "b"), ("a", "b", "c")]
     tree = _tree_of([paths for _ in range(5)])
 
     assert depth_schedule(tree) == [1, 2, 3, 1, 2]
+
+
+def test_a_path_called_once_in_each_of_more_iterations_has_more_chances():
+    """Chances count later iterations containing the path, not calls: a path called three times in one later
+    sample has fewer chances left than a path called once in each of two."""
+    a, b, c = ("a",), ("a", "b"), ("a", "b", "c")
+    tree = _tree_of([[a, b, c], [a, b, c, c, c], [a, b]])
+
+    assert depth_schedule(tree) == [3, 1, 2]
 
 
 def test_fewer_iterations_leave_the_deepest_paths_unscheduled():
@@ -138,20 +151,21 @@ def test_the_estimate_is_the_median_of_the_per_iteration_mean_times(mocker):
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
     mocker.patch(
         "aitune.torch.call_tree.recording.timing.time.perf_counter",
-        side_effect=_perf_reads([3.0, 1.0, 3.0, 1.0, 3.0, 1.0]),  # a 3 ms and a 1 ms call in each of 3 iterations
+        side_effect=_perf_reads([4.0, 1.0, 1.0] * 3),  # calls of 4, 1 and 1 ms in each of 3 iterations
     )
     a = ("a",)
-    tree = _tree_of([[a], [a], [a]])
+    tree = _tree_of([[a, a, a]] * 3)
     model = nn.Linear(2, 2)
 
     with TimingRecorder(tree) as timer:
         for _ in range(3):
             timer.begin_iteration()
-            for _ in range(2):
+            for _ in range(3):
                 timer.end_call(timer.begin_call("a", model, "forward", ()))
 
     node = tree.nodes[a]
-    # mean per iteration 2 ms; a per-call median over all six calls would give 1 or 3 ms
+    assert node.timings == [TimedIteration(i, 3, 6.0) for i in range(3)]
+    # mean per iteration 2 ms; a flat per-call median over all nine calls would give 1 ms
     assert node.time_ms == pytest.approx(2.0 * node.calls)
 
 
@@ -305,7 +319,8 @@ def test_a_model_on_the_gpu_is_timed_with_cuda_events():
         assert timer._use_cuda
 
 
-def test_end_event_is_recorded_on_the_start_device_when_the_call_changes_device(mocker):
+def test_end_event_is_recorded_on_the_start_stream_when_the_call_switches_streams(mocker):
+    """A call that switches the current stream still ends its timer on the stream it started on."""
     events = []
 
     class FakeEvent:
@@ -325,15 +340,9 @@ def test_end_event_is_recorded_on_the_start_device_when_the_call_changes_device(
         "aitune.torch.call_tree.recording.timing._record",
         side_effect=lambda event, stream: setattr(event, "stream", stream),
     )
-    current_device = mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.current_device", return_value=0)
-    mocker.patch(
-        "aitune.torch.call_tree.recording.timing.torch._C._cuda_getCurrentStream",
-        side_effect=lambda device: (0, device, 1),
-    )
-    mocker.patch(
-        "aitune.torch.call_tree.recording.timing.torch.cuda.Stream",
-        side_effect=lambda stream_id, device_index, device_type: f"stream{device_index}",
-    )
+    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.current_device", return_value=0)
+    current = ["stream0"]
+    mocker.patch.object(TimingRecorder, "_current_stream", lambda self, device: current[0])
     model = nn.Linear(2, 2)
     x = torch.randn(2, 2)
     tree = _recorded_tree(model, x)
@@ -342,7 +351,7 @@ def test_end_event_is_recorded_on_the_start_device_when_the_call_changes_device(
         timer._use_cuda = True
         timer.begin_iteration()
         call = timer.begin_call("root.forward", model, "forward", ())
-        current_device.return_value = 1  # the call changed the current device
+        current[0] = "stream1"  # the call switched the current stream
         timer.end_call(call)
         timer.flush()
 
@@ -371,14 +380,7 @@ def test_flush_synchronizes_every_end_event(mocker):
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.Event", FakeEvent)
     mocker.patch("aitune.torch.call_tree.recording.timing._record", side_effect=lambda event, stream: None)
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.current_device", return_value=0)
-    mocker.patch(
-        "aitune.torch.call_tree.recording.timing.torch._C._cuda_getCurrentStream",
-        side_effect=lambda device: (0, device, 1),
-    )
-    mocker.patch(
-        "aitune.torch.call_tree.recording.timing.torch.cuda.Stream",
-        side_effect=lambda stream_id, device_index, device_type: object(),
-    )
+    mocker.patch.object(TimingRecorder, "_current_stream", lambda self, device: object())
     cuda_synchronize = mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.synchronize")
     model = nn.Linear(2, 2)
     x = torch.randn(2, 2)
@@ -412,14 +414,7 @@ def test_unflushed_cuda_samples_keep_their_iteration(mocker):
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.Event", FakeEvent)
     mocker.patch("aitune.torch.call_tree.recording.timing._record", side_effect=lambda event, stream: None)
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.current_device", return_value=0)
-    mocker.patch(
-        "aitune.torch.call_tree.recording.timing.torch._C._cuda_getCurrentStream",
-        side_effect=lambda device: (0, device, 1),
-    )
-    mocker.patch(
-        "aitune.torch.call_tree.recording.timing.torch.cuda.Stream",
-        side_effect=lambda stream_id, device_index, device_type: object(),
-    )
+    mocker.patch.object(TimingRecorder, "_current_stream", lambda self, device: object())
     a = ("a",)
     tree = _tree_of([[a], [a], [a]])
     model = nn.Linear(2, 2)
@@ -436,6 +431,44 @@ def test_unflushed_cuda_samples_keep_their_iteration(mocker):
     assert node.time_ms == 1.0 * node.calls  # the median per call drops the 100 ms iteration
 
 
+def test_flushed_events_are_reused_only_on_their_device(mocker):
+    """The event pool is per device: a pair resolved on device 0 must not serve a call on device 1."""
+    created = []
+
+    class FakeEvent:
+        def __init__(self, *args, **kwargs):
+            created.append(self)
+
+        def synchronize(self):
+            pass
+
+        def elapsed_time(self, end):
+            return 1.0
+
+    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.Event", FakeEvent)
+    mocker.patch("aitune.torch.call_tree.recording.timing._record", side_effect=lambda event, stream: None)
+    device = [0]
+    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.current_device", side_effect=lambda: device[0])
+    mocker.patch.object(TimingRecorder, "_current_stream", lambda self, dev: f"stream{dev}")
+    a = ("a",)
+    tree = _tree_of([[a], [a]])
+    model = nn.Linear(2, 2)
+
+    with TimingRecorder(tree) as timer:
+        timer._use_cuda = True
+        timer.begin_iteration()
+        timer.end_call(timer.begin_call("a", model, "forward", ()))
+        timer.flush()
+        assert timer._free_events[0] == created[:2]  # the flushed pair went back to device 0's pool
+
+        device[0] = 1
+        timer.begin_iteration()
+        timer.end_call(timer.begin_call("a", model, "forward", ()))
+
+    assert len(created) == 4  # device 1's call created fresh events, device 0's pool was left alone
+    assert len(timer._free_events[0]) == 2
+
+
 def test_no_second_recording_starts_while_one_is_active():
     original_apply = nn.Module._apply
     structure, second = StructureRecorder(), StructureRecorder()
@@ -443,28 +476,23 @@ def test_no_second_recording_starts_while_one_is_active():
 
     with structure:
         with pytest.raises(RuntimeError, match="Another call recorder is already recording"):
-            with second:
-                pass
+            second.__enter__()
         with pytest.raises(RuntimeError, match="Another call recorder is already recording"):
-            with timer:
-                pass
+            timer.__enter__()
         assert nn.Module._apply is not original_apply
     assert CallRecorder.active() is None
     assert nn.Module._apply is original_apply
 
     with timer:
         with pytest.raises(RuntimeError, match="Another call recorder is already recording"):
-            with structure:
-                pass
+            structure.__enter__()
         with pytest.raises(RuntimeError, match="Another call recorder is already recording"):
-            with timer:
-                pass
+            timer.__enter__()
     assert CallRecorder.active() is None
     assert nn.Module._apply is original_apply
 
-    with pytest.raises(RuntimeError, match="boom"):
-        with timer:
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"), timer:
+        _boom()
     assert CallRecorder.active() is None
 
 
@@ -589,9 +617,8 @@ def test_a_timing_pass_that_raises_leaves_all_times_none():
     tree = _tree_with_a_child()
     tree.nodes[("root.forward",)].timings = [TimedIteration(0, 1, 5.0)]  # an earlier pass's time
 
-    with pytest.raises(RuntimeError, match="boom"):
-        with TimingRecorder(tree):
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"), TimingRecorder(tree):
+        _boom()
 
     assert all(node.time_ms is None for node in tree.nodes.values())
 
@@ -701,32 +728,34 @@ def test_a_depth_the_pass_never_timed_is_reported_with_the_needed_iterations(moc
 
     text = _warning_text(warning)
     assert "1 of the call tree's 3 nodes have no time" in text
-    assert "set number_of_iterations to at least 3" in text
+    assert "number_of_iterations must be at least 3" in text
     assert "a > b > c" in text
 
 
-def test_calls_never_timed_although_their_depth_was_warn(mocker):
+def test_calls_below_the_timed_depth_are_skipped_and_the_node_is_reported(mocker):
+    """A call nested inside a timed call is skipped entirely — the recorder never counts it — so the node the
+    structure pass recorded is reported as not run when no timed depth ever reaches it."""
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
     warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
     root_path, child_path = ("root.forward",), ("root.forward", "root.child.forward")
     tree = _tree_of([[root_path, child_path]] * 3)  # the schedule times depths 1, 2, 1
     model = nn.Linear(2, 2)
 
-    with TimingRecorder(tree) as timer:
-        timer.begin_iteration()  # iteration 1 times the root; the child runs untimed
-        root = timer.begin_call("root.forward", model, "forward", ())
-        child = timer.begin_call("root.child.forward", model, "forward", ())
-        timer.end_call(child)
-        timer.end_call(root)
-        timer.begin_iteration()  # iteration 2 times the child's depth, but the child does not run
-        timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
-        timer.begin_iteration()  # iteration 3 times the root again
-        timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
+    def call(label):
+        return timer.call(lambda: None, (), {}, label=label, obj=model, method="forward")
 
-    child_path = ("root.forward", "root.child.forward")
+    with TimingRecorder(tree) as timer:
+        timer.begin_iteration()  # depth 1: the root runs and is timed; a nested child call is skipped
+        timer.call(lambda: call("root.child.forward"), (), {}, label="root.forward", obj=model, method="forward")
+        timer.begin_iteration()  # depth 2: the child's depth is timed, but the child does not run
+        call("root.forward")
+        timer.begin_iteration()  # depth 1 again
+        call("root.forward")
+
+    assert child_path not in timer._calls  # the skip kept the child out of the counts entirely
     assert tree.nodes[child_path].time_ms is None
     text = _warning_text(warning)
-    assert "ran only in iterations that timed other depths" in text
+    assert "did not run in the timing pass" in text
     assert "child.forward" in text
 
 
@@ -838,22 +867,21 @@ def test_calls_inside_a_compiled_part_are_not_reported(mocker):
     warning.assert_not_called()
 
 
-def test_an_optimized_modules_orig_mod_is_the_exclusion_root(mocker):
+def test_an_optimized_module_is_the_exclusion_root(mocker):
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
     warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    optimized = torch.compile(nn.Sequential(nn.Linear(2, 2)), backend="eager")
+    inner = nn.Sequential(nn.Linear(2, 2))
+    optimized = torch.compile(inner, backend="eager")
     assert isinstance(optimized, nn.Module)
-    orig = optimized._orig_mod
-    assert isinstance(orig, nn.Sequential)
     root = CallNode(
-        path=("root.forward",), label="root.forward", owner_class="Seq", method="forward", module=orig, calls=1
+        path=("root.forward",), label="root.forward", owner_class="Seq", method="forward", module=optimized, calls=1
     )
     child = CallNode(
         path=("root.forward", "root.child.forward"),
         label="root.child.forward",
         owner_class="Linear",
         method="forward",
-        module=orig[0],
+        module=inner[0],
         calls=1,
     )
     root.children.append(child.path)
@@ -864,12 +892,72 @@ def test_an_optimized_modules_orig_mod_is_the_exclusion_root(mocker):
         modules=[("b", optimized)],
     )
 
-    with TimingRecorder(tree) as timer:  # nothing runs: the ``_orig_mod`` node is reported, the call inside is not
+    with TimingRecorder(tree) as timer:  # nothing runs: the ``OptimizedModule`` node is reported, the inside not
         timer.begin_iteration()
 
     text = _warning_text(warning)
     assert "did not run" in text
     assert "child" not in text
+
+
+def test_an_eager_call_of_a_module_inside_a_compiled_part_is_reported(mocker):
+    """A module that is called eagerly *and* inside a compiled part: only the path below the compiled call is
+    inside, so the eager call — untimed here — is reported, not silenced."""
+    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    shared = nn.Linear(2, 2)
+    compiled = nn.Sequential(shared)  # ``shared`` is a strict submodule of the compiled module
+    compiled._compiled_call_impl = lambda *args, **kwargs: None
+    paths = {
+        "root": ("root.forward",),
+        "eager": ("root.forward", "root.eager.forward"),
+        "comp": ("root.forward", "root.comp.forward"),
+        "inner": ("root.forward", "root.comp.forward", "root.comp.inner.forward"),
+    }
+    root = CallNode(path=paths["root"], label="root.forward", owner_class="Root", method="forward", calls=2)
+    nodes = {
+        paths["eager"]: CallNode(
+            path=paths["eager"],
+            label="root.eager.forward",
+            owner_class="Linear",
+            method="forward",
+            module=shared,
+            calls=2,
+        ),
+        paths["comp"]: CallNode(
+            path=paths["comp"],
+            label="root.comp.forward",
+            owner_class="Seq",
+            method="forward",
+            module=compiled,
+            calls=2,
+        ),
+        paths["inner"]: CallNode(
+            path=paths["inner"],
+            label="root.comp.inner.forward",
+            owner_class="Linear",
+            method="forward",
+            module=shared,
+            calls=2,
+        ),
+    }
+    tree = CallTree(
+        nodes={root.path: root, **nodes},
+        iterations=2,
+        sequences=[[paths["root"], paths["eager"], paths["comp"], paths["inner"]]] * 2,
+        modules=[("root.comp", compiled)],
+    )
+    model = nn.Linear(2, 2)
+
+    with TimingRecorder(tree) as timer:  # only the root runs, at depth 1
+        for _ in range(2):
+            timer.begin_iteration()
+            timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
+
+    text = _warning_text(warning)
+    assert "did not run" in text
+    assert "eager" in text
+    assert "inner" not in text
 
 
 def test_a_compiled_module_that_did_not_run_is_reported(mocker):

@@ -454,23 +454,23 @@ class ModuleInspector:
             # While a call-tree recorder records, report to it only: no per-call synchronization (it would
             # distort the recorder's timing) and no ModuleInfo updates (the legacy pass keeps its numbers).
             if self._recorder is not None and (recorder := CallRecorder.active()) is not None:
-                # The compiled ``_orig_mod`` is only reached inside Dynamo in the timing pass, where its forward
-                # wrapper passes through; reporting here under its label gives both passes its node. The mark
-                # keeps ``_orig_mod``'s own wrapper from reporting the call again.
+                # An ``OptimizedModule``'s call is the compiled call's node; mark its ``_orig_mod`` so the first
+                # inner forward entry — the same call, reached eagerly under ``force_eager`` — passes through
+                # without a second node. A recursive call of the ``_orig_mod`` still reports (see the mark's
+                # discard above).
                 if orig_mod is not None and orig_mod in self._module_info:
-                    target = orig_mod
-                    self._reported_by_outer_call.add(id(target))
+                    self._reported_by_outer_call.add(id(orig_mod))
                     try:
                         return recorder.call(
                             original_forward,
                             args,
                             kwargs,
-                            label=self._forward_label(target),
-                            obj=target,
+                            label=self._forward_label(module),
+                            obj=module,
                             method="forward",
                         )
                     finally:
-                        self._reported_by_outer_call.discard(id(target))
+                        self._reported_by_outer_call.discard(id(orig_mod))
                 return recorder.call(
                     original_forward, args, kwargs, label=self._forward_label(module), obj=module, method="forward"
                 )

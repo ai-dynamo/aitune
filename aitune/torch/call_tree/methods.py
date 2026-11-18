@@ -99,20 +99,26 @@ def is_transparent_container(obj: Any) -> bool:
     modes the same tree. Subclasses must stay: ``SentenceTransformer`` subclasses ``nn.Sequential`` and its ``forward``
     is a unit of its own.
 
-    The ``OptimizedModule`` that ``torch.compile(module)`` returns is transparent as well: it only calls the original
-    module (``_orig_mod``), which is recorded instead, so one call does not appear as two nested nodes.
+    A container that is compiled itself with ``nn.Module.compile()`` is not transparent: compiled, it is a unit of
+    its own, and the pass records and times its call as one node. The ``OptimizedModule`` that ``torch.compile``
+    returns is not transparent either — it is the compiled call's node; its ``_orig_mod``'s first entry is
+    suppressed by the inspector instead.
 
     Example:
         >>> class Encoder(nn.Sequential):
         ...     pass
         >>> is_transparent_container(nn.Sequential()), is_transparent_container(Encoder())
         (True, False)
+        >>> compiled = nn.Sequential()
+        >>> compiled.compile()
+        >>> is_transparent_container(compiled)
+        False
         >>> is_transparent_container(torch.compile(nn.Linear(1, 1), backend="eager"))
-        True
+        False
     """
-    if type(obj) in (nn.Sequential, nn.ModuleList, nn.ModuleDict):
-        return True
-    return isinstance(obj, optimized_module_type())
+    return (
+        type(obj) in (nn.Sequential, nn.ModuleList, nn.ModuleDict) and getattr(obj, "_compiled_call_impl", None) is None
+    )
 
 
 def is_transparent_call(args: tuple[Any, ...], kwargs: dict[str, Any] | None = None) -> bool:

@@ -18,9 +18,20 @@ from aitune.torch.call_tree.recording.base import NO_RESULT, CallRecorder
 
 logger = getLogger(__name__)
 
-# The cheapest correct event record (~1.5us): no current-stream lookup per record
-# (``Event.record()`` costs ~2.2us more).
-_record = torch._C._CudaEventBase.record
+# ``torch._C._CudaEventBase.record``, resolved lazily on first CUDA use: a CPU-only build ships a placeholder
+# ``_CudaEventBase`` without ``record``, so resolving it at import would break the import.
+_event_record: Any = None
+
+
+def _record(event: Any, stream: Any) -> None:
+    """Record ``event`` on ``stream`` directly.
+
+    The cheapest correct record (~1.5us), without the current-stream lookup ``Event.record()`` does (~2.2us more).
+    """
+    global _event_record
+    if _event_record is None:
+        _event_record = torch._C._CudaEventBase.record
+    _event_record(event, stream)
 
 
 def _format_paths(paths: list[CallPath]) -> str:
@@ -71,7 +82,7 @@ def depth_schedule(tree: CallTree) -> list[int | None]:
     later: Counter[CallPath] = Counter()
     for i in range(len(tree.sequences) - 1, -1, -1):
         chances[i] = later
-        later = later + Counter(tree.sequences[i])
+        later = later + Counter(set(tree.sequences[i]))  # later iterations containing the path, once each
     timed: Counter[CallPath] = Counter()  # planned timed calls per path
     schedule: list[int | None] = []
     for i, sequence in enumerate(tree.sequences):
@@ -96,16 +107,18 @@ def depth_schedule(tree: CallTree) -> list[int | None]:
 
 @dataclass(slots=True)
 class _TimedCall:
-    """An open timing-pass call: its call path, the recorded node, its timer's start and its start device.
+    """An open timing-pass call: its call path, the recorded node, its timer's start and its start stream.
 
     ``node`` is None for a call with no recorded node. The start is a CUDA event or a ``perf_counter`` value, or
-    None for an untimed call; ``device`` is the CUDA device the start event was recorded on.
+    None for an untimed call; ``device`` and ``stream`` are the CUDA device and stream the start event was
+    recorded on.
     """
 
     path: CallPath
     node: CallNode | None
     start: Any
     device: int | None
+    stream: Any
 
 
 class _UntimedCalls(NamedTuple):
@@ -136,10 +149,10 @@ class TimingRecorder(CallRecorder):
     has CUDA memory reserved — inputs or tensors created on the GPU — and from ``perf_counter`` otherwise. A CPU
     model in a process that holds unrelated CUDA tensors, or that did GPU work before and has since freed its
     tensors (the caching allocator keeps the memory reserved), gets CUDA events too, which are imprecise for short
-    CPU calls but not too short. Events are pooled so they cost little per call. Both events of a call go on the
-    current stream of the CUDA device that is current when the call starts, so work the call queues on another
-    device, or on a stream that this stream does not wait for, is not part of its time: such calls are timed too
-    short.
+    CPU calls but not too short. Events are pooled per device so they cost little per call. Both events of a call
+    go on the stream that is current on the call's device when the call starts — even when the call switches the
+    current stream or device before it returns — so work the call queues on another device, or on a stream that
+    this stream does not wait for, is not part of its time: such calls are timed too short.
 
     The pass writes its measured ``timings`` — one ``TimedIteration`` per iteration that timed the node — into
     the tree's nodes in place when the ``with`` block ends normally; ``CallNode.time_ms`` derives each node's
@@ -181,8 +194,8 @@ class TimingRecorder(CallRecorder):
         self._timed_depths: set[int] = set()
         self._stack: list[_TimedCall] = []
         self._samples: dict[CallPath, dict[int, list[float]]] = {}
-        self._events: list[tuple[CallNode, Any, Any, int]] = []
-        self._free_events: list[Any] = []
+        self._events: list[tuple[CallNode, Any, Any, int, int]] = []
+        self._free_events: dict[int, list[Any]] = {}
         self._streams: dict[tuple[int, int, int], torch.cuda.Stream] = {}
         self._calls: dict[CallPath, int] = {}
 
@@ -261,10 +274,10 @@ class TimingRecorder(CallRecorder):
         path = (*self._stack[-1].path, label) if self._stack else (label,)
         node = self._tree.nodes.get(path)
         self._calls[path] = self._calls.get(path, 0) + 1
-        start = device = None
+        start = device = stream = None
         if node is not None and len(path) == self._depth:
-            start, device = self._start_timer()
-        call = _TimedCall(path=path, node=node, start=start, device=device)
+            start, device, stream = self._start_timer()
+        call = _TimedCall(path=path, node=node, start=start, device=device, stream=stream)
         self._stack.append(call)
         return call
 
@@ -286,45 +299,38 @@ class TimingRecorder(CallRecorder):
         if not self._events:
             return
         if self._use_cuda:
-            for _, _, end, _ in self._events:
+            for _, _, end, _, _ in self._events:
                 end.synchronize()
-        for node, start, end, iteration in self._events:
+        for node, start, end, iteration, device in self._events:
             self._add_sample(node, start.elapsed_time(end), iteration)
-            self._free_events.append(start)
-            self._free_events.append(end)
+            pool = self._free_events.setdefault(device, [])
+            pool.append(start)
+            pool.append(end)
         self._events.clear()
 
-    def _inside_compiled_ids(self) -> tuple[set[int], set[int]]:
-        """Ids of the strict submodules and of the roots of every compiled module in the tree.
+    def _compiled_root_ids(self) -> set[int]:
+        """Ids of the compiled roots in the tree.
 
         A module counts as compiled when ``nn.Module.compile()`` set ``_compiled_call_impl`` on it or
-        ``torch.compile()`` wrapped it in an ``OptimizedModule`` — whose compiled root is its ``_orig_mod``. The
-        compiled root itself is not inside: it is timed as one call; only calls below it are — they run inside
-        the compiled code in the timing pass, so the pass cannot see them.
+        ``torch.compile()`` wrapped it in an ``OptimizedModule`` — the wrapper itself is the compiled root.
         """
-        inside: set[int] = set()
         roots: set[int] = set()
         for _, module in self._tree.modules:
-            if getattr(module, "_compiled_call_impl", None) is not None:
+            if getattr(module, "_compiled_call_impl", None) is not None or isinstance(module, optimized_module_type()):
                 roots.add(id(module))
-                inside.update(id(sub) for sub in module.modules() if sub is not module)
-            elif isinstance(module, optimized_module_type()):
-                roots.add(id(module._orig_mod))
-                inside.update(id(sub) for sub in module._orig_mod.modules() if sub is not module._orig_mod)
-        return inside, roots
+        return roots
 
-    def _inside_compiled(self, path: CallPath, inside: set[int], roots: set[int]) -> bool:
+    def _inside_compiled(self, path: CallPath, roots: set[int]) -> bool:
         """Whether ``path`` runs inside a compiled part, where the timing pass cannot see its calls.
 
-        That is when ``path`` or an ancestor is a strict submodule of a compiled module, or lies below a compiled
-        root's call, for example a recursive call of the root, which the compiled code makes invisibly.
+        That is when a strict ancestor on the path is a compiled root's call: everything below it runs inside
+        the compiled code — a recursive call of the root included. The root's own node is not inside, it is
+        timed as one call; neither is an eager call of a module that also sits inside a compiled part, which has
+        a different path.
         """
-        for k in range(1, len(path) + 1):
+        for k in range(1, len(path)):
             node = self._tree.nodes.get(path[:k])
-            if node is None or node.module is None:
-                continue
-            module_id = id(node.module)
-            if module_id in inside or (k < len(path) and module_id in roots):
+            if node is not None and node.module is not None and id(node.module) in roots:
                 return True
         return False
 
@@ -347,19 +353,17 @@ class TimingRecorder(CallRecorder):
 
     def _untimed_groups(self) -> _UntimedCalls:
         """The nodes left without a time, by cause, plus the nodes whose call count differs."""
-        inside, roots = self._inside_compiled_ids()
+        roots = self._compiled_root_ids()
         expected = self._expected_calls()
         never_timed_depth, did_not_run, missed, count_differs = [], [], [], []
         for path in self._tree.nodes:
             ran = self._calls.get(path, 0)
-            if len(path) not in self._timed_depths and not self._inside_compiled(path, inside, roots):
+            if len(path) not in self._timed_depths and not self._inside_compiled(path, roots):
                 never_timed_depth.append(path)
-            elif expected[path] > 0 and ran == 0 and not self._inside_compiled(path, inside, roots):
+            elif expected[path] > 0 and ran == 0 and not self._inside_compiled(path, roots):
                 did_not_run.append(path)
             elif (
-                len(path) in self._timed_depths
-                and path not in self._samples
-                and not self._inside_compiled(path, inside, roots)
+                len(path) in self._timed_depths and path not in self._samples and not self._inside_compiled(path, roots)
             ):
                 missed.append(path)
             if ran > 0 and ran != expected[path]:
@@ -400,7 +404,8 @@ class TimingRecorder(CallRecorder):
             deepest = max(len(path) for path in self._tree.nodes)
             sentences.append(
                 f"{len(never_timed_depth)} are at depths the timing pass never timed, because it times one depth "
-                f"per iteration; set number_of_iterations to at least {deepest} to time every depth: "
+                f"per iteration; number_of_iterations must be at least {deepest} to time every depth, and calls "
+                f"that only some samples make also need enough samples that make them: "
                 f"{_format_paths(never_timed_depth)}."
             )
         if did_not_run:
@@ -421,16 +426,18 @@ class TimingRecorder(CallRecorder):
         """Record one timed call of ``node``, under the iteration that timed it."""
         self._samples.setdefault(node.path, {}).setdefault(iteration, []).append(milliseconds)
 
-    def _start_timer(self) -> tuple[Any, int | None]:
+    def _start_timer(self) -> tuple[Any, int | None, Any]:
         """Start timing a call: record a pooled CUDA event on the current stream, or read ``perf_counter``.
 
         Returns:
-            The start of the timer and the CUDA device the start event was recorded on (``None`` without CUDA).
+            The start of the timer and, with CUDA, the device and stream the start event was recorded on (``None``s
+            without CUDA). The end event goes on the same stream, even if the call switches the current stream.
         """
         if self._use_cuda:
             device = torch.cuda.current_device()
-            return self._record_event(device), device
-        return time.perf_counter(), None
+            stream = self._current_stream(device)
+            return self._record_event(device, stream), device, stream
+        return time.perf_counter(), None, None
 
     def _stop_timer(self, call: _TimedCall) -> None:
         """Stop timing a call: queue the CUDA event pair for ``flush``, or take the CPU time as the sample."""
@@ -438,7 +445,8 @@ class TimingRecorder(CallRecorder):
         assert node is not None  # a call with a start time always has a node
         if self._use_cuda:
             assert call.device is not None
-            self._events.append((node, call.start, self._record_event(call.device), self._iteration - 1))
+            end = self._record_event(call.device, call.stream)
+            self._events.append((node, call.start, end, self._iteration - 1, call.device))
         else:
             self._add_sample(node, (time.perf_counter() - call.start) * 1000.0, self._iteration - 1)
 
@@ -450,8 +458,9 @@ class TimingRecorder(CallRecorder):
             stream = self._streams[key] = torch.cuda.Stream(stream_id=key[0], device_index=key[1], device_type=key[2])
         return stream
 
-    def _record_event(self, device: int) -> Any:
-        """Record a pooled event on the device's current stream and return it."""
-        event = self._free_events.pop() if self._free_events else torch.cuda.Event(enable_timing=True)
-        _record(event, self._current_stream(device))
+    def _record_event(self, device: int, stream: Any) -> Any:
+        """Record an event from ``device``'s pool on ``stream`` and return it."""
+        pool = self._free_events.setdefault(device, [])
+        event = pool.pop() if pool else torch.cuda.Event(enable_timing=True)
+        _record(event, stream)
         return event
