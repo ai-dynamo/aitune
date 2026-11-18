@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
+from aitune.torch.libs.exporting.dynamic_shapes import prepare_export_sample as prepare_flat_export_sample
 from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.utils.shapes import (
@@ -461,6 +462,29 @@ def test_prepare_export_sample_expands_batch_axis_to_2():
     assert out_args[0].shape[0] == 2, "batch axis at hint=1 must be expanded to 2"
 
 
+@pytest.mark.parametrize("prepare_sample", [prepare_export_sample, prepare_flat_export_sample], ids=["shared", "flat"])
+@pytest.mark.parametrize(
+    ("min_batch_size", "max_batch_size", "expected_batch_size"),
+    [(1, 1, 1), (1, 8, 2), (4, 8, 4), (4, 4, 4), (4, 1024, 4)],
+    ids=["static-one", "dynamic-from-one", "minimum-above-two", "static-above-two", "large-maximum"],
+)
+def test_prepare_export_sample_uses_smallest_valid_batch(
+    prepare_sample, min_batch_size, max_batch_size, expected_batch_size
+):
+    # Start at the maximum so this also verifies that preparation reduces an oversized example.
+    tensor = torch.ones(max_batch_size, 3)
+    sample = ((), {"x": tensor})
+    graph_spec = make_graph_spec(_single_input, sample, batch_size=max_batch_size)
+    update_input_spec(graph_spec, ((), {"x": torch.ones(min_batch_size, 3)}), batch_size=min_batch_size)
+
+    args, kwargs = prepare_sample(sample, graph_spec)
+
+    assert args == ()
+    assert kwargs["x"].shape == (expected_batch_size, 3)
+    assert min_batch_size <= kwargs["x"].shape[0] <= max_batch_size
+    assert tensor.shape == (max_batch_size, 3)
+
+
 def test_prepare_export_sample_batch_already_at_2_unchanged():
     """Batch axis already at 2 (max=2) is not further expanded."""
     args1 = (torch.zeros(1, 32),)
@@ -475,15 +499,16 @@ def test_prepare_export_sample_batch_already_at_2_unchanged():
 
 
 def test_prepare_export_sample_keyword_input_dim_axis_expanded():
-    """A dim* axis passed by keyword is expanded in the normalized call."""
+    """A dim* axis passed by keyword is expanded without changing its call layout."""
     kw1 = {"mask": torch.zeros(2, 1)}
     kw2 = {"mask": torch.zeros(2, 6)}
     gs = make_graph_spec(_mask_input, ((), kw1), batch_size=2)
     update_input_spec(gs, ((), kw2), batch_size=2)
 
-    out_args, _ = prepare_export_sample(((), kw1), gs)
+    out_args, out_kwargs = prepare_export_sample(((), kw1), gs)
 
-    assert out_args[0].shape[1] == 2, "size-1 dim* axis passed by keyword must be expanded"
+    assert out_args == ()
+    assert out_kwargs["mask"].shape[1] == 2, "size-1 dim* axis passed by keyword must be expanded"
 
 
 # ---------------------------------------------------------------------------
