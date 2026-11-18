@@ -364,12 +364,13 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
     def _prepare_outputs(self, outputs: dict[str, torch.Tensor], arguments: dict[str, Any]) -> Any:
         """Rebuild user outputs and apply input changes returned by ONNX Runtime.
 
-        Order named results as user outputs followed by internal state outputs. REPLACE_INPUT makes
-        the returned ORT buffers the current state, avoiding a separate copy-back into old tensor leaves,
-        including for recorded in-place writes. This is a restoration choice, not a requirement imposed
-        by ORT owning the buffers. Returned input containers retain their identity, but external references
-        to old tensor leaves may not observe updates. Assignment to a top-level normalized argument does
-        not rebind the caller's variable.
+        Order named results as user outputs followed by internal state outputs. REPLACE_INPUT requests
+        that returned ORT buffers become current state where a caller-owned mutable container permits
+        assignment, avoiding copy-back into old leaves. For direct arguments or paths containing only
+        tuples, recorded COPY_TENSOR changes use copy-back so the caller observes the update.
+        Replacement is a restoration choice, not a requirement imposed by ORT owning the buffers.
+        Returned input containers retain their identity, but references to replaced tensor leaves
+        may not observe updates.
         """
         graph_spec = cast(GraphSpec, self._graph_spec)
         user_output_names = tuple(
@@ -377,7 +378,7 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         )
         state_output_names = graph_spec.output_names()[len(user_output_names) :]
         flat_outputs = tuple(outputs[name] for name in user_output_names + state_output_names)
-        # Adopt returned state buffers rather than copy back; see the tensor identity tradeoff above.
+        # Request returned state buffers where caller-owned containers permit replacement; see above.
         mutation_policies = {
             mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
             for mutation in graph_spec.forward_contract.input_mutations

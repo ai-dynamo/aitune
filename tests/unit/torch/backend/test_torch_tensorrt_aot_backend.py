@@ -341,9 +341,7 @@ def test_mock_build(
     torch_device: torch.device,
     tmp_path: Path,
 ):
-    sentinel_exported = mocker.Mock(name="ExportedProgram")
-    sentinel_exported.example_inputs = ((mocker.sentinel.flat_input,), {})
-    export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
+    export_mock = mocker.spy(torch.export, "export")
     save_compiled = mocker.spy(torch_tensorrt_aot_backend, "_save_compiled_model")
 
     active_backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
@@ -371,8 +369,8 @@ def test_mock_build(
     warning_context.__exit__.assert_called_once()
     # Pin the pipeline shape: the ExportedProgram from torch.export.export must be
     # forwarded as the first positional arg to torch_tensorrt.dynamo.compile.
-    assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is sentinel_exported
-    assert save_compiled.call_args.args[2] is sentinel_exported.example_inputs
+    assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is export_mock.spy_return
+    assert save_compiled.call_args.args[2] is export_mock.spy_return.example_inputs
 
 
 @pytest.mark.parametrize(
@@ -417,14 +415,27 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     mocker.patch.object(TorchTensorRTAotBackend, "_devices", ["cpu", "cuda"])
 
     backend = TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
-    sentinel_exported = mocker.Mock(name="ExportedProgram")
-    export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
+    export_mock = mocker.spy(torch.export, "export")
+    save_compiled = mocker.spy(torch_tensorrt_aot_backend, "_save_compiled_model")
 
     backend.build(
         model, graph_spec, make_sample_store(sample_data, tmp_path), device=torch.device("cpu"), cache_dir=tmp_path
     )
 
     dynamic_shapes = export_mock.call_args.kwargs["dynamic_shapes"]
+    assert save_compiled.call_args.args[2] is export_mock.spy_return.example_inputs
+    assert save_compiled.call_args.args[3] is dynamic_shapes["flat_inputs"]
+    reexported = torch.export.export(
+        export_mock.spy_return.module(),
+        export_mock.spy_return.example_inputs[0],
+        dynamic_shapes=save_compiled.call_args.args[3],
+        strict=False,
+    )
+    path = tmp_path / "reexported.pt2"
+    torch.export.save(reexported, path)
+    loaded = torch.export.load(path).module()
+    value = torch.randn(3, 10)
+    torch.testing.assert_close(loaded(value)[0], model(value))
     dim = dynamic_shapes["flat_inputs"][0][0]
     assert dim is not torch.export.Dim.AUTO
     assert dim.min == 1
@@ -459,7 +470,6 @@ def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
     mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.get_cuda_device", return_value=0)
     mocker.patch.object(TorchTensorRTAotBackend, "_devices", ["cpu", "cuda"])
-    mocker.patch("torch.export.export", return_value=mocker.Mock())
     backend = TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
 
     backend.build(
@@ -479,7 +489,6 @@ def test_mock_infer(
     torch_device: torch.device,
     tmp_path: Path,
 ):
-    mocker.patch("torch.export.export")
     mocker.patch("torch.export.save")
     load = mocker.patch("torch.export.load", return_value=model)
     mocker.patch(
@@ -490,10 +499,7 @@ def test_mock_infer(
         "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.dynamo.export",
         return_value=mocker.MagicMock(),
     )
-    # torch.export.export is mocked above (returns Mock); torch_tensorrt.dynamo.compile
-    # would reject a Mock at its isinstance(_, ExportedProgram) check, so mock it too
-    # and return the original model — _opt_module then bypasses real TRT compilation
-    # while infer() still produces a real (1, 2) output via the underlying nn.Linear.
+    # Keep export/profile validation real and bypass TRT compilation with the original model.
     mocker.patch(
         "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.dynamo.compile",
         return_value=model,

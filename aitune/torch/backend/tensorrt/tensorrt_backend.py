@@ -974,12 +974,13 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         """Collect TensorRT outputs, restore input changes, and rebuild the module result.
 
         Results include allocator outputs and outputs bound directly to input buffers. REPLACE_INPUT
-        adopts these tensors as current state without a separate copy-back into old leaves. It also
-        handles an aliased result through the same restoration path. This choice preserves returned
-        input container identity but does not guarantee updates through retained references to old tensors.
+        requests adoption as current state where a caller-owned mutable container permits assignment,
+        avoiding copy-back into old leaves. Direct arguments and paths containing only tuples still use
+        copy-back for COPY_TENSOR changes so the caller observes the update. Aliased results use the same
+        restoration path. Container identity is preserved; references to replaced leaves may stay unchanged.
 
         CUDA graph results are cloned before adoption because replay reuses their output storage.
-        This protects returned state from later replay; it does not restore the identity of the old leaf.
+        This protects restored state from later replay. When a leaf is replaced, its old identity is not preserved.
         """
         graph_spec = self._graph_spec
         if graph_spec is None:
