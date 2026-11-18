@@ -22,11 +22,7 @@ from aitune.torch.backend.backend import (
     BuildMode,
     ExecutionMode,
 )
-from aitune.torch.backend.torch_tensorrt_logging import (
-    drop_unsupported_fields,
-    torch_tensorrt_errors,
-    torch_tensorrt_warnings,
-)
+from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_errors, torch_tensorrt_warnings
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.torch import TorchExporter
@@ -36,6 +32,7 @@ from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.module import move_module_to_device
 from aitune.torch.utils.tensor import format_tensor_name
+from aitune.utils.serialization import drop_unsupported_fields
 
 try:
     import torch_tensorrt

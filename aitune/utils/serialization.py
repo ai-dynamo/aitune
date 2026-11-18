@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""JSON serialization utilities."""
+"""Serialization utilities."""
 
-from dataclasses import asdict, is_dataclass
+import logging
+from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -28,3 +29,18 @@ def json_serialize(x: Any) -> Any:
     if isinstance(x, datetime):
         return x.isoformat()
     return str(x)
+
+
+def drop_unsupported_fields(config_class: type, config: dict[str, Any]) -> dict[str, Any]:
+    """Drop keys that are not fields of the ``config_class`` dataclass.
+
+    Loads configs saved with another library version, e.g. Torch-TensorRT ``CompilationSettings``
+    rejects ``enabled_precisions`` since 2.15.
+    """
+    supported = {f.name for f in fields(config_class)}
+    unsupported = sorted(set(config) - supported)
+    if unsupported:
+        logging.getLogger(__name__).warning(
+            "Ignoring %s settings not supported by the installed version: %s", config_class.__name__, unsupported
+        )
+    return {name: value for name, value in config.items() if name in supported}
