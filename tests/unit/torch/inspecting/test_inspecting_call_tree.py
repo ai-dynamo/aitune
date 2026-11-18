@@ -194,7 +194,7 @@ def test_fewer_iterations_than_depths_leaves_deep_nodes_untimed(mocker, dataset)
     warning.assert_called_once()
     text = warning.call_args.args[1]
     assert "are at depths the timing pass never timed" in text
-    assert f"set number_of_iterations to at least {deepest}" in text
+    assert f"number_of_iterations must be at least {deepest}" in text
 
 
 def test_calls_that_only_some_samples_make_are_timed(mocker):
@@ -267,6 +267,74 @@ def test_a_part_compiled_with_module_compile_logs_no_timing_warning(mocker, data
     warning.assert_not_called()
 
 
+def test_a_compiled_sequential_gets_a_timed_node_and_its_children_stay_untimed(mocker, dataset):
+    """``nn.Module.compile()`` on an exact ``nn.Sequential``: the container is a unit of its own — recorded and
+    timed as one call — and the calls inside the compiled part get no time without a warning."""
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    child = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8))
+    child.compile(backend="eager")
+    model = Root(child)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    node = tree.nodes[("root.forward", "root.child.forward")]
+    assert node.time_ms is not None
+    inner = tree.nodes[("root.forward", "root.child.forward", "root.child.0.forward")]
+    assert inner.time_ms is None
+    warning.assert_not_called()
+
+
+def test_a_torch_compiled_sequential_gets_a_timed_node(mocker, dataset):
+    """``torch.compile(nn.Sequential)``: the ``OptimizedModule`` gets the compiled call's node — recorded under its
+    label and timed — while the calls inside stay untimed without a warning."""
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    torch._dynamo.reset()
+    model = Root(torch.compile(nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8)), backend="eager"))
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+    torch._dynamo.reset()
+
+    tree = _tree(info)
+    node = tree.nodes[("root.forward", "root.child.forward")]
+    assert node.time_ms is not None
+    inner = tree.nodes[("root.forward", "root.child.forward", "root.child._orig_mod.0.forward")]
+    assert inner.time_ms is None
+    warning.assert_not_called()
+
+
 def test_a_torch_compiled_child_that_recurses_records_the_nested_call(mocker, dataset):
     """A compiled module whose forward calls itself: the mark suppresses only the first entry, so the
     structure pass records the nested call and the timing pass reports it, not as a missing call."""
@@ -299,7 +367,7 @@ def test_a_torch_compiled_child_that_recurses_records_the_nested_call(mocker, da
     )
     torch._dynamo.reset()
 
-    path = ("root.forward", "root.child._orig_mod.forward", "root.child._orig_mod.forward")
+    path = ("root.forward", "root.child.forward", "root.child._orig_mod.forward")
     assert path in _tree(info).nodes
     warning.assert_not_called()
 
@@ -396,7 +464,7 @@ def test_compiled_child_inspects_and_its_calls_appear_in_the_tree(dataset):
 
 
 def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(dataset):
-    """``torch.compile(module)`` adds no node of its own: the original module's ``forward`` is the node."""
+    """``torch.compile(module)``: the ``OptimizedModule``'s ``forward`` is the node; ``_orig_mod`` adds none."""
     from typing import cast
 
     from aitune.torch.call_tree import shared_weights_of
@@ -431,8 +499,8 @@ def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(datase
     paths = {n.path_str: n.calls for n in _tree(info).nodes.values()}
     assert paths == {
         "forward": ITERATIONS,
-        "forward > child._orig_mod.forward": ITERATIONS,
-        "forward > child._orig_mod.forward > child._orig_mod.lin.forward": ITERATIONS,
+        "forward > child.forward": ITERATIONS,
+        "forward > child.forward > child._orig_mod.lin.forward": ITERATIONS,
     }
     assert shared_weights_of(_tree(info), cast(nn.Module, model.child)) == []
 

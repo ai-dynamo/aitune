@@ -139,9 +139,7 @@ class CallRecorder(ABC):
         self, label: str, obj: Any, method: str, args: tuple[Any, ...], kwargs: dict[str, Any] | None = None
     ) -> Any:
         """Record the start of a call; return a frame to pass to ``end_call``, or None to not record it."""
-        ...
 
     @abstractmethod
     def end_call(self, frame: Any, result: Any = NO_RESULT) -> None:
         """Record the end of the call ``frame`` is for, with its return value or ``NO_RESULT`` when it raised."""
-        ...
