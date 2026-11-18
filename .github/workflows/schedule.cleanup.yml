@@ -27,24 +27,13 @@ jobs:
     if: github.repository_owner == 'ai-dynamo'
     runs-on: linux-amd64-cpu4
     timeout-minutes: 30
-    permissions:
-      packages: write
     steps:
-      # Each package must grant this repository the Admin role (Package settings → Manage Actions access).
       - uses: dataaxiom/ghcr-cleanup-action@v1.2.2
         with:
-          packages: >-
-            aitune,
-            aitune/nvcr-torch-25.08-py3,
-            aitune/nvcr-torch-25.10-py3,
-            aitune/nvcr-torch-26.01-py3,
-            aitune/nvcr-torch-26.03-py3,
-            aitune/nvcr-torch-26.05-py3,
-            aitune/nvcr-torch-26.06-py3,
-            aitune/nvcr-torch-26.08-py3,
-            aitune/nvcr-triton-26.05-py3,
-            aitune/cuda-12.9.2-devel-ubuntu24.04,
-            aitune/cuda-13.0.3-devel-ubuntu24.04
+          # Wildcard package expansion needs a classic PAT with read, write and delete:packages scopes.
+          token: ${{ secrets.GHCR_CLEANUP_TOKEN }}
+          packages: aitune,aitune/*
+          expand-packages: true
           exclude-tags: latest,buildcache
           older-than: ${{ inputs.older_than || '1 month' }}
           keep-n-tagged: 0
