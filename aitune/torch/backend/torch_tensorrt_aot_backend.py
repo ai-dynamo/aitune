@@ -32,7 +32,6 @@ from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.module import move_module_to_device
 from aitune.torch.utils.tensor import format_tensor_name
-from aitune.utils.serialization import drop_unsupported_fields
 
 try:
     import torch_tensorrt
@@ -45,8 +44,6 @@ except (ImportError, RuntimeError, OSError):
         """Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 
         Attributes:
-            enabled_precisions: Enabled TensorRT precisions. Defaults to None.
-            use_explicit_typing: Whether to use explicit typing. Defaults to True.
             workspace_size: TensorRT workspace size. Defaults to 0.
             use_distributed_mode_trace: Enable distributed tracing. Defaults to False.
             min_block_size: Minimum number of operators in a TensorRT block. Defaults to 5.
@@ -55,8 +52,6 @@ except (ImportError, RuntimeError, OSError):
                 Defaults to False.
         """
 
-        enabled_precisions: set[torch.dtype] | None = None
-        use_explicit_typing: bool = True
         workspace_size: int = 0
         use_distributed_mode_trace: bool = False
         min_block_size: int = 5
@@ -107,7 +102,6 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
             self.compile_config,
             other.compile_config,
             exclude=["device"],
-            include=["enabled_precisions"],
         )
         parts = [f"compile_config=TorchTensorRTConfig({','.join(compile_config_parts)})"]
 
@@ -132,9 +126,7 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
         data = dict(data)
         data.pop("ir", None)
         if isinstance(data.get("compile_config"), dict):
-            data["compile_config"] = TorchTensorRTConfig(
-                **drop_unsupported_fields(TorchTensorRTConfig, data["compile_config"])
-            )
+            data["compile_config"] = TorchTensorRTConfig(**data["compile_config"])
         return cls(**data)
 
 
