@@ -11,6 +11,7 @@ from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
+from tests.utilities.helpers import make_graph_spec
 
 
 def _graph_spec() -> GraphSpec:
@@ -26,7 +27,9 @@ def _graph_spec() -> GraphSpec:
         inputs = SampleMetadata.from_inputs(arguments, batch_size=batch_size)
         outputs = SampleMetadata.from_outputs((tokens, mask), batch_size=batch_size)
         if graph_spec is None:
-            graph_spec = GraphSpec("graph", inputs, outputs, signature)
+            graph_spec = make_graph_spec(
+                forward, ((tokens, mask), {}), (tokens, mask), name="graph", batch_size=batch_size
+            )
         else:
             graph_spec.update_shapes_seen(inputs, outputs)
     assert graph_spec is not None
@@ -141,14 +144,19 @@ def test_output_bounds_intersect_effective_logical_input_batch_ranges():
 
 
 def test_output_bounds_follow_explicit_batch_range_without_changing_other_dimensions():
-    signature = ForwardSignature.from_callable(lambda tokens: tokens)
     graph_spec = None
     for batch_size in (1, 4):
         tokens = torch.zeros(batch_size, 8)
         inputs = SampleMetadata.from_inputs({"tokens": tokens}, batch_size=batch_size)
         outputs = SampleMetadata.from_outputs((tokens, torch.ones(5)), batch_size=batch_size)
         if graph_spec is None:
-            graph_spec = GraphSpec("graph", inputs, outputs, signature)
+            graph_spec = make_graph_spec(
+                lambda tokens: tokens,
+                ((tokens,), {}),
+                (tokens, torch.ones(5)),
+                name="graph",
+                batch_size=batch_size,
+            )
         else:
             graph_spec.update_shapes_seen(inputs, outputs)
     assert graph_spec is not None

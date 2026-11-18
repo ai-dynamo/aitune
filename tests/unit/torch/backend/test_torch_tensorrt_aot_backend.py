@@ -25,7 +25,7 @@ from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyTorchModel
 from tests.toy_models.torch_models import ToyTorchConditionalModel
-from tests.utilities.helpers import make_graph_spec, make_sample_store, requires_cuda, update_input_spec
+from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store, requires_cuda, update_input_spec
 
 
 @dataclass
@@ -70,8 +70,7 @@ def sample_data(torch_device, tmp_path) -> SampleStore:
 @pytest.fixture
 def graph_spec(model, sample_data) -> GraphSpec:
     args, kwargs = sample_data[0]
-    output = model(*args, **kwargs)
-    return make_graph_spec(model.forward, (args, kwargs), output, name="0", strict=True)
+    return make_recorded_graph_spec(model, (args, kwargs), name="0", strict=True)
 
 
 @pytest.fixture
@@ -222,9 +221,7 @@ def mock_torch_tensorrt(mocker, model: SimpleModel):
 
 
 def _graph_spec_from_samples(model: nn.Module, samples: list[Sample]) -> GraphSpec:
-    args, kwargs = samples[0]
-    output = model(*args, **kwargs)
-    graph_spec = make_graph_spec(model.forward, (args, kwargs), output, name="0", strict=True)
+    graph_spec = make_recorded_graph_spec(model, samples[0], name="0", strict=True)
     for args, kwargs in samples[1:]:
         output = model(*args, **kwargs)
         update_input_spec(graph_spec, (args, kwargs), strict=True)

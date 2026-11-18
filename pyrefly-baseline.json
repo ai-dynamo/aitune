@@ -491,13 +491,6 @@
       "severity": "error"
     },
     {
-      "column": 20,
-      "path": "aitune/torch/backend/torch_inductor_aot_backend.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `None`",
-      "severity": "error"
-    },
-    {
       "column": 31,
       "path": "aitune/torch/backend/torch_inductor_jit_backend.py",
       "name": "bad-argument-type",
