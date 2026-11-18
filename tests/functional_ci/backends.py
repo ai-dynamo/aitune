@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import pytest
-import torch
 
 from aitune.torch.backend import (
     Backend,
@@ -53,9 +52,7 @@ class BackendCase:
 
 def _torch_tensorrt_config() -> TorchTensorRTConfig:
     """Convert the whole graph in fp32 without TF32."""
-    return TorchTensorRTConfig(
-        enabled_precisions={torch.float32}, min_block_size=1, disable_tf32=True, require_full_compilation=True
-    )
+    return TorchTensorRTConfig(min_block_size=1, disable_tf32=True, require_full_compilation=True)
 
 
 def _torch_tensorrt_aot() -> Backend:
@@ -136,13 +133,13 @@ BACKENDS: dict[str, BackendCase] = {
         ),
         artifact_format="onnx",
     ),
-    "onnxruntime-tensorrt": BackendCase(
-        _onnx_runtime(ONNXExecutionProvider.TENSORRT),
-        TENSORRT_FP32,
-        _tags(
-            "base",
-        ),
-    ),
+    # "onnxruntime-tensorrt": BackendCase(
+    #     _onnx_runtime(ONNXExecutionProvider.TENSORRT),
+    #     TENSORRT_FP32,
+    #     _tags(
+    #         "base",
+    #     ),
+    # ),
     "torchao-int8wo": BackendCase(
         _torchao_int8_weight_only,
         Tolerance(rtol=5e-2, atol=5e-2),

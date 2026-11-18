@@ -652,20 +652,6 @@
       "severity": "error"
     },
     {
-      "column": 109,
-      "path": "aitune/torch/checkpoint/torch_checkpoint.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `dict[str, device | str]` is not assignable to parameter `device_map` with type `dict[str, device]` in function `TorchCheckpoint.load_state_dict_for_module`",
-      "severity": "error"
-    },
-    {
-      "column": 49,
-      "path": "aitune/torch/checkpoint/torch_checkpoint.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `dict[str, device | str]` is not assignable to parameter `device_map` with type `dict[str, device]` in function `TorchCheckpoint.load_state_dict_for_pipeline`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "aitune/torch/checkpoint/torch_checkpoint.py",
       "name": "bad-argument-type",
@@ -2027,13 +2013,6 @@
       "column": 21,
       "path": "tests/functional/pytorch/005_aitune_torch_tune_resnet_torch_tensorrt_aot_backend_test.py",
       "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `enabled_precisions` in function `torch_tensorrt.dynamo._settings.CompilationSettings.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "tests/functional/pytorch/005_aitune_torch_tune_resnet_torch_tensorrt_aot_backend_test.py",
-      "name": "unexpected-keyword",
       "concise_description": "Unexpected keyword argument `use_python_runtime` in function `torch_tensorrt.dynamo._settings.CompilationSettings.__init__`",
       "severity": "error"
     },
@@ -2049,13 +2028,6 @@
       "path": "tests/functional/pytorch/005_aitune_torch_tune_resnet_torch_tensorrt_aot_backend_test.py",
       "name": "unexpected-keyword",
       "concise_description": "Unexpected keyword argument `assume_dynamic_shape_support` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "tests/functional/pytorch/006_aitune_torch_tune_resnet_torch_tensorrt_jit_backend_test.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `enabled_precisions` in function `torch_tensorrt.dynamo._settings.CompilationSettings.__init__`",
       "severity": "error"
     },
     {
@@ -2185,20 +2157,6 @@
       "severity": "error"
     },
     {
-      "column": 21,
-      "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `enabled_precisions` in function `torch_tensorrt.dynamo._settings.CompilationSettings.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `min_block_size` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 31,
       "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
       "name": "missing-attribute",
@@ -2210,20 +2168,6 @@
       "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
       "name": "missing-attribute",
       "concise_description": "Object of type `Module | Tensor | Unknown | None` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
-      "column": 17,
-      "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `enabled_precisions` in function `torch_tensorrt.dynamo._settings.CompilationSettings.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 17,
-      "path": "tests/functional/pytorch/049_aitune_kernel_selector_backend_for_attention_test.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `min_block_size` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
       "severity": "error"
     },
     {
@@ -2357,13 +2301,6 @@
       "path": "tests/functional_ci/artifacts.py",
       "name": "missing-attribute",
       "concise_description": "No attribute `float16` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 9,
-      "path": "tests/functional_ci/backends.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `enabled_precisions` in function `torch_tensorrt.dynamo._settings.CompilationSettings.__init__`",
       "severity": "error"
     },
     {
