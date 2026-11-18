@@ -254,6 +254,48 @@ def test_compiled_child_inspects_and_its_calls_appear_in_the_tree(dataset):
     assert any("lin" in label for label in labels)
 
 
+def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(dataset):
+    """``torch.compile(module)`` adds no node of its own: the original module's ``forward`` is the node."""
+    from typing import cast
+
+    from aitune.torch.call_tree import shared_weights_of
+
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+    class Root(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.child = torch.compile(Inner(), backend="eager")
+
+        def forward(self, x):
+            return self.child(x)
+
+    torch._dynamo.reset()
+    model = Root()
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=ITERATIONS,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    paths = {n.path: n.calls for n in _tree(info).nodes.values()}
+    assert paths == {
+        "forward": ITERATIONS,
+        "forward > child._orig_mod.forward": ITERATIONS,
+        "forward > child._orig_mod.forward > child._orig_mod.lin.forward": ITERATIONS,
+    }
+    assert shared_weights_of(_tree(info), cast(nn.Module, model.child)) == []
+
+
 def test_module_compiled_child_is_recorded_once_and_counts_stay_unchanged(dataset):
     """A child compiled with ``nn.Module.compile()`` gets its call-tree nodes, and the recording pass leaves counts alone."""
 
