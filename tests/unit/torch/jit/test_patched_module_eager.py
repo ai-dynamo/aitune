@@ -558,8 +558,10 @@ def test_jit_external_hook_preserved_in_forward_hooks_after_restore_proxy_cycle(
     assert len(inner._forward_hooks) == 1  # must be restored
 
 
-def test_jit_external_hook_fires_exactly_once_after_restore_proxy_cycle():
+def test_jit_external_hook_fires_exactly_once_after_restore_proxy_cycle(mocker):
     """After the cycle the hook fires exactly once per forward call — no double-firing."""
+    # Exercise hook restoration without running device selection or backend tuning.
+    mocker.patch.object(PatchedModule, "tune")
     inner = _SimpleJitModule()
     patched = PatchedModule(inner)
 
