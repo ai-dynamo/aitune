@@ -207,6 +207,8 @@ jobs:
             aitune-extra: torch213
           - python-version: "3.14"
             aitune-extra: torch214
+          - python-version: "3.14"
+            aitune-extra: torch215
     steps:
       - uses: actions/checkout@v7.0.1
         with:
