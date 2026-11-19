@@ -7,8 +7,9 @@ Recorded metadata defines the same order for example inputs, shape constraints, 
 The adapter reconstructs the Python call inside the exported module, keeping backend code
 independent of the original argument structure.
 
-These are export building blocks. Backend integration and restoration of caller-visible input
-changes are added separately. See docs/guides/advanced/execution_graphs.md for the design example.
+The adapter also exposes recorded tensor mutations as outputs. Backends use GraphSpec's forward
+contract to apply those changes to current inputs and restore the Python result. See
+docs/guides/advanced/execution_graphs.md for the flat interface design example.
 """
 
 from aitune.torch.libs.exporting.onnx_exporter import ONNXExporter

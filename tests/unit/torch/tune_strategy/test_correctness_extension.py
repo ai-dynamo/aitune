@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.module.forward_contract import ForwardContract
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -77,6 +78,7 @@ def _mock_backend_validation_context(mocker, tmp_path):
         input_spec=_input_metadata(sample, batch_size=2),
         output_spec=SampleMetadata.from_outputs(torch.randn(2, 8), batch_size=2),
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
     return backend, module, strategy, samples, graph_spec
 
@@ -116,6 +118,7 @@ def test_correctness_is_idempotent(tmp_path):
         input_spec=input_spec,
         output_spec=output_spec,
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
     strategy.check_correctness(MockBackend(), "test_model", graph_spec, samples)  # type: ignore
     assert len(cache) == 0, "cache should be empty"
@@ -141,6 +144,7 @@ def test_correctness_loads_samples_on_backend_device(mocker, tmp_path):
         input_spec=_input_metadata(sample, batch_size=2),
         output_spec=SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2),
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
 
     TuneStrategyTestCorrectness().check_correctness(MockBackend(), "test_model", graph_spec, samples)  # type: ignore
@@ -162,6 +166,7 @@ def test_correctness_requires_at_least_one_sample(tmp_path):
         input_spec=input_spec,
         output_spec=output_spec,
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
 
     with pytest.raises(ValueError, match="requires at least one sample"):
@@ -200,6 +205,7 @@ def test_correctness_checks_dynamic_min_and_max_shapes(tmp_path):
         input_spec=input_spec,
         output_spec=output_spec,
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
 
     samples = make_sample_store([recorded_sample], tmp_path)
@@ -241,6 +247,7 @@ def test_correctness_skips_value_checks_for_dynamic_boundary_samples(tmp_path):
         input_spec=input_spec,
         output_spec=output_spec,
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
 
     samples = make_sample_store([recorded_sample], tmp_path)
@@ -276,6 +283,7 @@ def test_correctness_reports_dynamic_boundary_inference_failure(tmp_path):
         input_spec=input_spec,
         output_spec=output_spec,
         forward_signature=FORWARD_SIGNATURE,
+        forward_contract=ForwardContract(None),
     )
     samples = make_sample_store([recorded_sample], tmp_path)
 

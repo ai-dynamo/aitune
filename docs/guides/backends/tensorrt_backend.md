@@ -309,6 +309,9 @@ CUDA graphs are enabled by default for engines with fixed input shapes and for o
 where `min == opt == max` for every dimension of every input. Profiles containing a dynamic range use
 ordinary TensorRT execution, even when a request happens to match their optimum shape. Inputs used as
 shape tensors also use ordinary execution because fixed dimensions do not guarantee fixed shape values.
+Engines whose outputs alias input buffers also use ordinary execution so capture warmup and replay
+cannot apply an in-place state update multiple times. State returned through independent output buffers
+can use CUDA graphs; those buffers are copied before restoring the caller's state.
 
 Each eligible profile is captured lazily when admitted to the cache. Its graph, execution context, input buffers,
 and output allocator are cached together while sharing the engine. Switching back to a previously used

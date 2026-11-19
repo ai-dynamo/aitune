@@ -16,9 +16,10 @@ from aitune.torch.module.sample_store import Sample
 class TensorExportAdapter(nn.Module):
     """Adapt a structured module call to flat tensor inputs and outputs in recorded order.
 
-    Flattening is the explicit interface shared by export and later backend execution. It separates
+    Flattening is the explicit interface shared by export and backend execution. It separates
     tensor computation from Python containers, whose structure and identity must be restored outside
-    the compiled runner. This adapter returns recorded user outputs; mutation outputs are added separately.
+    the compiled runner. User tensor outputs come first, followed by changed input tensors that the
+    forward contract needs for state restoration and that are absent from the user outputs.
 
     Non-tensor arguments come from the recorded sample. Compatible inputs use a prepared PyTree
     recipe to keep reconstruction simple for strict Torch Export. Otherwise, recorded locators
@@ -34,8 +35,15 @@ class TensorExportAdapter(nn.Module):
             Flat outputs:  (result,)
 
         Each invocation supplies current tensors in the recorded order. The scale stays 2 because it
-        comes from the sample, and the call stays keyword-based. Outputs contain only recorded tensors;
-        restoring the caller's Python output structure belongs to backend integration.
+        comes from the sample, and the call stays keyword-based. This example has no input mutations.
+        Backend restoration rebuilds the caller's Python output structure from the user tensor results.
+
+    Mutation outputs:
+        For ``cache[0] = x + 1; return x * 2`` with ``cache=[None]`` in the sample, flat inputs are
+        ``(x,)`` and flat outputs are ``(x * 2, x + 1)``. Appending the updated cache tensor keeps an
+        otherwise unreturned assignment visible outside the compiled graph. The backend applies it to
+        the caller's cache before returning the user result. A changed tensor already returned by the
+        module uses its existing output slot, so no extra result is needed for that mutation.
 
     Reconstruction rules:
         PyTree is used only when tensor identity and order agree with SampleMetadata and replacing
@@ -65,14 +73,22 @@ class TensorExportAdapter(nn.Module):
         self._call_layout = graph_spec.forward_signature.capture_call_layout(*sample)
         self._input_spec = graph_spec.input_spec
         self._output_spec = graph_spec.output_spec
+        self._state_output_locators = tuple(mutation.locator for mutation in graph_spec.extra_tensor_mutations())
         self._argument_tree_spec, self._argument_leaf_template, self._tensor_leaf_indices = reconstruction
 
     def forward(self, *flat_inputs: torch.Tensor) -> tuple[torch.Tensor, ...]:
-        """Run the module with rebuilt inputs and return flat tensor outputs."""
+        """Return user tensor outputs followed by the contract's extra mutation tensors.
+
+        Extra results are read from reconstructed arguments after forward. They carry state changes
+        to backend restoration even when the original module's return value omits that state.
+        """
         arguments = self._reconstruct_arguments(flat_inputs)
         args, kwargs = self._call_layout.restore(arguments)
         output = self.module(*args, **kwargs)
-        return self._output_spec.flatten_tensors(output)
+        user_outputs = self._output_spec.flatten_tensors(output)
+        # These locators are recorded exclusively for tensor mutations.
+        state_outputs: tuple[Any, ...] = tuple(locator.get_value(arguments) for locator in self._state_output_locators)
+        return user_outputs + state_outputs
 
     def _reconstruct_arguments(self, flat_inputs: tuple[torch.Tensor, ...]) -> dict[str, Any]:
         """Rebuild normalized arguments with fresh containers for each call.

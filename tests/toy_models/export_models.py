@@ -7,6 +7,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
+from aitune.torch.module.forward_contract import ForwardContract
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -39,6 +40,7 @@ class ExportModelMixin:
                     input_spec=input_metadata,
                     output_spec=output_metadata,
                     forward_signature=forward_signature,
+                    forward_contract=ForwardContract(output_metadata.without_tensors(output)),
                 )
             else:
                 graph_spec.update_shapes_seen(input_metadata, output_metadata)

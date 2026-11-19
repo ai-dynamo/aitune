@@ -15,6 +15,7 @@ from aitune.records import (
     DType,
 )
 from aitune.torch.backend import ArtifactPath
+from aitune.torch.backend.tensorrt.cuda_graphs import CudaGraphProfile
 from aitune.torch.backend.tensorrt.onnx_autocast import ONNXAutoCastConfig
 from aitune.torch.backend.tensorrt.tensorrt_backend import TensorRTBackend, TensorRTBackendConfig, TensorRTProfileMode
 from aitune.torch.backend.tensorrt.tensorrt_profile import TensorRTProfile
@@ -22,7 +23,13 @@ from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models.torch_models import ToyTorchModel
-from tests.utilities.helpers import make_graph_spec, make_sample_store, requires_cuda, update_input_spec
+from tests.utilities.helpers import (
+    make_graph_spec,
+    make_recorded_graph_spec,
+    make_sample_store,
+    requires_cuda,
+    update_input_spec,
+)
 
 # Constants for testing
 IN_FEATURES = 32
@@ -126,6 +133,37 @@ def test_tensorrt_backend_config_describe():
     describe = config.describe()
 
     assert describe == "quantization_config=ONNXAutoCastConfig(precision='bf16', keep_io_types=True)"
+
+
+def test_build_places_shared_module_before_each_graph_export(mocker, tmp_path):
+    model = torch.nn.Linear(3, 2).eval()
+    sample = ((torch.ones(2, 3),), {})
+    graph_spec = make_recorded_graph_spec(model, sample, batch_size=2)
+    engine_path = tmp_path / "model.plan"
+    engine_path.write_bytes(b"engine")
+    profiles_path = tmp_path / "profiles.json"
+    profiles_path.write_text("[]")
+    events = []
+    move = mocker.patch(
+        "aitune.torch.backend.tensorrt.tensorrt_backend.move_module_to_device",
+        side_effect=lambda module, device: events.append("place-module"),
+    )
+    mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.cuda_set_device")
+
+    def export_graph(*args):
+        events.append("export-graph")
+        return engine_path
+
+    mocker.patch.object(TensorRTBackend, "_build_standard", side_effect=export_graph)
+    mocker.patch.object(TensorRTBackend, "_save_trt_optimization_profiles", return_value=profiles_path)
+    mocker.patch.object(TensorRTBackend, "_activate")
+    for _ in range(2):
+        backend = TensorRTBackend()
+        backend._device = torch.device("cpu")
+        backend._build(model, graph_spec, make_sample_store([sample], tmp_path), tmp_path)
+
+    assert events == ["place-module", "export-graph", "place-module", "export-graph"]
+    assert move.call_args_list == [mocker.call(model, torch.device("cpu"))] * 2
 
 
 def test_tensorrt_backend_init():
@@ -476,7 +514,6 @@ def test_tensorrt_state_marks_runtime_artifacts_but_not_timing_cache(tmp_path):
     )
     sample = ((torch.randn(1, 4),), {})
     backend._graph_spec = make_graph_spec(_single_input, sample, sample[0][0])
-    backend._output_object = torch.randn(1, 4)
 
     state_dict = backend.to_dict()
 
@@ -543,7 +580,8 @@ def test_tensorrt_backend_prepare_inputs(mocker):
     backend._engine_info.input_names = [x_name]
     backend._graph_spec = make_graph_spec(_single_input, sample, sample)
 
-    prepared_inputs = backend._prepare_inputs((test_tensor,), {})
+    arguments = backend._graph_spec.forward_signature.normalize((test_tensor,), {}).arguments
+    prepared_inputs = backend._prepare_inputs(arguments)
     assert torch.equal(prepared_inputs[x_name], test_tensor)
 
     # case 2: single kwarg only
@@ -552,7 +590,8 @@ def test_tensorrt_backend_prepare_inputs(mocker):
     backend._engine_info.input_names = [x_name]
     backend._graph_spec = make_graph_spec(_single_input, sample, sample)
 
-    prepared_inputs = backend._prepare_inputs((), {"x": test_tensor})
+    arguments = backend._graph_spec.forward_signature.normalize((), {"x": test_tensor}).arguments
+    prepared_inputs = backend._prepare_inputs(arguments)
     assert torch.equal(prepared_inputs[x_name], test_tensor)
 
     # case 3: single arg and single kwarg
@@ -562,9 +601,123 @@ def test_tensorrt_backend_prepare_inputs(mocker):
     backend._engine_info.input_names = [arg_name, x_name]
     backend._graph_spec = make_graph_spec(_two_inputs, sample, sample)
 
-    prepared_inputs = backend._prepare_inputs((test_tensor,), {"x": test_tensor})
+    arguments = backend._graph_spec.forward_signature.normalize((test_tensor,), {"x": test_tensor}).arguments
+    prepared_inputs = backend._prepare_inputs(arguments)
     assert torch.equal(prepared_inputs[arg_name], test_tensor)
     assert torch.equal(prepared_inputs[x_name], test_tensor)
+
+
+@pytest.mark.parametrize("use_graph", [False, True])
+def test_prepare_outputs_applies_mutable_tensor_and_scalar_state(mocker, use_graph):
+    class StatefulDecoder(torch.nn.Module):
+        def forward(self, x, cache, index):
+            cache[0] = x + 1
+            index[0] += 1
+            return x * 2
+
+    model = StatefulDecoder().eval()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [None], [0]), {}), strict=True)
+    backend = TensorRTBackend()
+    backend._graph_spec = graph_spec
+    state_output = x + 1
+    backend._output_allocator = mocker.Mock(
+        outputs=dict(zip(graph_spec.output_names(), (x * 2, state_output), strict=True))
+    )
+    if use_graph:
+        backend._cuda_graphs.active = CudaGraphProfile(mocker.Mock(), backend._output_allocator, graph=mocker.Mock())
+    cache = [None]
+    index = [0]
+    arguments = graph_spec.forward_signature.normalize((x, cache, index), {}).arguments
+
+    result = backend._prepare_outputs_for_return(arguments)
+
+    torch.testing.assert_close(result, x * 2)
+    torch.testing.assert_close(cache[0], x + 1)
+    assert index == [1]
+    if use_graph:
+        state_output.fill_(99)
+        torch.testing.assert_close(cache[0], x + 1)
+    else:
+        assert cache[0] is state_output
+
+
+@pytest.mark.parametrize("reject_allocator", [False, True])
+def test_create_output_allocator_uses_supplied_context(mocker, reject_allocator):
+    backend = TensorRTBackend()
+    backend._engine_info = mocker.Mock(output_input_aliases={"cache_output": "cache_input"})
+    backend._output_names = ["value", "cache_output"]
+    backend._context = mocker.Mock()
+    backend._output_allocator = mocker.Mock()
+    base_allocator = backend._output_allocator
+    create_allocator = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.TorchOutputAllocator")
+    context = mocker.Mock()
+    context.set_output_allocator.return_value = not reject_allocator
+
+    if reject_allocator:
+        with pytest.raises(RuntimeError, match="Failed to set output allocator"):
+            backend._create_output_allocator(context)
+    else:
+        assert backend._create_output_allocator(context) is create_allocator.return_value
+
+    create_allocator.assert_called_once_with(engine_info=backend._engine_info)
+    context.set_output_allocator.assert_called_once_with("value", create_allocator.return_value)
+    backend._context.set_output_allocator.assert_not_called()
+    assert backend._output_allocator is base_allocator
+
+
+def test_alias_binding_uses_input_address_instead_of_output_allocator(mocker):
+    backend = TensorRTBackend()
+    backend._engine_info = mocker.Mock(output_input_aliases={"cache_output": "cache_input"})
+    backend._output_names = ["value", "cache_output"]
+    backend._context = mocker.MagicMock()
+    backend._context.set_output_allocator.return_value = True
+    backend._context.set_input_shape.return_value = True
+    backend._context.set_tensor_address.return_value = True
+    backend._output_allocator = mocker.Mock()
+    backend._io_tensors = {"cache_input": {"shape": (2,)}}
+    cache = mocker.MagicMock()
+    cache.is_contiguous.return_value = True
+    cache.is_cuda = True
+    cache.shape = (2,)
+    cache.dtype = torch.float32
+    cache.data_ptr.return_value = 123
+
+    backend._configure_output_bindings(backend._context, backend._output_allocator)
+    backend._set_input_tensors({"cache_input": cache})
+
+    backend._context.set_output_allocator.assert_called_once_with("value", backend._output_allocator)
+    assert backend._context.set_tensor_address.call_args_list == [
+        mocker.call("cache_input", 123),
+        mocker.call("cache_output", 123),
+    ]
+    assert backend._aliased_outputs == {"cache_output": cache}
+
+
+def test_prepare_outputs_restores_aliased_state_buffer(mocker):
+    class StatefulDecoder(torch.nn.Module):
+        def forward(self, x, cache):
+            cache[0].add_(x)
+            return x * 2
+
+    model = StatefulDecoder().eval()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [torch.zeros(2)]), {}), strict=True)
+    output_name, state_name = graph_spec.output_names()
+    runtime_output = torch.full((2,), 2.0)
+    state = [torch.zeros(2)]
+    state_input_name = format_tensor_name(graph_spec.input_spec.tensor_data[1][0].path, "input")
+    backend = TensorRTBackend()
+    backend._graph_spec = graph_spec
+    backend._output_input_aliases = {state_name: state_input_name}
+    backend._aliased_outputs = {state_name: state[0]}
+    backend._output_allocator = mocker.Mock(outputs={output_name: runtime_output})
+    arguments = graph_spec.forward_signature.normalize((x, state), {}).arguments
+
+    result = backend._prepare_outputs_for_return(arguments)
+
+    assert result is runtime_output
+    assert state[0] is backend._aliased_outputs[state_name]
 
 
 @requires_cuda
@@ -584,7 +737,7 @@ def test_backend_inference_returns_copy_of_tensors(tmp_path):
     model.eval()
     x = torch.tensor([[1, 1]], device=device)
     args, kwargs = (x,), {}
-    graph_spec = make_graph_spec(model.forward, (args, kwargs), x)
+    graph_spec = make_recorded_graph_spec(model, (args, kwargs))
 
     backend = TensorRTBackend()
     backend = backend.build(
@@ -615,7 +768,7 @@ def test_backend_handle_args_kwargs(tmp_path, use_dynamo):
     x = torch.tensor([[1, 1]], device=device)
     y = torch.tensor([[1, 1]], device=device)
     args, kwargs = (x,), {"y": y}
-    graph_spec = make_graph_spec(model.forward, (args, kwargs), (x, y))
+    graph_spec = make_recorded_graph_spec(model, (args, kwargs))
 
     config = TensorRTBackendConfig(use_dynamo=use_dynamo)
     backend = TensorRTBackend(config=config)
@@ -1259,6 +1412,8 @@ def test_set_input_tensors_rejects_invalid_address(mocker):
 
 def test_infer_selects_optimization_profile_before_setting_inputs(mocker):
     backend = TensorRTBackend(TensorRTBackendConfig(use_cuda_graphs=False))
+    backend._graph_spec = mocker.MagicMock()
+    backend._graph_spec.forward_signature.normalize.return_value.arguments = {}
     backend._context = mocker.MagicMock()
     backend._context.execute_async_v3.return_value = True
     backend._cuda_stream = mocker.MagicMock()
