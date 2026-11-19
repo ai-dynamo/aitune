@@ -12,8 +12,7 @@ from typing import Any
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.methods import is_compiled_module
-from aitune.torch.call_tree.nodes import CallNode, CallPath, TimedIteration, format_call_path
+from aitune.torch.call_tree.nodes import CallNode, CallPath, TimedIteration
 from aitune.torch.call_tree.recording.base import NO_RESULT, CallRecorder
 
 logger = getLogger(__name__)
@@ -32,11 +31,6 @@ def _record(event: Any, stream: Any) -> None:
     if _event_record is None:
         _event_record = torch._C._CudaEventBase.record
     _event_record(event, stream)
-
-
-def _format_paths(paths: list[CallPath]) -> str:
-    """The paths joined for a warning message: at most three, then an ellipsis."""
-    return ", ".join(format_call_path(path) for path in paths[:3]) + (", …" if len(paths) > 3 else "")
 
 
 def depth_schedule(tree: CallTree) -> list[int | None]:
@@ -156,11 +150,10 @@ class TimingRecorder(CallRecorder):
     ``timings`` mean the node was not timed in this pass, for example a call inside a compiled part, never that it
     took no time. To keep several timed trees, time a ``tree.copy()`` each.
 
-    Diagnostics: a call can stay untimed when ``number_of_iterations`` is too small to time every depth, or when a
-    sample behaves differently than in the structure pass, for example under random sampling. When the ``with``
-    block ends, one warning lists the nodes left without a time, with a hint when a depth was never timed. Calls
-    inside a part compiled with ``nn.Module.compile()`` or ``torch.compile`` are expected to have no time and are
-    not listed.
+    Diagnostics: with fewer iterations than the tree has depths, or when a sample behaves differently than in the
+    structure pass, some depth may never be timed. When the ``with`` block ends, one warning names the untimed
+    depths and the ``number_of_iterations`` that would time every depth. Calls inside a compiled part have no time
+    either, without a warning.
 
     Example:
         >>> from aitune.torch.call_tree.nodes import CallNode
@@ -239,7 +232,7 @@ class TimingRecorder(CallRecorder):
             self._tree.nodes[path].timings = [
                 TimedIteration(iteration, len(times), sum(times)) for iteration, times in sorted(samples.items())
             ]
-        self._report_untimed_calls()
+        self._report_untimed_depths()
 
     def begin_iteration(self) -> None:
         """Start the next timing-pass iteration: time the depth the schedule plans for it.
@@ -300,60 +293,25 @@ class TimingRecorder(CallRecorder):
             pool.append(end)
         self._events.clear()
 
-    def _compiled_root_ids(self) -> set[int]:
-        """Ids of the compiled roots in the tree.
+    def _report_untimed_depths(self) -> None:
+        """Warn once when the pass ended without timing every call-path depth of the tree.
 
-        A module counts as compiled when ``nn.Module.compile()`` set ``_compiled_call_impl`` on it,
-        ``torch.compile()`` wrapped it in an ``OptimizedModule``, or its ``forward`` is a ``torch.compile``'d
-        callable (``module.forward = torch.compile(module.forward)``).
+        Nodes at an untimed depth keep ``time_ms`` None. Nodes can also stay untimed at a timed depth, for example
+        calls inside a compiled part or calls a sample made only in the structure pass; the tree shows those as
+        ``time_ms`` None without a warning.
         """
-        roots: set[int] = set()
-        for _, module in self._tree.modules:
-            if is_compiled_module(module):
-                roots.add(id(module))
-        return roots
-
-    def _inside_compiled(self, path: CallPath, roots: set[int]) -> bool:
-        """Whether ``path`` runs inside a compiled part, where the timing pass cannot see its calls.
-
-        That is when a strict ancestor on the path is a compiled root's ``forward`` call: everything below it
-        runs inside the compiled code — a recursive call of the root included. ``compile()`` compiles the call
-        only, so the root's other methods (``encode()`` and the like) and calls below them run eagerly and are
-        not inside. The root's own node is not inside, it is timed as one call; neither is an eager call of a
-        module that also sits inside a compiled part, which has a different path.
-        """
-        for k in range(1, len(path)):
-            node = self._tree.nodes.get(path[:k])
-            if node is not None and node.module is not None and node.method == "forward" and id(node.module) in roots:
-                return True
-        return False
-
-    def _report_untimed_calls(self) -> None:
-        """Warn once about the nodes the pass left without a time.
-
-        Nodes inside a compiled part (below a compiled module's ``forward`` call) are excepted: calls inside run
-        compiled in the timing pass and are expected to have no time, while the compiled part itself is timed as
-        one call. Other methods of a compiled module run eagerly, so calls below them are listed like any other.
-        A hint is added when a listed node sits at a depth the pass never timed.
-        """
-        roots = self._compiled_root_ids()
-        untimed = [
-            path for path in self._tree.nodes if path not in self._samples and not self._inside_compiled(path, roots)
-        ]
-        if not untimed:
-            return
-        message = (
-            f"{len(untimed)} of the call tree's {len(self._tree.nodes)} nodes have no time (time_ms is None): "
-            f"{_format_paths(untimed)}."
-        )
-        if any(len(path) not in self._timed_depths for path in untimed):
-            deepest = max(len(path) for path in self._tree.nodes)
-            message += (
-                f" The timing pass times one call-path depth per iteration; number_of_iterations must be at least "
-                f"{deepest} to time every depth, and calls that only some samples make also need enough samples "
-                f"that make them."
+        deepest = max((len(path) for path in self._tree.nodes), default=0)
+        untimed = [depth for depth in range(1, deepest + 1) if depth not in self._timed_depths]
+        if untimed:
+            logger.warning(
+                "The timing pass times one call-path depth per iteration and did not time %s %s of %d, so nodes "
+                "there have no time (time_ms is None). number_of_iterations must be at least %d to time every "
+                "depth, and calls that only some samples make also need enough samples that make them.",
+                "depth" if len(untimed) == 1 else "depths",
+                ", ".join(map(str, untimed)),
+                deepest,
+                deepest,
             )
-        logger.warning("%s", message)
 
     def _add_sample(self, node: CallNode, milliseconds: float, iteration: int) -> None:
         """Record one timed call of ``node``, under the iteration that timed it."""

@@ -52,9 +52,10 @@ def inspect(
             with each node's time, tensor bytes, argument signatures and weight accesses. This runs two more passes
             of ``number_of_iterations``: one records the tree eagerly, the other times one call-path depth per
             iteration. Nodes left untimed, for example with fewer iterations than the tree has depths, keep
-            ``time_ms`` None, and a warning names them. Calls inside parts compiled with ``torch.compile`` get no
-            time of their own; the compiled part is timed as one call. For deep models the walk must reach the
-            linear layers, for example ``max_depth=8``. Details are in ``docs/guides/aot_inspect.md``.
+            ``time_ms`` None, and a warning says which ``number_of_iterations`` would time every depth. Calls inside
+            parts compiled with ``torch.compile`` get no time of their own; the compiled part is timed as one call.
+            For deep models the walk must reach the linear layers, for example ``max_depth=8``. Details are in
+            ``docs/guides/aot_inspect.md``.
 
     Returns:
         InspectedModulesInfo object.
