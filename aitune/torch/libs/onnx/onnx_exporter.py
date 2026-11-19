@@ -140,7 +140,8 @@ class ONNXExporter:
             verbose=verbose,
             **export_kwargs,
         )
-        assert onnx_program is not None
+        if onnx_program is None:
+            raise RuntimeError("torch.onnx.export returned no ONNX program")
         # onnxscript 0.5.x optimizer can emit unbind's Split after its consumers; re-sort before saving.
         TopologicalSortPass()(onnx_program.model)
         onnx_program.save(onnx_path, external_data=True)

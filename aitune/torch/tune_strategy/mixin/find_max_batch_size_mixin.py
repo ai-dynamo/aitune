@@ -61,8 +61,6 @@ class FindMaxBatchSizeMixin(TuneStrategy):
             self._logger.info("🚀 Finding max batch size for %s", name)
             find_max_batch_size_cache_dir = cache_dir / "find_max_batch_size"
             build_log_file = self._log_file(find_max_batch_size_cache_dir, "build.log")
-            max_batch_size = None
-            max_throughput = None
             try:
                 with coordinator.raise_if_any_rank_fails("Building find-max-batch-size backend"):
                     backend = self._find_max_batch_size_backend_class()
@@ -97,8 +95,6 @@ class FindMaxBatchSizeMixin(TuneStrategy):
                 self._logger.info("⚠️ Finding max batch size for `%s` failed (log file: %s)", name, error_log_file)
                 raise
 
-            assert max_batch_size is not None
-            assert max_throughput is not None
             self._logger.info(
                 "✅ Max batch size for %s is %d with throughput %.2f samples/s",
                 name,

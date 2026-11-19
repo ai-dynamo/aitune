@@ -216,7 +216,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         outcome, gathered_results = coordinator.collect_results(result, local_error)
         if not outcome.succeeded:
             return None
-        assert result is not None
+        if result is None:
+            raise RuntimeError("Profiling succeeded on all ranks but produced no result")
         return self._aggregate_result(gathered_results)
 
     def _pre_tune(
@@ -277,7 +278,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             )
             return
 
-        assert result is not None
+        if result is None:
+            raise RuntimeError("Baseline profiling succeeded on all ranks but produced no result")
         result = self._aggregate_result(gathered_results)
         self._baseline_backend = backend
         self._baseline_result = result

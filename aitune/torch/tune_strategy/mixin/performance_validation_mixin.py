@@ -154,8 +154,8 @@ class PerformanceValidationMixin(TuneStrategy):
             )
             return
 
-        assert batch_size is not None
-        assert throughput is not None
+        if batch_size is None or throughput is None:
+            raise RuntimeError("Performance validation baseline succeeded on all ranks but produced no result")
         self._baseline_throughput = throughput
         self._baseline_backend = backend
         report_graph_baseline_metric("throughput", throughput)
@@ -212,8 +212,8 @@ class PerformanceValidationMixin(TuneStrategy):
             log("⚠️ Performance profiling failed for %s, performance check skipped", description, sink=self._sink)
             return built
 
-        assert batch_size is not None
-        assert throughput is not None
+        if batch_size is None or throughput is None:
+            raise RuntimeError(f"Performance profiling of {description} succeeded on all ranks but produced no result")
 
         if self._baseline_throughput == 0:
             log("⚠️ Baseline throughput is 0 for %s, performance check skipped", description, sink=self._sink)
