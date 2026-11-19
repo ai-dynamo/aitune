@@ -301,6 +301,7 @@ class CallTree:
                     "call_path": node.path_str,
                     "owner_class": node.owner_class,
                     "calls": node.calls,
+                    "inside_compiled_part": node.inside_compiled_part,
                     "time_ms": node.time_ms,
                     "timings": [
                         {"iteration": t.iteration, "calls": t.calls, "time_ms": t.time_ms} for t in node.timings

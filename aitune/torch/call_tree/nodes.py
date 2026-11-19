@@ -187,6 +187,10 @@ class CallNode:
             appears exactly once. A signature whose calls raised has ``outputs`` None.
         children: Call paths of the called nodes in first-call order.
         first_seen: Position of the node's first call among all nodes.
+        inside_compiled_part: Whether the call runs inside a compiled part, so the timing pass cannot time it (it
+            runs compiled there). The compiled part's own call is not inside it and is timed as one call. Calls
+            below a ``torch.compiler.disable``'d call inside a compiled part count as inside too: they run
+            eagerly, but the timing pass does not see the disabled call, so it cannot match them to their nodes.
 
     Example:
         >>> node = CallNode(
@@ -211,6 +215,7 @@ class CallNode:
     signatures: list[CallSignature] = field(default_factory=list)
     children: list[CallPath] = field(default_factory=list)
     first_seen: int = 0
+    inside_compiled_part: bool = False
 
     @property
     def time_ms(self) -> float | None:

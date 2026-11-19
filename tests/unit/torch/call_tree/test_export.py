@@ -45,6 +45,7 @@ def test_to_dict_exports_the_whole_tree():
         if node.module is not None:
             assert _object_path(exported["call_path"]) in d["modules"]
         assert exported["calls"] == node.calls
+        assert exported["inside_compiled_part"] == node.inside_compiled_part
         assert exported["time_ms"] == node.time_ms
         assert exported["timings"] == [
             {"iteration": t.iteration, "calls": t.calls, "time_ms": t.time_ms} for t in node.timings
@@ -55,6 +56,7 @@ def test_to_dict_exports_the_whole_tree():
             "call_path",
             "owner_class",
             "calls",
+            "inside_compiled_part",
             "time_ms",
             "timings",
             "bytes_in",

@@ -11,7 +11,7 @@ from typing import Any
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.recording import StructureRecorder, TimingRecorder
+from aitune.torch.call_tree.recording import StructureRecorder, TimingRecorder, timeable_depths
 from aitune.torch.call_tree.sync import synchronize_call_tree
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, ensure_enough_samples, samples_generator
 from aitune.torch.distributed import coordinator
@@ -146,8 +146,7 @@ def _record_call_tree(
             stack.close()
     with coordinator.raise_if_any_rank_fails("Reading the call tree's structure"):
         tree = recorder.result()
-    deepest = max((len(path) for path in tree.nodes), default=0)
-    logger.info("Timing the call tree, one call-path depth per iteration (%d depths).", deepest)
+    logger.info("Timing the call tree, one call-path depth per iteration (%d depths).", len(timeable_depths(tree)))
     with contextlib.ExitStack() as stack:
         with coordinator.raise_if_any_rank_fails("Starting the call tree timing pass"):
             timer = stack.enter_context(TimingRecorder(tree))
