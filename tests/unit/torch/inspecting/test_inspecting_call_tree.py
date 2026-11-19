@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """``ait.inspect(..., call_tree=True)``: the recorder pass and its effect on the legacy output."""
 
+import contextlib
 import unittest.mock
 
 import pytest
@@ -335,6 +336,50 @@ def test_a_torch_compiled_sequential_gets_a_timed_node(mocker, dataset):
     warning.assert_not_called()
 
 
+def test_a_compiled_modules_encode_call_exposes_its_children(mocker, dataset):
+    """``module.compile()`` compiles the call (``forward``) only: an ``encode()`` of the compiled module runs
+    eagerly in the timing pass, so the calls below it are seen and timed like any other — no warning."""
+
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+        def encode(self, x):
+            return self.lin(x)
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child.encode(x)
+
+    inner = Inner()
+    inner.compile(backend="eager")
+    model = Root(inner)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    path = ("root.forward", "root.child.encode", "root.child.lin.forward")
+    assert path in tree.nodes
+    assert tree.nodes[path].time_ms is not None
+    warning.assert_not_called()
+
+
 def test_a_torch_compiled_child_that_recurses_records_the_nested_call(mocker, dataset):
     """A compiled module whose forward calls itself: the mark suppresses only the first entry, so the
     structure pass records the nested call and the timing pass reports it, not as a missing call."""
@@ -427,6 +472,74 @@ def test_flush_failure_is_raised_through_the_rank_failure_context(mocker, datase
         inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
     spy.assert_any_call("Resolving call tree timings")
+    assert nn.Module._apply is original_apply
+
+
+def test_timing_pass_entry_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    mocker.patch.object(TimingRecorder, "_start", side_effect=RuntimeError("bad start"))
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad start"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Starting the call tree timing pass")
+    begin.assert_not_called()  # the failure on entry ran no timed inference
+    assert nn.Module._apply is original_apply
+
+
+def test_timing_pass_entry_peer_failure_exits_the_recorder(mocker, dataset):
+    model, fn = _vla()
+    real_guard = coordinator.raise_if_any_rank_fails
+    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    stop = mocker.spy(TimingRecorder, "_stop")
+    original_apply = nn.Module._apply
+
+    @contextlib.contextmanager
+    def _peer_failed():
+        yield
+        raise RuntimeError("peer failed")
+
+    mocker.patch.object(
+        coordinator,
+        "raise_if_any_rank_fails",
+        side_effect=lambda op: _peer_failed() if op == "Starting the call tree timing pass" else real_guard(op),
+    )
+
+    with pytest.raises(RuntimeError, match="peer failed"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    begin.assert_not_called()  # entry succeeded locally but no timed inference ran
+    stop.assert_called_once()
+    assert stop.call_args.kwargs["completed"] is False  # the recorder exited through the failed path
+    assert nn.Module._apply is original_apply
+
+
+def test_timing_pass_exit_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    mocker.patch.object(TimingRecorder, "_stop", side_effect=RuntimeError("bad stop"))
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad stop"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Ending the call tree timing pass")
+    assert nn.Module._apply is original_apply
+
+
+def test_structure_result_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    mocker.patch.object(StructureRecorder, "result", side_effect=RuntimeError("bad result"))
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad result"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Reading the call tree's structure")
     assert nn.Module._apply is original_apply
 
 
