@@ -48,22 +48,13 @@ def inspect(
         warmup_iterations: Number of iterations to run for warmup.
         min_depth: Minimum depth of the modules to inspect, if root level modules is not working, try to increase this value
         max_depth: Maximum depth of the modules to inspect
-        call_tree: Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran
-            inside which, keyed by their chain of callers. Per node it records tensor bytes in and out, plus
-            deduplicated ``signatures``: the dtypes and shapes of the tensors and the types of other objects passed
-            in and returned, each signature listing which calls had it and, for each tensor or object, where it
-            last appeared in a recorded call (``source``). It also records the reads and device lookups code
-            outside a module makes on its weights. This runs two more passes of ``number_of_iterations``, so
-            inspection takes longer. The first, structure pass runs eagerly and without per-module
-            synchronization; it records the tree and records no times. The second, timing pass times calls with all
-            tracking off, each iteration timing one call-path depth, chosen from the calls that sample made in
-            the structure pass, so no timed call runs inside another and calls that only some samples make are
-            timed too. Nodes the iterations can't cover keep ``time_ms`` None; the timing pass logs one warning
-            listing them, grouped by cause, with the ``number_of_iterations`` that would time every depth when that
-            is the cause. Parts
-            compiled with ``torch.compile`` run compiled in the timing pass, so calls inside them get no time; a
-            node with no timed calls has ``time_ms`` None. For deep models the walk must reach
-            the linear layers, for example ``max_depth=8``.
+        call_tree: Also record the call tree (``InspectedModulesInfo.call_tree``): which calls ran inside which,
+            with each node's time, tensor bytes, argument signatures and weight accesses. This runs two more passes
+            of ``number_of_iterations``: one records the tree eagerly, the other times one call-path depth per
+            iteration. Nodes left untimed, for example with fewer iterations than the tree has depths, keep
+            ``time_ms`` None, and a warning names them. Calls inside parts compiled with ``torch.compile`` get no
+            time of their own; the compiled part is timed as one call. For deep models the walk must reach the
+            linear layers, for example ``max_depth=8``. Details are in ``docs/guides/aot_inspect.md``.
 
     Returns:
         InspectedModulesInfo object.
@@ -75,8 +66,8 @@ def inspect(
     setup_logging(format_string=LOG_FORMAT)
 
     logger.info("Inspecting object searching for executed nn.Module members.")
-    structure = StructureRecorder() if call_tree else None
-    model_inspector = ModuleInspector(min_depth=min_depth, max_depth=max_depth, recorder=structure)
+    recorder = StructureRecorder() if call_tree else None
+    model_inspector = ModuleInspector(min_depth=min_depth, max_depth=max_depth, recorder=recorder)
     try:
         model_inspector.inspect(obj)
 
@@ -100,8 +91,8 @@ def inspect(
         total_execution_time, modules = _synchronize_inspection_result(total_execution_time, modules)
 
         tree = None
-        if structure is not None:
-            tree = _record_call_tree(structure, inference_function, dataset, number_of_iterations)
+        if recorder is not None:
+            tree = _record_call_tree(recorder, inference_function, dataset, number_of_iterations)
 
         logger.info("Inspection done. Found %d candidate modules for tuning.", len(modules))
 
@@ -134,7 +125,7 @@ def _run_inference(obj: Callable, args: Sequence[Any], kwargs: dict[str, Any]) -
 
 
 def _record_call_tree(
-    structure: StructureRecorder,
+    recorder: StructureRecorder,
     inference_function: Callable,
     dataset: DatasetLike | DataLoaderFactory | torch.Tensor,
     number_of_iterations: int,
@@ -143,17 +134,17 @@ def _record_call_tree(
     logger.info("Recording the call tree's structure.")
     with contextlib.ExitStack() as stack:
         with coordinator.raise_if_any_rank_fails("Starting the call tree's structure pass"):
-            stack.enter_context(structure)
+            stack.enter_context(recorder)
         # Recording reads each weight access eagerly; Dynamo cannot trace the TorchFunctionMode.
         stack.enter_context(torch.compiler.set_stance("force_eager"))
         for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
-            structure.begin_iteration()
+            recorder.begin_iteration()
             _run_inference(inference_function, args, kwargs)
-            structure.end_iteration()
+            recorder.end_iteration()
         with coordinator.raise_if_any_rank_fails("Ending the call tree's structure pass"):
             stack.close()
     with coordinator.raise_if_any_rank_fails("Reading the call tree's structure"):
-        tree = structure.result()
+        tree = recorder.result()
     deepest = max((len(path) for path in tree.nodes), default=0)
     logger.info("Timing the call tree, one call-path depth per iteration (%d depths).", deepest)
     with contextlib.ExitStack() as stack:

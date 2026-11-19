@@ -261,25 +261,39 @@ What is recorded:
   source; neither has an object without weak-reference support, such as one whose class defines `__slots__`
   without `__weakref__`.
 
-`call_tree=True` runs two more passes of `number_of_iterations`, so inspection takes longer. The structure pass
-runs eagerly — parts compiled with `torch.compile` too, so their calls and weight reads are recorded — and records
-no times. The timing pass runs without that tracking and with compiled parts compiled; each iteration times one
-call-path depth, chosen from the calls that sample made in the structure pass, so no timed call runs inside
-another and calls that only some samples make are timed too. Nodes the iterations can't cover, for example deeper
-depths with fewer iterations than depths, are not timed (`time_ms` is `null`); the timing pass logs one warning
-listing them, grouped by cause, with the `number_of_iterations` that would time every depth when that is the cause. Calls inside a compiled part get no time (`time_ms` is
-`null`). What remains
-is the wrappers' Python per call (about 2 µs), which still adds to calls with many calls inside where the GPU waits
-for the CPU — on roberta-base at batch 1 the encoder reads about 25% high, at batch 8 within a few percent — so use
-the times for a rough comparison, not as deployed latency; eager and tuned trees can be compared. `get_modules()` and
-`describe()` are unchanged: they still come from the synchronized pass. The object walk has to reach the linear
-layers, so deep models need a larger `max_depth` (8 for BAGEL-sized pipelines).
+### How the call tree is recorded
 
-Limits: exact `nn.Sequential`, `nn.ModuleList` and
-`nn.ModuleDict` containers are skipped and their children attached to the caller; a call that takes a callable as an
-argument (a checkpoint helper) is skipped the same way; free functions are not recorded. CUDA times come from
-events on the device that was current when a call started, so work that a call runs on other GPUs is not fully
-counted.
+`call_tree=True` adds two passes of `number_of_iterations` after the per-module pass that `get_modules()` comes
+from, so inspection takes longer:
+
+1. **The structure pass** records the tree: every call with its arguments, tensor bytes and weight accesses. It runs
+   eagerly, parts compiled with `torch.compile` included, so the calls inside them are recorded too. This tracking
+   runs in Python and would distort times, so the structure pass records none.
+2. **The timing pass** replays the same samples in the same order, with all tracking off and compiled parts
+   compiled. Each iteration times the calls at one call-path depth only, so no timed call runs inside another. The
+   depth for each iteration is planned from the calls the structure pass saw for that sample, so calls that only
+   some samples make are timed too.
+
+Some nodes get no time (`time_ms` is `null`):
+
+- deeper nodes, when there are fewer iterations than the tree has depths. `inspect` then logs a warning that names
+  them and the `number_of_iterations` that would time every depth;
+- calls inside a compiled part, since they run inside the compiled code. The compiled part itself is timed as one
+  call.
+
+The times are close to a normal eager run, but not exact: every call inside a timed call still runs through its
+recording wrapper, about 0.7 µs each. Where the GPU waits for the CPU, that adds up for calls with many calls inside:
+on roberta-base at batch 1, the encoder reads about 10% high; at batch 8, within a few percent. Use the times to
+compare nodes, or eager with tuned trees, not as deployed latency.
+
+`get_modules()` and `describe()` are unchanged. The object walk has to reach the linear layers, so deep models need
+a larger `max_depth` (8 for BAGEL-sized pipelines).
+
+Limits: exact `nn.Sequential`, `nn.ModuleList` and `nn.ModuleDict` containers are skipped and their children
+attached to the caller, unless the container itself is compiled with `module.compile()`. A call that takes a
+callable as an argument (a checkpoint helper) is skipped the same way, and free functions are not recorded. CUDA
+times come from events on the device that was current when a call started, so work that a call runs on other GPUs
+is not fully counted.
 
 ### Export the call tree
 
@@ -331,12 +345,11 @@ The exported data has this structure:
 }
 ```
 
-`iterations` is the number of recorded iterations and `calls`, `bytes_in` and `bytes_out` are totals over them —
-divide by `iterations` for per-iteration values, by `calls` for per-call. `time_ms` is an estimate of the same
-total from the timing pass: the median over the iterations that timed the node of its mean time per call within
-the iteration (the mean of those when fewer than three iterations timed it) times `calls`, or `null` when none
-was timed. `timings` lists what the timing pass measured, per iteration that timed the node (`iteration`, `calls`,
-`time_ms`); `time_ms` is the estimate derived from them.
+`iterations` is the number of recorded iterations; `calls`, `bytes_in` and `bytes_out` are totals over them.
+Divide by `iterations` for per-iteration values, by `calls` for per-call values. `time_ms` estimates the same total:
+the node's time per call, as the median over the iterations that timed it (the mean with fewer than three), times
+`calls`. It is `null` when the timing pass never timed the node. `timings` holds the measurements behind it, one
+entry per iteration that timed the node, with that iteration's `calls` and their summed `time_ms`.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
 the calls with exactly that signature, plus `inputs`/`outputs` dicts keyed by argument name (such as `x` or
 `inputs['input_ids']`), and `output` for the result, or `output[0]` and `output['logits']` for values nested in it.

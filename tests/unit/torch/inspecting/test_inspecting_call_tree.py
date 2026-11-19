@@ -194,7 +194,6 @@ def test_fewer_iterations_than_depths_leaves_deep_nodes_untimed(mocker, dataset)
     assert all(node.time_ms is None for node in tree.nodes.values() if len(node.path) > 2)
     warning.assert_called_once()
     text = warning.call_args.args[1]
-    assert "are at depths the timing pass never timed" in text
     assert f"number_of_iterations must be at least {deepest}" in text
 
 
@@ -265,6 +264,42 @@ def test_a_part_compiled_with_module_compile_logs_no_timing_warning(mocker, data
     )
 
     assert ("root.forward", "root.child.forward", "root.child.lin.forward") in _tree(info).nodes
+    warning.assert_not_called()
+
+
+def test_a_part_compiled_through_its_forward_logs_no_timing_warning(mocker, dataset):
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    inner = Inner()
+    inner.forward = torch.compile(inner.forward, backend="eager")
+    model = Root(inner)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    assert ("root.forward", "root.child.forward", "root.child.lin.forward") in _tree(info).nodes
+    assert _tree(info).nodes[("root.forward", "root.child.forward")].time_ms is not None
     warning.assert_not_called()
 
 

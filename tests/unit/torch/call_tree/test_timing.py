@@ -3,7 +3,6 @@
 
 import itertools
 import threading
-from collections import Counter
 
 import pytest
 import torch
@@ -110,7 +109,6 @@ def test_calls_inside_a_timed_call_are_skipped(mocker):
 
     child_path = ("root.forward", "root.child.forward")
     assert ran and stack_during_root == [1]
-    assert child_path not in timer._calls
     assert timer._stack == []
     assert tree.nodes[("root.forward",)].time_ms is not None
     assert tree.nodes[child_path].time_ms is None
@@ -135,10 +133,11 @@ def test_an_iteration_beyond_the_recorded_ones_times_nothing(mocker):
         child = timer.begin_call("root.child.forward", model, "forward", ())
         timer.end_call(child)
         timer.end_call(root)
-        assert timer._expected_calls() == {("root.forward",): Counter({0: 1})}
 
     assert all(node.time_ms is None for node in tree.nodes.values())
-    assert "did not run in the timing pass" not in _warning_text(warning)
+    text = _warning_text(warning)
+    assert "2 of the call tree's 2 nodes have no time" in text
+    assert "number_of_iterations must be at least 2" in text
 
 
 def _perf_reads(durations_ms: list[float]) -> list[float]:
@@ -707,7 +706,6 @@ def test_a_node_that_did_not_run_is_reported(mocker):
 
     text = _warning_text(warning)
     assert "1 of the call tree's 2 nodes have no time" in text
-    assert "did not run in the timing pass" in text
     assert "a > b" in text
 
 
@@ -733,8 +731,8 @@ def test_a_depth_the_pass_never_timed_is_reported_with_the_needed_iterations(moc
 
 
 def test_calls_below_the_timed_depth_are_skipped_and_the_node_is_reported(mocker):
-    """A call nested inside a timed call is skipped entirely — the recorder never counts it — so the node the
-    structure pass recorded is reported as not run when no timed depth ever reaches it."""
+    """A call nested inside a timed call is skipped entirely — the recorder never records it — so the node the
+    structure pass recorded is reported when no timed call ever runs it."""
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
     warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
     root_path, child_path = ("root.forward",), ("root.forward", "root.child.forward")
@@ -752,10 +750,10 @@ def test_calls_below_the_timed_depth_are_skipped_and_the_node_is_reported(mocker
         timer.begin_iteration()  # depth 1 again
         call("root.forward")
 
-    assert child_path not in timer._calls  # the skip kept the child out of the counts entirely
+    assert child_path not in timer._samples  # the skip kept the child out of the recording entirely
     assert tree.nodes[child_path].time_ms is None
     text = _warning_text(warning)
-    assert "did not run in the timing pass" in text
+    assert "1 of the call tree's 2 nodes have no time" in text
     assert "child.forward" in text
 
 
@@ -782,64 +780,6 @@ def test_a_node_without_a_time_is_listed_when_its_depth_was_timed_elsewhere(mock
     assert node.time_ms is None
     text = _warning_text(warning)
     assert "a > x" in text
-
-
-def test_a_different_call_count_is_reported_but_the_node_is_timed(mocker):
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    root_path, child_path = ("root.forward",), ("root.forward", "root.child.forward")
-    tree = _tree_of([[root_path, child_path], [root_path, child_path]])
-    model = nn.Linear(2, 2)
-
-    with TimingRecorder(tree) as timer:
-        timer.begin_iteration()  # depth 1: only the root is counted
-        timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
-        timer.begin_iteration()  # depth 2 covers the child; it runs one time too many
-        root = timer.begin_call("root.forward", model, "forward", ())
-        for _ in range(2):
-            timer.end_call(timer.begin_call("root.child.forward", model, "forward", ()))
-        timer.end_call(root)
-
-    assert tree.nodes[child_path].time_ms is not None
-    text = _warning_text(warning)
-    assert "ran a different number of times than in the structure pass" in text
-    assert "child.forward" in text
-
-
-def test_a_different_call_count_in_one_iteration_is_reported(mocker):
-    """The same total shifted between iterations — 1 then 3 recorded, 3 then 1 timed — still differs."""
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    a = ("root.forward",)
-    tree = _tree_of([[a], [a, a, a]])
-    model = nn.Linear(2, 2)
-
-    with TimingRecorder(tree) as timer:  # the schedule times depth 1 in both iterations; every call is counted
-        timer.begin_iteration()
-        for _ in range(3):  # runs 3 times where the structure pass made 1 call
-            timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
-        timer.begin_iteration()
-        timer.end_call(timer.begin_call("root.forward", model, "forward", ()))  # once where it made 3
-
-    text = _warning_text(warning)
-    assert "ran a different number of times than in the structure pass" in text
-    assert text.count("forward") == 1  # one entry for the path (rendered "forward"), not one per iteration
-
-
-def test_a_call_without_a_recorded_node_is_reported(mocker):
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    tree = _tree_with_a_child()
-    model = nn.Linear(2, 2)
-
-    with TimingRecorder(tree) as timer:
-        timer.begin_iteration()
-        timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
-        timer.end_call(timer.begin_call("root.unknown.forward", model, "forward", ()))
-
-    text = _warning_text(warning)
-    assert "calls in the timing pass have no recorded node" in text
-    assert "unknown.forward" in text
 
 
 def _tree_with_a_compiled_module() -> tuple[CallTree, nn.Module]:
@@ -931,7 +871,7 @@ def test_an_optimized_module_is_the_exclusion_root(mocker):
         timer.begin_iteration()
 
     text = _warning_text(warning)
-    assert "did not run" in text
+    assert "1 of the call tree's 2 nodes have no time" in text
     assert "child" not in text
 
 
@@ -990,7 +930,7 @@ def test_an_eager_call_of_a_module_inside_a_compiled_part_is_reported(mocker):
             timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
 
     text = _warning_text(warning)
-    assert "did not run" in text
+    assert "2 of the call tree's 4 nodes have no time" in text
     assert "eager" in text
     assert "inner" not in text
 
@@ -1004,7 +944,7 @@ def test_a_compiled_module_that_did_not_run_is_reported(mocker):
         timer.begin_iteration()
 
     text = _warning_text(warning)
-    assert "did not run" in text
+    assert "1 of the call tree's 2 nodes have no time" in text
     # only the compiled module's own node is listed; the call inside it is expected to have no time
     assert "child" not in text
 
@@ -1024,7 +964,7 @@ def test_more_than_three_untimed_paths_get_an_ellipsis(mocker):
             timer.end_call(timer.begin_call("a", model, "forward", ()))
 
     text = _warning_text(warning)
-    assert "did not run in the timing pass" in text
+    assert "4 of the call tree's 5 nodes have no time" in text
     assert "a > b1, a > b2, a > b3, …" in text
     assert "b4" not in text
 
