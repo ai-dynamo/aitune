@@ -673,18 +673,18 @@ class HTMLGenerator:
                         <h4>📥 Input Arguments</h4>
                         <div class="detail-item">
                             <div class="detail-label">Args Types</div>
-                            {args_html if args_html else '<div class="detail-value">No arguments</div>'}
+                            {args_html or '<div class="detail-value">No arguments</div>'}
                         </div>
                         <div class="detail-item">
                             <div class="detail-label">Kwargs Types</div>
-                            {kwargs_html if kwargs_html else '<div class="detail-value">No keyword arguments</div>'}
+                            {kwargs_html or '<div class="detail-value">No keyword arguments</div>'}
                         </div>
                     </div>
                     <div class="detail-section">
                         <h4>📤 Output Information</h4>
                         <div class="detail-item">
                             <div class="detail-label">Result Types</div>
-                            {output_types_html if output_types_html else '<div class="detail-value">No output data</div>'}
+                            {output_types_html or '<div class="detail-value">No output data</div>'}
                         </div>
                     </div>
                     {f'<div class="detail-section"><h4>🌳 Child Modules ({len(module._children)})</h4>{children_html}</div>' if module._children else ""}

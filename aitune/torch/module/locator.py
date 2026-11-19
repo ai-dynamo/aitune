@@ -161,8 +161,7 @@ class Locator:
             if i > 0:  # we have to modify parent with changed child reference
                 parent_locator = Locator(self._access_path[:i], self._is_output)
                 return parent_locator.set_value(root, obj)
-            else:
-                return obj
+            return obj
         else:
             obj[accessor] = value  # type: ignore
         return root
@@ -288,11 +287,11 @@ class Locator:
         """
         if issubclass(obj_type, list | tuple):
             return Locator._iter_sequence
-        elif issubclass(obj_type, (dict, UserDict)):
+        if issubclass(obj_type, (dict, UserDict)):
             return Locator._iter_dict
-        elif dataclasses.is_dataclass(obj_type):
+        if dataclasses.is_dataclass(obj_type):
             return Locator._iter_dataclass
-        elif obj_type in Locator._user_types:
+        if obj_type in Locator._user_types:
             return Locator._iter_user_type
 
         return None

@@ -4,7 +4,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from wrapt import lazy_import
 
@@ -95,8 +95,7 @@ class TensorRTRuntime:
                 if not engine_path.exists():
                     raise FileNotFoundError(f"TensorRT engine file not found: {engine_path}")
 
-                with open(engine_path, "rb") as f:
-                    engine_bytes = f.read()
+                engine_bytes = engine_path.read_bytes()
 
                 if not engine_bytes:
                     raise ValueError(f"TensorRT engine file is empty: {engine_path}")
@@ -126,13 +125,11 @@ class TensorRTRuntime:
         with annotate("Creating execution context"):
             try:
                 # Create runtime and deserialize engine
-                log_level = global_context.get(LIBRARY_LOGGING_KEY, logger.level)
+                log_level = cast(int, global_context.get(LIBRARY_LOGGING_KEY, logger.level))
 
                 # Use Python-based logger that routes through logging system
                 # This allows control_output() to capture TensorRT messages to files
-                trt_log_severity = _get_log_level_mapping().get(
-                    log_level if log_level <= logging.CRITICAL else logging.CRITICAL, trt.Logger.INFO
-                )
+                trt_log_severity = _get_log_level_mapping().get(min(log_level, logging.CRITICAL), trt.Logger.INFO)
                 trt_logger = PythonTRTLogger(severity=trt_log_severity)
 
                 runtime = trt.Runtime(trt_logger)

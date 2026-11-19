@@ -46,7 +46,7 @@ def get_device(device: str | torch.device) -> str:
         if device.type != "cuda":
             raise ValueError("Device must be 'cuda' type")
         return f"{device.type}:{device.index or 0}"
-    elif isinstance(device, str):
+    if isinstance(device, str):
         pattern = r"^cuda:(\d+)$"
         match = re.match(pattern, device)
         if match:

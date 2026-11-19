@@ -101,7 +101,7 @@ def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
     """Capture all config attributes for the given tuning mode."""
     if mode == AITuneMode.DECLARATIVE:
         return json_serialize(config.to_dict())
-    elif mode == AITuneMode.JIT:
+    if mode == AITuneMode.JIT:
         from aitune.torch.jit.config import config as jit_config
         from aitune.torch.tune_strategy.resolver import resolve_strategy
 

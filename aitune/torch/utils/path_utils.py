@@ -69,9 +69,8 @@ def format_file_size(size_bytes: int) -> str:
     """
     if size_bytes >= 1_073_741_824:  # 1024^3
         return f"{size_bytes / 1_073_741_824:.1f} GB"
-    elif size_bytes >= 1_048_576:  # 1024^2
+    if size_bytes >= 1_048_576:  # 1024^2
         return f"{size_bytes / 1_048_576:.1f} MB"
-    elif size_bytes >= 1_024:  # 1024
+    if size_bytes >= 1_024:  # 1024
         return f"{size_bytes / 1_024:.1f} KB"
-    else:
-        return f"{size_bytes} B"
+    return f"{size_bytes} B"
