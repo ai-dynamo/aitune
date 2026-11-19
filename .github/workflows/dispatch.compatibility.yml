@@ -125,15 +125,6 @@ jobs:
     container:
       image: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda.cuda_image }}:latest
     steps:
-      - name: Install Node for local act
-        if: ${{ env.ACT == 'true' }}
-        run: |
-          node_dir="$RUNNER_TEMP/node"
-          mkdir -p "$node_dir"
-          curl -fsSL https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz \
-            | tar -xz --strip-components=1 -C "$node_dir"
-          echo "$node_dir/bin" >> "$GITHUB_PATH"
-          "$node_dir/bin/node" --version
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
