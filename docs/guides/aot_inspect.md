@@ -292,16 +292,20 @@ The exported data has this structure:
   "nodes": [
     {"call_path": "forward", "owner_class": "Vla", "calls": 2, "time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
-     "calls": 10, "time_ms": 25.0, "bytes_in": 3670016, "bytes_out": 3670016,
+     "calls": 10, "time_ms": 25.0, "bytes_in": 3670056, "bytes_out": 3670016,
      "signatures": [
          {"call_indices": [0, 5],
           "inputs": {"hidden_states": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
-                                       "shape": [1, 220, 4096]}, ...},
-          "outputs": {...}},
+                                       "shape": [1, 220, 4096]},
+                     "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
+          "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
+                                 "shape": [1, 220, 4096]}}},
          {"call_indices": [1, 2, 3, 4, 6, 7, 8, 9],
           "inputs": {"hidden_states": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
-                                       "shape": [1, 1, 4096]}, ...},
-          "outputs": {...}}],
+                                       "shape": [1, 1, 4096]},
+                     "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
+          "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
+                                 "shape": [1, 1, 4096]}}}],
      "iteration_starts": [0, 5]}
   ],
   "modules": {"dit": {"class": "my_pkg.Dit",
@@ -314,8 +318,9 @@ The exported data has this structure:
 `iterations` is the number of recorded iterations and all node values (`calls`, `time_ms`, `bytes_in`,
 `bytes_out`) are totals over them — divide by `iterations` for per-iteration values, by `calls` for per-call.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
-the calls with exactly that signature, plus `inputs`/`outputs` dicts keyed by argument name (such as `x` or `inputs['input_ids']`) — every leaf with
-`type`, tensors also `dtype` and exact `shape`; `outputs` is null for a signature whose calls raised.
+the calls with exactly that signature, plus `inputs`/`outputs` dicts keyed by argument name (such as `x` or
+`inputs['input_ids']`), and `output` for the result, or `output[0]` and `output['logits']` for values nested in it.
+Every leaf has `type`, tensors also `dtype` and exact `shape`; `outputs` is null for a signature whose calls raised.
 `iteration_starts` gives how many of the node's calls were made before each iteration began.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:

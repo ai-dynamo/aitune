@@ -364,15 +364,21 @@ def _named_leaves(value: Any, root: str, seen: set[int] | None = None) -> Iterat
       runs no code of the class unless a property shadows the field; a field without a value, such as an unset
       slot, is skipped. Dataclasses that pytree flattens itself, such as ``ModelOutput``, are walked by pytree.
 
-    Everything else is a leaf and not looked into. The steps follow pytree's ``keystr`` style: ``x[0]`` for
+    Everything else is a leaf and not looked into. The suffixes follow pytree's ``keystr`` style: ``x[0]`` for
     sequences, ``x['key']`` for mappings, ``x.field`` for namedtuples and dataclass fields. pytree's
     ``tree_flatten_with_path`` isn't used because transformers registers ``ModelOutput`` without a
     ``flatten_with_keys_fn``, so it raises for model outputs.
+
+    Example:
+        >>> t = torch.zeros(2)
+        >>> [(name, type(leaf).__name__) for name, leaf in _named_leaves({"ids": t, "extra": [t, "x"]}, "inputs")]
+        [("inputs['ids']", 'Tensor'), ("inputs['extra'][0]", 'Tensor'), ("inputs['extra'][1]", 'str')]
     """
     seen = set() if seen is None else seen
     stack = [(root, value)]
     while stack:
         name, obj = stack.pop()
+        # Only containers are walked once; a tensor or other leaf reached under two names is yielded under both.
         if torch.is_tensor(obj):
             yield name, obj
             continue
@@ -383,11 +389,30 @@ def _named_leaves(value: Any, root: str, seen: set[int] | None = None) -> Iterat
         if id(obj) in seen:
             continue
         seen.add(id(obj))
-        stack.extend((name + step, child) for step, child in reversed(children))
+        # Pushed reversed, so the stack pops the children in their own order.
+        stack.extend((name + suffix, child) for suffix, child in reversed(children))
 
 
 def _children(obj: Any) -> list[tuple[str, Any]] | None:
-    """A container's children as ``(step, child)`` pairs for ``_named_leaves``, or None if ``obj`` is a leaf."""
+    """The direct children of ``obj`` as ``(suffix, child)`` pairs, or None when ``obj`` is a leaf.
+
+    ``suffix`` is appended to the container's name to name the child: the child at ``[0]`` of ``x`` is ``x[0]``. The
+    suffixes depend on the kind of container:
+
+    - ``UserDict``: its ``.data``, a plain dict, under an empty suffix, so its entries are named like a dict's.
+    - A container pytree registers with keys (lists, tuples, dicts, namedtuples): pytree's keys, such as ``[0]``,
+      ``['key']`` or ``.field``.
+    - A container pytree registers without keys, such as transformers' ``ModelOutput``: see ``_suffixed_children``.
+    - A dataclass that pytree does not register: its fields, as ``.field`` (see ``_field_values``).
+
+    Anything else is a leaf.
+
+    Example:
+        >>> [suffix for suffix, _ in _children([1, 2])], [suffix for suffix, _ in _children({"a": 1})]
+        (['[0]', '[1]'], ["['a']"])
+        >>> _children(object()) is None
+        True
+    """
     if isinstance(obj, UserDict):
         return [("", obj.data)]
     node_def = torch.utils._pytree.SUPPORTED_NODES.get(torch.utils._pytree._get_node_type(obj))
@@ -395,9 +420,23 @@ def _children(obj: Any) -> list[tuple[str, Any]] | None:
         return _field_values(obj) if dataclasses.is_dataclass(obj) and not isinstance(obj, type) else None
     if node_def.flatten_with_keys_fn is not None:
         return [(str(key), child) for key, child in node_def.flatten_with_keys_fn(obj)[0]]
-    flat, context = node_def.flatten_fn(obj)
-    # transformers registers ModelOutput without keys: its context is the field names. Other
-    # registrations may use non-string or duplicate contexts; those children get positional names instead.
+    return _suffixed_children(*node_def.flatten_fn(obj))
+
+
+def _suffixed_children(flat: list[Any], context: Any) -> list[tuple[str, Any]]:
+    """The ``(suffix, child)`` pairs of a container that pytree registers without keys.
+
+    ``flat`` and ``context`` are what pytree's ``flatten_fn`` returns for the container: its children, and what
+    pytree needs to rebuild it. When ``context`` is a list of distinct strings, one per child, those strings name the
+    children like a dict's entries. That is how transformers registers ``ModelOutput``, with its field names, so its
+    children get suffixes such as ``['logits']``. Any other context gives positional suffixes: ``[0]``, ``[1]``, ...
+
+    Example:
+        >>> _suffixed_children([1, 2], ["logits", "hidden_states"])
+        [("['logits']", 1), ("['hidden_states']", 2)]
+        >>> _suffixed_children([1, 2], None)
+        [('[0]', 1), ('[1]', 2)]
+    """
     if (
         isinstance(context, (list, tuple))
         and len(context) == len(flat)
@@ -417,6 +456,9 @@ def _field_values(instance: Any) -> list[tuple[str, Any]]:
     return values
 
 
+# Types left out of signatures entirely: Python's scalars, strings and enums, and torch's ``dtype``, ``device``,
+# ``Size``, ``layout`` and ``memory_format``. Their values are immutable, compared by value and hold no tensor data,
+# so their type alone says nothing about a call. Recording their values instead is open in #184.
 _PRIMITIVES = (
     type(None),
     bool,

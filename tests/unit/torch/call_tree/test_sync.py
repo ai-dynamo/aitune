@@ -4,7 +4,7 @@
 import pytest
 import torch
 
-from aitune.torch.call_tree.sync import synchronize_call_tree
+from aitune.torch.call_tree.sync import _NodeRecord, synchronize_call_tree
 from tests.unit.torch.call_tree.helpers import make_tree, record
 
 BROADCAST = "aitune.torch.call_tree.sync.coordinator.broadcast_from_rank0"
@@ -17,7 +17,7 @@ def _tree(time_ms: float = 1.0, calls: int = 1):
 def _records(tree):
     starts = tree.iteration_starts()
     return tuple(
-        (k, n.owner_class, n.calls, starts[k], n.time_ms, n.bytes_in, n.bytes_out, n.signatures)
+        _NodeRecord(k, n.owner_class, n.calls, starts[k], n.time_ms, n.bytes_in, n.bytes_out, n.signatures)
         for k, n in tree.nodes.items()
     )
 
@@ -37,8 +37,8 @@ def test_rank_zero_times_are_applied(mocker):
 def test_different_keys_raise(mocker):
     tree = _tree()
     records = (
-        (("root.forward",), "root", 1, [], 10.0, 0, 0, []),
-        (("root.forward", "root.other.forward"), "other", 1, [], 1.0, 0, 0, []),
+        _NodeRecord(("root.forward",), "root", 1, [], 10.0, 0, 0, []),
+        _NodeRecord(("root.forward", "root.other.forward"), "other", 1, [], 1.0, 0, 0, []),
     )
     mocker.patch(BROADCAST, return_value=(2, records))
 

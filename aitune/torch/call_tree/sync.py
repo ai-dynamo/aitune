@@ -2,8 +2,28 @@
 # SPDX-License-Identifier: Apache-2.0
 """Synchronize a recorded call tree across distributed ranks."""
 
+from typing import NamedTuple
+
 from aitune.torch.call_tree.call_tree import CallTree
+from aitune.torch.call_tree.nodes import CallPath, CallSignature
 from aitune.torch.distributed import coordinator
+
+
+class _NodeRecord(NamedTuple):
+    """What rank zero broadcasts for one node: the structure every rank must share, and the values it applies."""
+
+    path: CallPath
+    owner_class: str
+    calls: int
+    iteration_starts: list[int]
+    time_ms: float | None
+    bytes_in: int
+    bytes_out: int
+    signatures: list[CallSignature]
+
+    def structure(self) -> tuple[str, int, list[int]]:
+        """The part every rank must have recorded identically."""
+        return self.owner_class, self.calls, self.iteration_starts
 
 
 def synchronize_call_tree(tree: CallTree) -> CallTree:
@@ -29,7 +49,7 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
     local = (
         tree.iterations,
         tuple(
-            (
+            _NodeRecord(
                 path,
                 node.owner_class,
                 node.calls,
@@ -45,7 +65,7 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
     rank_zero_iterations, rank_zero_records = coordinator.broadcast_from_rank0(local)
 
     with coordinator.raise_if_any_rank_fails("Synchronizing call tree"):
-        rank_zero_paths = {path for path, *_ in rank_zero_records}
+        rank_zero_paths = {record.path for record in rank_zero_records}
         if set(tree.nodes) != rank_zero_paths or tree.iterations != rank_zero_iterations:
             missing = sorted(rank_zero_paths - set(tree.nodes))
             unexpected = sorted(set(tree.nodes) - rank_zero_paths)
@@ -53,18 +73,18 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
                 f"Local call tree differs from rank zero: missing={missing!r}, unexpected={unexpected!r}, "
                 f"iterations local={tree.iterations} rank zero={rank_zero_iterations}"
             )
-        for path, owner_class, calls, starts, *_ in rank_zero_records:
-            node = tree.nodes[path]
-            local_structure = (node.owner_class, node.calls, iteration_starts[path])
-            if local_structure != (owner_class, calls, starts):
+        for record in rank_zero_records:
+            node = tree.nodes[record.path]
+            local_structure = (node.owner_class, node.calls, iteration_starts[record.path])
+            if local_structure != record.structure():
                 raise RuntimeError(
-                    f"Local call {path[-1]!r} differs from rank zero: (owner class, calls, iteration starts) "
-                    f"local={local_structure!r}, rank zero={(owner_class, calls, starts)!r}"
+                    f"Local call {record.path[-1]!r} differs from rank zero: (owner class, calls, iteration starts) "
+                    f"local={local_structure!r}, rank zero={record.structure()!r}"
                 )
-    for path, _, _, _, time_ms, bytes_in, bytes_out, signatures in rank_zero_records:
-        node = tree.nodes[path]
-        node.time_ms = time_ms
-        node.bytes_in = bytes_in
-        node.bytes_out = bytes_out
-        node.signatures = list(signatures)
+    for record in rank_zero_records:
+        node = tree.nodes[record.path]
+        node.time_ms = record.time_ms
+        node.bytes_in = record.bytes_in
+        node.bytes_out = record.bytes_out
+        node.signatures = list(record.signatures)
     return tree
