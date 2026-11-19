@@ -99,6 +99,9 @@ def is_compiled_call(obj: Any, method: str) -> bool:
     itself, so only its ``forward`` counts; and a ``torch.compile``'d method counts — the last is found on the
     method's ``__wrapped__`` chain, so wrappers in between must keep ``__wrapped__`` (``functools.wraps``) for it.
 
+    A direct ``module.forward(x)`` call after ``nn.Module.compile()`` runs eagerly, since only ``module(x)`` enters the
+    compiled call, but counts as compiled here: the two calls look the same, so the calls below it get no time.
+
     Args:
         obj: The object the method belongs to.
         method: The method's name.
@@ -224,8 +227,8 @@ def is_transparent_container(obj: Any) -> bool:
     modes the same tree. Subclasses must stay: ``SentenceTransformer`` subclasses ``nn.Sequential`` and its ``forward``
     is a unit of its own.
 
-    A container that is compiled itself with ``nn.Module.compile()`` is not transparent: compiled, it is a unit of
-    its own, and the pass records and times its call as one node. The ``OptimizedModule`` that ``torch.compile``
+    A container that is compiled itself, with ``nn.Module.compile()`` or a ``torch.compile``'d ``forward``, is not
+    transparent: compiled, it is a unit of its own, and the pass records and times its call as one node. The ``OptimizedModule`` that ``torch.compile``
     returns is not transparent either — it is the compiled call's node; its ``_orig_mod``'s first entry is
     suppressed by the inspector instead.
 
@@ -238,11 +241,17 @@ def is_transparent_container(obj: Any) -> bool:
         >>> compiled.compile()
         >>> is_transparent_container(compiled)
         False
+        >>> compiled_forward = nn.Sequential()
+        >>> compiled_forward.forward = torch.compile(compiled_forward.forward, backend="eager")
+        >>> is_transparent_container(compiled_forward)
+        False
         >>> is_transparent_container(torch.compile(nn.Linear(1, 1), backend="eager"))
         False
     """
     return (
-        type(obj) in (nn.Sequential, nn.ModuleList, nn.ModuleDict) and getattr(obj, "_compiled_call_impl", None) is None
+        type(obj) in (nn.Sequential, nn.ModuleList, nn.ModuleDict)
+        and getattr(obj, "_compiled_call_impl", None) is None
+        and not runs_compiled(getattr(obj, "forward", None))
     )
 
 

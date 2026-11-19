@@ -338,6 +338,42 @@ def test_a_compiled_sequential_gets_a_timed_node_and_its_children_stay_untimed(m
     warning.assert_not_called()
 
 
+def test_a_sequential_with_a_compiled_forward_gets_a_timed_node_and_its_children_stay_untimed(mocker, dataset):
+    """A ``torch.compile``'d ``forward`` on an exact ``nn.Sequential`` makes the container a unit of its own, like
+    ``nn.Module.compile()``: its call is timed as one node, and the calls inside are marked as inside it."""
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    child = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8))
+    child.forward = torch.compile(child.forward, backend="eager")
+    model = Root(child)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    node = tree.nodes[("root.forward", "root.child.forward")]
+    assert node.time_ms is not None
+    assert not node.inside_compiled_part
+    inner = tree.nodes[("root.forward", "root.child.forward", "root.child.0.forward")]
+    assert inner.time_ms is None
+    assert inner.inside_compiled_part
+    warning.assert_not_called()
+
+
 def test_a_compiled_sequential_with_fewer_iterations_warns_about_its_own_depth(mocker, dataset):
     """The compiled part's own node is timeable: with too few iterations the warning names its depth, not the
     depths that only exist inside it."""
