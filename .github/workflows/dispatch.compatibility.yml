@@ -30,6 +30,7 @@ env:
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: "3.12"
+  UV_CACHE_DIR: ${{ github.workspace }}/.cache/uv
   ONNXRUNTIME_VERSION: 1.26.0
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
