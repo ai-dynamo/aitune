@@ -186,19 +186,25 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  pythons-cpu:
-    name: Pythons CPU
+  torch-cpu-matrix:
+    name: Torch CPU
     needs: wheel
     runs-on: linux-amd64-cpu4
     strategy:
       matrix:
         include:
           - python-version: "3.11"
+            aitune-extra: torch28
+          - python-version: "3.11"
             aitune-extra: torch29
           - python-version: "3.12"
-            aitune-extra: torch29
+            aitune-extra: torch210
+          - python-version: "3.12"
+            aitune-extra: torch211
+          - python-version: "3.12"
+            aitune-extra: torch212
           - python-version: "3.13"
-            aitune-extra: torch29
+            aitune-extra: torch213
           - python-version: "3.14"
             aitune-extra: torch214
     steps:

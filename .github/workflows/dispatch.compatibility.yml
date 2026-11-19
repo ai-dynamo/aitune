@@ -88,8 +88,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", "3.13"]
-        torch: [torch29, torch210, torch211, torch212]
+        python_version: ["3.12"]
+        torch: [torch29, torch210, torch211, torch212, torch213]
         cuda:
           - &cu128
             uv_torch_backend: cu128
@@ -109,6 +109,9 @@ jobs:
             cuda: *cu128
         include:
           - python_version: "3.14"
+            torch: torch214
+            cuda: *cu130
+          - python_version: "3.15"
             torch: torch214
             cuda: *cu130
     container:
