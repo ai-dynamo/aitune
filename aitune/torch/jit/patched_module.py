@@ -362,7 +362,7 @@ class PatchedModule:
         It initializes the module and sets the state to RECORDING.
         """
         params = count_parameters(self.__wrapped__)
-        if int(params) <= config.min_parameters:
+        if int(params) < config.min_parameters:
             self._unpatch()
             return self._original_forward(*args, **kwargs)
 
