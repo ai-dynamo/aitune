@@ -60,6 +60,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v10.0.1
         with:
+          enable-cache: true
           python-version: *python_version
           version: ${{ env.UV_VERSION }}
       - run: uv sync --frozen --group dev --group test --extra triton
@@ -76,6 +77,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v10.0.1
         with:
+          enable-cache: true
           python-version: *python_version
           version: ${{ env.UV_VERSION }}
       - name: Check license headers
@@ -107,6 +109,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v10.0.1
         with:
+          enable-cache: true
           python-version: *python_version
           version: ${{ env.UV_VERSION }}
       - run: uv sync --frozen --group dev --group test --group doc --extra triton
@@ -176,6 +179,7 @@ jobs:
           fi
       - uses: astral-sh/setup-uv@v10.0.1
         with:
+          enable-cache: true
           python-version: *python_version
           version: ${{ env.UV_VERSION }}
       - run: echo "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_AITUNE=$(sh .github/scripts/scm_minor_version.sh)" >> "$GITHUB_ENV"
@@ -215,6 +219,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v10.0.1
         with:
+          enable-cache: true
           python-version: ${{ matrix.python-version }}
           version: ${{ env.UV_VERSION }}
       - uses: actions/download-artifact@v8.0.1

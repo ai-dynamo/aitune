@@ -133,6 +133,7 @@ jobs:
         env:
           RUNNER_TOOL_CACHE: ${{ runner.temp }}/tool-cache
         with:
+          enable-cache: true
           python-version: ${{ matrix.python_version }}
           version: ${{ env.UV_VERSION }}
       # - run: nvidia-smi
