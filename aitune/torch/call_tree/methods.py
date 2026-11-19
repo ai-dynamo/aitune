@@ -4,6 +4,7 @@
 
 import functools
 import inspect
+from collections.abc import Callable
 from typing import Any
 
 import torch
@@ -89,6 +90,54 @@ def optimized_module_type() -> type:
     from torch._dynamo.eval_frame import OptimizedModule
 
     return OptimizedModule
+
+
+def is_compiled_module(module: Any, forward: Callable[..., Any] | None = None) -> bool:
+    """Whether ``module`` runs compiled.
+
+    That is ``nn.Module.compile()`` (``_compiled_call_impl``), ``torch.compile()`` (an ``OptimizedModule``), or a
+    ``torch.compile``'d ``forward`` (``module.forward = torch.compile(module.forward)``).
+
+    ``forward`` defaults to ``module.forward``; the inspector passes the original it kept, because its wrapper
+    shadows it during inspection. The check follows the ``__wrapped__`` chain, since not every wrapper copies the
+    compiled callable's ``_torchdynamo_orig_callable`` marker.
+
+    Args:
+        module: The object to check.
+        forward: The callable to check for a compile mark, defaults to ``module.forward``.
+
+    Returns:
+        Whether ``module`` is an ``nn.Module`` compiled in any of the three ways.
+
+    Example:
+        >>> class M(nn.Module):
+        ...     def forward(self, x):
+        ...         return x
+        >>> is_compiled_module(M()), is_compiled_module(object())
+        (False, False)
+        >>> compiled = M()
+        >>> compiled.compile()
+        >>> is_compiled_module(compiled)
+        True
+        >>> is_compiled_module(torch.compile(M(), backend="eager"))
+        True
+        >>> m = M()
+        >>> m.forward = torch.compile(m.forward, backend="eager")
+        >>> is_compiled_module(m)
+        True
+    """
+    if not isinstance(module, nn.Module):
+        return False
+    if isinstance(module, optimized_module_type()) or getattr(module, "_compiled_call_impl", None) is not None:
+        return True
+    callable_ = module.forward if forward is None else forward
+    for _ in range(10):  # bound the __wrapped__ walk
+        if callable_ is None:
+            return False
+        if hasattr(callable_, "_torchdynamo_orig_callable"):
+            return True
+        callable_ = getattr(callable_, "__wrapped__", None)
+    return False
 
 
 def is_transparent_container(obj: Any) -> bool:
