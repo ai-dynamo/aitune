@@ -279,7 +279,7 @@ Some nodes get no time (`time_ms` is `null`):
 - deeper nodes, when there are fewer iterations than the tree has depths. `inspect` then logs a warning with the
   `number_of_iterations` that would time every depth;
 - calls inside a compiled part, since they run inside the compiled code. The compiled part itself is timed as one
-  call.
+  call, and such nodes are marked `inside_compiled_part` in the export.
 
 The times are close to a normal eager run, but not exact: every call inside a timed call still runs through its
 recording wrapper, about 0.7 µs each. Where the GPU waits for the CPU, that adds up for calls with many calls inside:
@@ -317,7 +317,7 @@ The exported data has this structure:
   "nodes": [
     {"call_path": "forward", "owner_class": "Vla", "calls": 2, "time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
-     "calls": 10, "time_ms": 25.0,
+     "calls": 10, "inside_compiled_part": false, "time_ms": 25.0,
      "timings": [{"iteration": 0, "calls": 5, "time_ms": 12.5},
                   {"iteration": 1, "calls": 5, "time_ms": 12.5}],
      "bytes_in": 3670056, "bytes_out": 3670016,
@@ -350,6 +350,8 @@ Divide by `iterations` for per-iteration values, by `calls` for per-call values.
 the node's time per call, as the median over the iterations that timed it (the mean with fewer than three), times
 `calls`. It is `null` when the timing pass never timed the node. `timings` holds the measurements behind it, one
 entry per iteration that timed the node, with that iteration's `calls` and their summed `time_ms`.
+`inside_compiled_part` is true for calls inside a compiled part: they run inside the compiled code in the timing
+pass, so their `time_ms` is `null`; the compiled part's own call is timed.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
 the calls with exactly that signature, plus `inputs`/`outputs` dicts keyed by argument name (such as `x` or
 `inputs['input_ids']`), and `output` for the result, or `output[0]` and `output['logits']` for values nested in it.

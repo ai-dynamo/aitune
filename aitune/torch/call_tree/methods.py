@@ -92,6 +92,79 @@ def optimized_module_type() -> type:
     return OptimizedModule
 
 
+def is_compiled_call(obj: Any, method: str) -> bool:
+    """Whether calling ``obj.<method>`` enters compiled code.
+
+    ``torch.compile(module)``'s ``OptimizedModule`` compiles every call; ``nn.Module.compile()`` compiles the call
+    itself, so only its ``forward`` counts; and a ``torch.compile``'d method counts — the last is found on the
+    method's ``__wrapped__`` chain, so wrappers in between must keep ``__wrapped__`` (``functools.wraps``) for it.
+
+    Args:
+        obj: The object the method belongs to.
+        method: The method's name.
+
+    Returns:
+        Whether a call of ``obj.<method>`` enters compiled code.
+
+    Example:
+        >>> class M(nn.Module):
+        ...     def forward(self, x):
+        ...         return self.lin(x)
+        ...     def encode(self, x):
+        ...         return x
+        >>> is_compiled_call(torch.compile(M(), backend="eager"), "forward")
+        True
+        >>> compiled = M()
+        >>> compiled.compile(backend="eager")
+        >>> is_compiled_call(compiled, "forward"), is_compiled_call(compiled, "encode")
+        (True, False)
+        >>> m = M()
+        >>> m.forward = torch.compile(m.forward, backend="eager")
+        >>> is_compiled_call(m, "forward")
+        True
+        >>> is_compiled_call(M(), "forward")
+        False
+    """
+    if isinstance(obj, optimized_module_type()):  # torch.compile(module)
+        return True
+    if method == "forward" and getattr(obj, "_compiled_call_impl", None) is not None:
+        return True  # module.compile() compiles the call only
+    return runs_compiled(getattr(obj, method, None))  # a compiled forward or other method
+
+
+def runs_compiled(function: Callable[..., Any] | None) -> bool:
+    """Whether ``function`` is a ``torch.compile``'d callable.
+
+    Found by following the ``__wrapped__`` chain for ``_torchdynamo_orig_callable``, since not every wrapper
+    copies the marker. False otherwise: an unmarked callable, or one marked ``torch.compiler.disable``'d, which
+    runs eagerly.
+
+    Args:
+        function: The callable to check for a compile mark.
+
+    Returns:
+        Whether a call of ``function`` enters compiled code.
+
+    Example:
+        >>> def f(x):
+        ...     return x
+        >>> runs_compiled(f)
+        False
+        >>> runs_compiled(torch.compile(f, backend="eager"))
+        True
+        >>> runs_compiled(torch.compiler.disable(f))
+        False
+    """
+    callable_ = function
+    for _ in range(10):  # bound the __wrapped__ walk
+        if callable_ is None:
+            return False
+        if hasattr(callable_, "_torchdynamo_orig_callable"):
+            return not getattr(callable_, "_torchdynamo_disable", False)
+        callable_ = getattr(callable_, "__wrapped__", None)
+    return False
+
+
 def is_compiled_module(module: Any, forward: Callable[..., Any] | None = None) -> bool:
     """Whether ``module`` runs compiled.
 
@@ -140,13 +213,7 @@ def is_compiled_module(module: Any, forward: Callable[..., Any] | None = None) -
     if isinstance(module, optimized_module_type()) or getattr(module, "_compiled_call_impl", None) is not None:
         return True
     callable_ = module.forward if forward is None else forward
-    for _ in range(10):  # bound the __wrapped__ walk
-        if callable_ is None:
-            return False
-        if hasattr(callable_, "_torchdynamo_orig_callable") and not getattr(callable_, "_torchdynamo_disable", False):
-            return True
-        callable_ = getattr(callable_, "__wrapped__", None)
-    return False
+    return runs_compiled(callable_)
 
 
 def is_transparent_container(obj: Any) -> bool:

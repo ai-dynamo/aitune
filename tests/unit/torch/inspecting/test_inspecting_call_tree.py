@@ -194,8 +194,8 @@ def test_fewer_iterations_than_depths_leaves_deep_nodes_untimed(mocker, dataset)
     assert all(node.time_ms is None for node in tree.nodes.values() if len(node.path) > 2)
     warning.assert_called_once()
     text = warning.call_args.args[0] % warning.call_args.args[1:]
-    assert "did not time depth" in text
-    assert f"number_of_iterations must be at least {deepest}" in text
+    assert "No call at depth" in text
+    assert f"set number_of_iterations to at least {deepest}" in text
 
 
 def test_calls_that_only_some_samples_make_are_timed(mocker):
@@ -335,6 +335,140 @@ def test_a_compiled_sequential_gets_a_timed_node_and_its_children_stay_untimed(m
     assert node.time_ms is not None
     inner = tree.nodes[("root.forward", "root.child.forward", "root.child.0.forward")]
     assert inner.time_ms is None
+    warning.assert_not_called()
+
+
+def test_a_compiled_sequential_with_fewer_iterations_warns_about_its_own_depth(mocker, dataset):
+    """The compiled part's own node is timeable: with too few iterations the warning names its depth, not the
+    depths that only exist inside it."""
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    child = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8))
+    child.compile(backend="eager")
+    model = Root(child)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=1,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    own = tree.nodes[("root.forward", "root.child.forward")]
+    assert own.inside_compiled_part is False
+    for path in ("root.child.0.forward", "root.child.1.forward", "root.child.2.forward"):
+        node = tree.nodes[("root.forward", "root.child.forward", path)]
+        assert node.inside_compiled_part is True
+        assert node.time_ms is None
+    text = warning.call_args.args[0] % warning.call_args.args[1:]
+    assert "No call at depth 2 (of 2)" in text
+    assert "set number_of_iterations to at least 2" in text
+
+
+@pytest.mark.parametrize("how", ["module.compile", "forward"])
+def test_a_compiled_part_times_its_own_node_with_enough_iterations(mocker, dataset, how):
+    """With enough iterations for the timeable depths, the compiled part's call is timed and nothing warns."""
+
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    inner = Inner()
+    if how == "module.compile":
+        inner.compile(backend="eager")
+    else:
+        inner.forward = torch.compile(inner.forward, backend="eager")
+    model = Root(inner)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=2,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    assert tree.nodes[("root.forward", "root.child.forward")].time_ms is not None
+    warning.assert_not_called()
+
+
+def test_a_disabled_call_inside_a_compiled_part(mocker, dataset):
+    """Inside a compiled part, a ``torch.compiler.disable``'d call and everything below it are marked inside:
+    the calls run eagerly, but the timing pass never sees the disabled call, so it cannot match them to their
+    nodes and cannot time them."""
+
+    class Disabled(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        @torch.compiler.disable
+        def forward(self, x):
+            return self.lin(x)
+
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.off = Disabled()
+
+        def forward(self, x):
+            return self.off(x)
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    inner = Inner()
+    inner.compile(backend="eager")
+    model = Root(inner)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    disabled = tree.nodes[("root.forward", "root.child.forward", "root.child.off.forward")]
+    assert disabled.inside_compiled_part is True
+    assert disabled.time_ms is None
+    lin = tree.nodes[("root.forward", "root.child.forward", "root.child.off.forward", "root.child.off.lin.forward")]
+    assert lin.inside_compiled_part is True
+    assert lin.time_ms is None
     warning.assert_not_called()
 
 

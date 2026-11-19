@@ -1833,3 +1833,60 @@ def test_recording_a_call_dispatches_no_torch_function_for_its_leaves(mocker):
 
     spy.assert_not_called()
     assert tree.nodes[("root.forward",)].bytes_in > 0
+
+
+def test_calls_inside_a_compiled_call_are_marked_inside_compiled_part():
+    """The compiled call's own node is timeable; everything below it is inside, a disabled call included."""
+    recorder = StructureRecorder()
+
+    compiled, disabled, plain = nn.Linear(2, 2), nn.Linear(2, 2), nn.Linear(2, 2)
+    compiled.forward = torch.compile(compiled.forward, backend="eager")
+    disabled.forward = torch.compiler.disable(disabled.forward)
+
+    with recorder:
+        recorder.begin_iteration()
+        outer = recorder.begin_call("root.forward", compiled, "forward", ())
+        inner = recorder.begin_call("root.inner.forward", plain, "forward", ())
+        off = recorder.begin_call("root.inner.off.forward", disabled, "forward", ())
+        leaf = recorder.begin_call("root.inner.off.lin.forward", plain, "forward", ())
+        recorder.end_call(leaf)
+        recorder.end_call(off)
+        recorder.end_call(inner)
+        recorder.end_call(outer)
+        recorder.end_iteration()
+
+    nodes = recorder.result().nodes
+    assert nodes[("root.forward",)].inside_compiled_part is False  # the compiled call itself is timed as one call
+    assert nodes[("root.forward", "root.inner.forward")].inside_compiled_part is True
+    assert nodes[("root.forward", "root.inner.forward", "root.inner.off.forward")].inside_compiled_part is True
+    assert (
+        nodes[
+            ("root.forward", "root.inner.forward", "root.inner.off.forward", "root.inner.off.lin.forward")
+        ].inside_compiled_part
+        is True
+    )  # a ``torch.compiler.disable``'d call runs eagerly, but the timing pass cannot match the calls below it
+
+
+def test_a_compiled_modules_other_methods_are_not_compiled_calls():
+    """``module.compile()`` compiles the call only: ``encode`` of the same module is not a compiled call."""
+    recorder = StructureRecorder()
+    module = nn.Linear(2, 2)
+    module.compile(backend="eager")
+    plain = nn.Linear(2, 2)
+
+    with recorder:
+        recorder.begin_iteration()
+        outer = recorder.begin_call("root.forward", module, "forward", ())
+        inner = recorder.begin_call("root.inner.forward", plain, "forward", ())
+        recorder.end_call(inner)
+        recorder.end_call(outer)
+        encode = recorder.begin_call("root.encode", module, "encode", ())
+        leaf = recorder.begin_call("root.lin.forward", plain, "forward", ())
+        recorder.end_call(leaf)
+        recorder.end_call(encode)
+        recorder.end_iteration()
+
+    nodes = recorder.result().nodes
+    assert nodes[("root.forward", "root.inner.forward")].inside_compiled_part is True
+    assert nodes[("root.encode",)].inside_compiled_part is False
+    assert nodes[("root.encode", "root.lin.forward")].inside_compiled_part is False

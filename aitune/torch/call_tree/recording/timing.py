@@ -33,6 +33,34 @@ def _record(event: Any, stream: Any) -> None:
     _event_record(event, stream)
 
 
+def timeable_depths(tree: CallTree) -> list[int]:
+    """The call-path depths with at least one node the timing pass can time, sorted.
+
+    Nodes that only run inside a compiled part (``inside_compiled_part``) are left out: the pass cannot time them.
+
+    Example:
+        >>> root = CallNode(path=("m.forward",), label="m.forward", owner_class="M", method="forward")
+        >>> inner = CallNode(
+        ...     path=("m.forward", "m.inner.forward"),
+        ...     label="m.inner.forward",
+        ...     owner_class="I",
+        ...     method="forward",
+        ...     inside_compiled_part=True,
+        ... )
+        >>> leaf = CallNode(
+        ...     path=("m.forward", "m.inner.forward", "m.inner.lin.forward"),
+        ...     label="m.inner.lin.forward",
+        ...     owner_class="L",
+        ...     method="forward",
+        ...     inside_compiled_part=True,
+        ... )
+        >>> tree = CallTree(nodes={n.path: n for n in (root, inner, leaf)})
+        >>> timeable_depths(tree)
+        [1]
+    """
+    return sorted({len(node.path) for node in tree.nodes.values() if not node.inside_compiled_part})
+
+
 def depth_schedule(tree: CallTree) -> list[int | None]:
     """Plan which call-path depth each timing-pass iteration times, from the calls the structure pass saw.
 
@@ -49,6 +77,9 @@ def depth_schedule(tree: CallTree) -> list[int | None]:
 
     Ties go to the shallowest depth. When every sample makes the same calls, the schedule is a plain rotation
     through the depths, shallowest first.
+
+    Calls inside a compiled part (``inside_compiled_part``) run compiled in the timing pass and can never be timed, so
+    they are left out of the plan: an iteration whose calls are all inside gets None.
 
     Args:
         tree: The structure pass's call tree.
@@ -77,16 +108,18 @@ def depth_schedule(tree: CallTree) -> list[int | None]:
         >>> depth_schedule(tree)
         [2, 1, 1, 1]
     """
-    # chances[i][path]: in how many iterations after i the path is called again
+    # chances[i][path]: in how many iterations after i the path is called again; calls inside a compiled part
+    # (``inside_compiled_part``) run compiled in the timing pass and can never be timed, so they are left out.
+    inside = {path for path, node in tree.nodes.items() if node.inside_compiled_part}
     chances: list[Counter[CallPath]] = [Counter() for _ in tree.sequences]
     later: Counter[CallPath] = Counter()
     for i in range(len(tree.sequences) - 1, -1, -1):
         chances[i] = later
-        later = later + Counter(set(tree.sequences[i]))  # later iterations containing the path, once each
+        later = later + Counter(set(tree.sequences[i]) - inside)  # later iterations, once each
     timed: Counter[CallPath] = Counter()  # planned timed calls per path
     schedule: list[int | None] = []
     for i, sequence in enumerate(tree.sequences):
-        calls = Counter(sequence)  # path -> calls in this iteration
+        calls = Counter(path for path in sequence if path not in inside)  # timeable calls in this iteration
         if not calls:
             schedule.append(None)
             continue
@@ -153,7 +186,7 @@ class TimingRecorder(CallRecorder):
     Diagnostics: with fewer iterations than the tree has depths, or when a sample behaves differently than in the
     structure pass, some depth may never be timed. When the ``with`` block ends, one warning names the untimed
     depths and the ``number_of_iterations`` that would time every depth. Calls inside a compiled part have no time
-    either, without a warning.
+    either; the schedule spends no iteration on them and the warning leaves them out.
 
     Example:
         >>> from aitune.torch.call_tree.nodes import CallNode
@@ -294,23 +327,23 @@ class TimingRecorder(CallRecorder):
         self._events.clear()
 
     def _report_untimed_depths(self) -> None:
-        """Warn once when the pass ended without timing every call-path depth of the tree.
+        """Warn once when the pass ended without timing every timeable call-path depth of the tree.
 
-        Nodes at an untimed depth keep ``time_ms`` None. Nodes can also stay untimed at a timed depth, for example
-        calls inside a compiled part or calls a sample made only in the structure pass; the tree shows those as
-        ``time_ms`` None without a warning.
+        Calls inside a compiled part are left out of the schedule and of the warning. Nodes at an untimed depth
+        keep ``time_ms`` None, and nodes can still stay untimed at a timed depth, for example calls a sample made
+        only in the structure pass; the tree shows those as ``time_ms`` None without a warning.
         """
-        deepest = max((len(path) for path in self._tree.nodes), default=0)
-        untimed = [depth for depth in range(1, deepest + 1) if depth not in self._timed_depths]
+        timeable = timeable_depths(self._tree)
+        untimed = [depth for depth in timeable if depth not in self._timed_depths]
         if untimed:
             logger.warning(
-                "The timing pass times one call-path depth per iteration and did not time %s %s of %d, so nodes "
-                "there have no time (time_ms is None). number_of_iterations must be at least %d to time every "
-                "depth, and calls that only some samples make also need enough samples that make them.",
+                "No call at %s %s (of %d) of the call tree was timed, so those nodes have no time (time_ms is "
+                "None). The timing pass times one call-path depth per iteration: set number_of_iterations to at "
+                "least %d to reach every depth, and higher if some calls happen only in some samples.",
                 "depth" if len(untimed) == 1 else "depths",
                 ", ".join(map(str, untimed)),
-                deepest,
-                deepest,
+                len(timeable),
+                len(timeable),
             )
 
     def _add_sample(self, node: CallNode, milliseconds: float, iteration: int) -> None:

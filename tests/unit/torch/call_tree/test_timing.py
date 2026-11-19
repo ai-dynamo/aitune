@@ -87,6 +87,23 @@ def test_an_iteration_without_calls_gets_no_depth():
     assert depth_schedule(tree) == [1, None]
 
 
+def test_calls_inside_a_compiled_part_are_not_scheduled():
+    """A node that only runs inside a compiled part is left out of the plan entirely."""
+    root, inner = ("a",), ("a", "b")
+    tree = _tree_of([[root, inner]] * 2)
+    tree.nodes[inner].inside_compiled_part = True
+
+    assert depth_schedule(tree) == [1, 1]
+
+
+def test_an_iteration_with_only_inside_compiled_calls_gets_no_depth():
+    root, inner = ("a",), ("a", "b")
+    tree = _tree_of([[root], [inner]])
+    tree.nodes[inner].inside_compiled_part = True
+
+    assert depth_schedule(tree) == [1, None]
+
+
 def test_calls_inside_a_timed_call_are_skipped(mocker):
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
     tree = _tree_with_a_child()
@@ -136,8 +153,8 @@ def test_an_iteration_beyond_the_recorded_ones_times_nothing(mocker):
 
     assert all(node.time_ms is None for node in tree.nodes.values())
     text = _warning_text(warning)
-    assert "did not time depth 2 of 2" in text
-    assert "number_of_iterations must be at least 2" in text
+    assert "No call at depth 2 (of 2)" in text
+    assert "set number_of_iterations to at least 2" in text
 
 
 def _perf_reads(durations_ms: list[float]) -> list[float]:
@@ -709,8 +726,40 @@ def test_a_depth_the_pass_never_timed_is_reported_with_the_needed_iterations(moc
             timer.end_call(a)
 
     text = _warning_text(warning)
-    assert "did not time depth 3 of 3" in text
-    assert "number_of_iterations must be at least 3" in text
+    assert "No call at depth 3 (of 3)" in text
+    assert "set number_of_iterations to at least 3" in text
+
+
+def test_a_depth_that_exists_only_inside_a_compiled_part_does_not_warn(mocker):
+    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    root, inner = ("a",), ("a", "b")
+    tree = _tree_of([[root, inner]])
+    tree.nodes[inner].inside_compiled_part = True  # the pass cannot time it; it is not an untimed depth
+    model = nn.Linear(2, 2)
+
+    with TimingRecorder(tree) as timer:
+        timer.begin_iteration()  # depth 1 is the only timeable depth
+        timer.end_call(timer.begin_call("a", model, "forward", ()))
+
+    warning.assert_not_called()
+
+
+def test_inside_compiled_depths_do_not_count_in_the_untimed_depth_warning(mocker):
+    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    a, ab, abc = ("a",), ("a", "b"), ("a", "b", "c")
+    tree = _tree_of([[a, ab, abc]])
+    tree.nodes[abc].inside_compiled_part = True  # the tree reaches depth 3, but only 1 and 2 are timeable
+    model = nn.Linear(2, 2)
+
+    with TimingRecorder(tree) as timer:
+        timer.begin_iteration()  # times depth 1, the shallowest timeable one
+        timer.end_call(timer.begin_call("a", model, "forward", ()))
+
+    text = _warning_text(warning)
+    assert "No call at depth 2 (of 2)" in text
+    assert "set number_of_iterations to at least 2" in text
 
 
 def test_calls_below_the_timed_depth_are_skipped(mocker):

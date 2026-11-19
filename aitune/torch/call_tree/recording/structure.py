@@ -32,6 +32,7 @@ from torch import nn
 
 from aitune.torch.call_tree.call_tree import CallNode, CallTree
 from aitune.torch.call_tree.callers import unrecorded_caller
+from aitune.torch.call_tree.methods import is_compiled_call
 from aitune.torch.call_tree.nodes import CallPath, CallSignature, Leaf, TensorLeaf, _Source
 from aitune.torch.call_tree.recording.base import NO_RESULT, CallRecorder
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, WeightAccessMode, storage_key
@@ -132,6 +133,7 @@ class StructureRecorder(CallRecorder):
         """
         if CallRecorder.active() is not self:
             return None
+        parent = self._stack[-1].compiled if self._stack else False
         parent_path = self._stack[-1].node.path if self._stack else ()
         path = (*parent_path, label)
         node = self._nodes.get(path)
@@ -147,6 +149,8 @@ class StructureRecorder(CallRecorder):
             self._nodes[path] = node
             if self._stack:
                 self._stack[-1].node.children.append(path)
+        # a node stays timeable if any call of it ran outside a compiled part
+        node.inside_compiled_part = parent if node.calls == 0 else node.inside_compiled_part and parent
         node.calls += 1
         with torch._C.DisableTorchFunction():
             values, input_bytes = _leaves_and_bytes(self._input_leaves(obj, method, args, kwargs))
@@ -154,7 +158,13 @@ class StructureRecorder(CallRecorder):
         if self._current_sequence is not None:
             self._current_sequence.append(path)
         input_key, visible = self._link_inputs(path, values)
-        frame = _Frame(node=node, input_key=input_key, call_index=node.calls - 1, visible=visible)
+        frame = _Frame(
+            node=node,
+            input_key=input_key,
+            call_index=node.calls - 1,
+            visible=visible,
+            compiled=parent or is_compiled_call(obj, method),
+        )
         self._stack.append(frame)
         return frame
 
@@ -534,10 +544,11 @@ class _Frame:
 
     ``call_index`` is the call's position among the node's calls in start order (the same order
     ``CallTree.sequences`` records). ``visible`` holds the values visible inside the call: its own
-    arguments and what its child calls returned.
+    arguments and what its child calls returned. ``compiled`` says whether calls inside this call run compiled.
     """
 
     node: CallNode
     input_key: tuple[Leaf, ...]
     call_index: int
     visible: _SourceIndex
+    compiled: bool
