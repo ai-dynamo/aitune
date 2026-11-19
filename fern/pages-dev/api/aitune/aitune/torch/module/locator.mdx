@@ -154,6 +154,29 @@ String representation of the locator.
 
 
 </Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_get_child">
+
+<CodeBlock links={{"aitune.torch.module.locator.ObjectType":"#aitune-torch-module-locator-ObjectType"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._get_child(
+    container: object,
+    accessor: int | str,
+    obj_type: aitune.torch.module.locator.ObjectType
+) -> object
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Read a child using its recorded access kind.
+
+
+</Indent>
 <Anchor id="aitune-torch-module-locator-Locator-_get_iter_handler">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -317,6 +340,53 @@ Resolve the only_tensors flag for the current object.
 
 
 </Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_set_child">
+
+<CodeBlock links={{"aitune.torch.module.locator.ObjectType":"#aitune-torch-module-locator-ObjectType"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._set_child(
+    container: object,
+    accessor: int | str,
+    obj_type: aitune.torch.module.locator.ObjectType,
+    value: object
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Update a child using its recorded access kind.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_set_values_at_depth">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._set_values_at_depth(
+    current: object,
+    replacements: tuple[tuple[aitune.torch.module.locator.Locator, object], ...],
+    depth: int
+) -> object
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Apply replacements below one container.
+
+
+</Indent>
 <Anchor id="aitune-torch-module-locator-Locator-accessor_at">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -420,6 +490,25 @@ Ignore a type.
 
 
 </Indent>
+<Anchor id="aitune-torch-module-locator-Locator-is_prefix_of">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.is_prefix_of(
+    other: aitune.torch.module.locator.Locator
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether this path contains ``other``.
+
+
+</Indent>
 <Anchor id="aitune-torch-module-locator-Locator-path_iter">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -475,6 +564,31 @@ aitune.torch.module.locator.Locator.set_value(
 <Indent>
 
 Set the value of the locator.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-set_values">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.set_values(
+    obj: object,
+    replacements: collections.abc.Iterable[tuple[aitune.torch.module.locator.Locator, object]]
+) -> object
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Replace values in mutable containers and rebuild each affected tuple once.
+
+Replacing a parent takes precedence over replacements beneath it. Grouping shared paths avoids
+repeatedly rebuilding large or nested tuples, but adds Python overhead for small mutable containers.
 
 
 </Indent>

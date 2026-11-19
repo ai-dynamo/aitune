@@ -1,0 +1,126 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/exporting/torch_exporter
+title: aitune.torch.libs.exporting.torch_exporter
+---
+
+Export modules through the flat tensor boundary with Torch Export.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TorchExportResult`](#aitune-torch-libs-exporting-torch_exporter-TorchExportResult) | Program and dynamic-shape rules produced by Torch Export. |
+| [`TorchExporter`](#aitune-torch-libs-exporting-torch_exporter-TorchExporter) | Export a module through AITune's flat tensor interface. |
+
+### Data
+
+[`logger`](#aitune-torch-libs-exporting-torch_exporter-logger)
+
+### API
+
+<Anchor id="aitune-torch-libs-exporting-torch_exporter-TorchExportResult">
+
+<CodeBlock links={{"aitune.torch.libs.exporting.dynamic_shapes.TorchDynamicShapes":"./dynamic_shapes.mdx#aitune-torch-libs-exporting-dynamic_shapes-TorchDynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.TorchExportResult(
+    exported_program: torch.export.ExportedProgram,
+    dynamic_shapes: aitune.torch.libs.exporting.dynamic_shapes.TorchDynamicShapes | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Program and dynamic-shape rules produced by Torch Export.
+
+
+<ParamField path="dynamic_shapes" type="TorchDynamicShapes | None">
+Input constraints used for export, or None when all input dimensions are static.
+</ParamField>
+
+<ParamField path="exported_program" type="ExportedProgram">
+Program accepting flat tensors and returning a tuple of recorded output tensors.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-torch_exporter-TorchExporter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.TorchExporter(
+    use_auto: bool = True,
+    strict: bool | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export a module through AITune's flat tensor interface.
+
+The returned program uses the adapter's tensor order, rather than the original Python call layout.
+For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, its module accepts
+``(x, bias)`` and returns ``(result,)``. Backend integration must restore the Python output structure.
+
+Default tracing tries strict export, then non-strict export for modules that strict tracing cannot
+capture. Each attempt prepares fresh sample containers and an adapter; the original module is shared,
+so this does not roll back changes to module state. An explicit strict setting disables the retry.
+
+**Parameters:**
+
+<ParamField path="use_auto" type="bool" default="True">
+Let Torch Export infer relationships for non-batch dynamic dimensions. If False,
+use named bounded dimensions; inferred dimensions with matching bounds share a dimension.
+</ParamField>
+
+<ParamField path="strict" type="bool | None" default="None">
+Select strict or non-strict export. ``None`` tries strict export first and then falls back.
+</ParamField>
+
+
+<Anchor id="aitune-torch-libs-exporting-torch_exporter-TorchExporter-export">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.libs.exporting.torch_exporter.TorchExportResult":"#aitune-torch-libs-exporting-torch_exporter-TorchExportResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.TorchExporter.export(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    device: torch.device | str | None = None
+) -> aitune.torch.libs.exporting.torch_exporter.TorchExportResult
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare a tensor-only example call and export the module.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-torch_exporter-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.torch_exporter.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

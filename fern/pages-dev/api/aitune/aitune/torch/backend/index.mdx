@@ -5891,8 +5891,6 @@ Saves the backend configuration to a file.
 
 ```python
 class aitune.torch.backend.TorchTensorRTConfig(
-    enabled_precisions: set[torch.dtype] | None = None,
-    use_explicit_typing: bool = True,
     workspace_size: int = 0,
     min_block_size: int = 5,
     disable_tf32: bool = False,
@@ -5914,10 +5912,6 @@ Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 Whether to disable TF32 in TensorRT layers. Defaults to False.
 </ParamField>
 
-<ParamField path="enabled_precisions" type="set[dtype] | None = None">
-Enabled TensorRT precisions. Defaults to None.
-</ParamField>
-
 <ParamField path="min_block_size" type="int = 5">
 Minimum number of operators in a TensorRT block. Defaults to 5.
 </ParamField>
@@ -5925,10 +5919,6 @@ Minimum number of operators in a TensorRT block. Defaults to 5.
 <ParamField path="require_full_compilation" type="bool = False">
 Whether to require one TensorRT engine for the whole graph.
 Defaults to False.
-</ParamField>
-
-<ParamField path="use_explicit_typing" type="bool = True">
-Whether to use explicit typing. Defaults to True.
 </ParamField>
 
 <ParamField path="workspace_size" type="int = 0">

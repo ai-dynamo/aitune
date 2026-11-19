@@ -700,6 +700,50 @@
                   slug: aitune/aitune/torch/libs/cuda/memory
                   pageId: aitune/aitune/torch/libs/cuda/memory.mdx
         - type: section
+          title: exporting
+          slug: aitune/aitune/torch/libs/exporting
+          children:
+            - type: section
+              title: dynamic_shapes
+              slug: aitune/aitune/torch/libs/exporting/dynamic_shapes
+              children:
+                - type: page
+                  title: dynamic_shapes
+                  slug: aitune/aitune/torch/libs/exporting/dynamic_shapes
+                  pageId: aitune/aitune/torch/libs/exporting/dynamic_shapes.mdx
+            - type: section
+              title: onnx_exporter
+              slug: aitune/aitune/torch/libs/exporting/onnx_exporter
+              children:
+                - type: page
+                  title: onnx_exporter
+                  slug: aitune/aitune/torch/libs/exporting/onnx_exporter
+                  pageId: aitune/aitune/torch/libs/exporting/onnx_exporter.mdx
+            - type: section
+              title: preparation
+              slug: aitune/aitune/torch/libs/exporting/preparation
+              children:
+                - type: page
+                  title: preparation
+                  slug: aitune/aitune/torch/libs/exporting/preparation
+                  pageId: aitune/aitune/torch/libs/exporting/preparation.mdx
+            - type: section
+              title: tensor_export_adapter
+              slug: aitune/aitune/torch/libs/exporting/tensor_export_adapter
+              children:
+                - type: page
+                  title: tensor_export_adapter
+                  slug: aitune/aitune/torch/libs/exporting/tensor_export_adapter
+                  pageId: aitune/aitune/torch/libs/exporting/tensor_export_adapter.mdx
+            - type: section
+              title: torch_exporter
+              slug: aitune/aitune/torch/libs/exporting/torch_exporter
+              children:
+                - type: page
+                  title: torch_exporter
+                  slug: aitune/aitune/torch/libs/exporting/torch_exporter
+                  pageId: aitune/aitune/torch/libs/exporting/torch_exporter.mdx
+        - type: section
           title: onnx
           slug: aitune/aitune/torch/libs/onnx
           children:

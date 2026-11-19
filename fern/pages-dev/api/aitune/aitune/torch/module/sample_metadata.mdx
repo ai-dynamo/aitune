@@ -294,6 +294,31 @@ Check if dynamic axes are detected in the metadata.
 
 
 </Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-flatten_tensors">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.flatten_tensors(
+    value: typing.Any
+) -> tuple[torch.Tensor, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Read tensor references in the stable order recorded by this metadata.
+
+Export and inference must use the same recorded paths, rather than rediscovering leaves from
+each runtime value. Otherwise a tensor can be passed to the wrong compiled input or shape rule.
+
+Each call walks the recorded paths in Python without copying tensor data. Inference overhead
+therefore depends on the number and depth of tensor paths, rather than tensor size.
+
+
+</Indent>
 <Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-from_dict">
 
 <CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
@@ -468,6 +493,35 @@ A dictionary representation safe for ``json.dumps``.
 
 
 </Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-unflatten_tensors">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"./locator.mdx#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.unflatten_tensors(
+    tensors: typing.Any,
+    template: typing.Any,
+    preserved_values: tuple[tuple[aitune.torch.module.locator.Locator, typing.Any], ...] = ()
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Rebuild the structure, preserving explicitly supplied values by identity.
+
+Flat backend results do not describe Python containers or input/output object identity.
+The template supplies the structure. Preserved values let later mutation handling return a
+caller-owned cache object instead of a copy; the caller must apply its state changes first.
+Preserved paths take precedence over tensor replacements beneath them.
+Containers and non-tensor data are deep-copied to isolate calls; tensor data is not copied.
+This adds Python work on each output restoration, including ordinary tensor outputs.
+The cost depends on the template structure and the number of replacements and preserved paths.
+
+
+</Indent>
 <Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-update_max_batch_size">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -507,6 +561,29 @@ aitune.torch.module.sample_metadata.SampleMetadata.update_shapes_seen(
 <Indent>
 
 Update shapes seen from other SampleMetadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-sample_metadata-SampleMetadata-without_tensors">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.sample_metadata.SampleMetadata.without_tensors(
+    value: typing.Any,
+    preserved_values: tuple[typing.Any, ...] = ()
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Copy a structure while replacing tensors and explicitly preserved values with ``None``.
+
+The template retains Python structure without keeping sample tensor storage alive or invoking
+tensor-subclass copy behavior. Preserved objects are supplied from the current call at restoration.
 
 
 </Indent>

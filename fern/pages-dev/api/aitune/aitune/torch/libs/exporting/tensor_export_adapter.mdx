@@ -1,0 +1,161 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/exporting/tensor_export_adapter
+title: aitune.torch.libs.exporting.tensor_export_adapter
+---
+
+Wrap structured module calls for exporters that accept flat tensors.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TensorExportAdapter`](#aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter) | Adapt a structured module call to flat tensor inputs and outputs in recorded order. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_prepare_argument_reconstruction`](#aitune-torch-libs-exporting-tensor_export_adapter-_prepare_argument_reconstruction) | Prepare a PyTree recipe when it agrees with the recorded tensor paths. |
+
+### API
+
+<Anchor id="aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.TensorExportAdapter(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `Module`
+
+Adapt a structured module call to flat tensor inputs and outputs in recorded order.
+
+Flattening is the explicit interface shared by export and later backend execution. It separates
+tensor computation from Python containers, whose structure and identity must be restored outside
+the compiled runner. This adapter returns recorded user outputs; mutation outputs are added separately.
+
+Non-tensor arguments come from the recorded sample. Compatible inputs use a prepared PyTree
+recipe to keep reconstruction simple for strict Torch Export. Otherwise, recorded locators
+reconstruct the arguments, including custom objects supported by Locator but unknown to PyTree.
+This fallback preserves reconstruction support; export still depends on the module and exporter.
+
+Example:
+    For a module whose forward returns ``{"result": (x + state["bias"]) * state["scale"]}``,
+    preparation from ``module(x=x, state={"bias": bias, "scale": 2})`` records this interface:
+
+    ```python
+    Flat inputs:   (x, bias)
+    Rebuilt call:  module(x=x, state={"bias": bias, "scale": 2})
+    Flat outputs:  (result,)
+    ```
+
+    Each invocation supplies current tensors in the recorded order. The scale stays 2 because it
+    comes from the sample, and the call stays keyword-based. Outputs contain only recorded tensors;
+    restoring the caller's Python output structure belongs to backend integration.
+
+Reconstruction rules:
+    PyTree is used only when tensor identity and order agree with SampleMetadata and replacing
+    tensors with None preserves the tree structure and non-tensor leaf identity. Matching only
+    tensor counts could silently associate a flat input with the wrong argument. On mismatch,
+    locators reconstruct from a copied template instead. Rebuilt containers isolate ordinary
+    list and dict changes between calls; input tensors are references, so tensor writes can still
+    affect supplied tensors. Custom-object reconstruction does not guarantee traceability.
+
+
+<ParamField path="_call_layout">
+</ParamField>
+
+<ParamField path="_input_spec" type="= graph_spec.input_spec">
+</ParamField>
+
+<ParamField path="_output_spec" type="= graph_spec.output_spec">
+</ParamField>
+
+<ParamField path="training" type="= module.training">
+</ParamField>
+<Anchor id="aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter-_reconstruct_arguments">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.TensorExportAdapter._reconstruct_arguments(
+    flat_inputs: tuple[torch.Tensor, ...]
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Rebuild normalized arguments with fresh containers for each call.
+
+A None TreeSpec means the PyTree compatibility checks failed. The locator fallback deep-copies
+the template and inserts tensors at recorded paths, preserving support for custom input objects
+without requiring global PyTree registration. The compatible path rebuilds PyTree containers
+around the saved non-tensor leaves and current tensor inputs.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter-forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.TensorExportAdapter.forward(
+    flat_inputs: torch.Tensor = ()
+) -> tuple[torch.Tensor, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run the module with rebuilt inputs and return flat tensor outputs.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-tensor_export_adapter-_prepare_argument_reconstruction">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"../../module/sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.tensor_export_adapter._prepare_argument_reconstruction(
+    arguments: dict[str, typing.Any],
+    template: dict[str, typing.Any],
+    input_spec: aitune.torch.module.sample_metadata.SampleMetadata
+) -> tuple[torch.utils._pytree.TreeSpec | None, tuple[typing.Any, ...], tuple[int, ...]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare a PyTree recipe when it agrees with the recorded tensor paths.
+
+Tensor order and identity must match, and the template must have the same tree structure,
+with tensors replaced by None and non-tensor leaves retaining their identity. This lets forward
+rebuild arguments without discovering their structure or deep-copying the template while tracing.
+
+Return a None TreeSpec on mismatch so the adapter uses locator reconstruction instead.
+For example, Locator may traverse a custom object that PyTree treats as an opaque leaf.
+
+
+</Indent>

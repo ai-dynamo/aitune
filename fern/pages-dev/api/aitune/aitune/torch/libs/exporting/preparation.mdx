@@ -1,0 +1,109 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/exporting/preparation
+title: aitune.torch.libs.exporting.preparation
+---
+
+Prepare flat tensor inputs shared by AITune exporters.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`TensorExportPreparation`](#aitune-torch-libs-exporting-preparation-TensorExportPreparation) | Tensor-only module adapter and example inputs prepared for export. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`prepare_tensor_export`](#aitune-torch-libs-exporting-preparation-prepare_tensor_export) | Prepare a structured module call for a tensor-only exporter. |
+
+### API
+
+<Anchor id="aitune-torch-libs-exporting-preparation-TensorExportPreparation">
+
+<CodeBlock links={{"aitune.torch.libs.exporting.tensor_export_adapter.TensorExportAdapter":"./tensor_export_adapter.mdx#aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.TensorExportPreparation(
+    adapter: aitune.torch.libs.exporting.tensor_export_adapter.TensorExportAdapter,
+    flat_inputs: tuple[torch.Tensor, ...]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Tensor-only module adapter and example inputs prepared for export.
+
+The fields form a matched pair: ``adapter(*flat_inputs)`` reconstructs the prepared sample call
+and returns its recorded tensor outputs. Preparation may resize sample tensors to make dynamic
+axes visible, so the flat inputs need not have the original sample shapes.
+
+
+<ParamField path="adapter" type="TensorExportAdapter">
+Module that rebuilds the Python call using recorded tensor paths and non-tensor values.
+</ParamField>
+
+<ParamField path="flat_inputs" type="tuple[Tensor, ...]">
+Prepared example tensors in the adapter's recorded input order.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-preparation-prepare_tensor_export">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.libs.exporting.preparation.TensorExportPreparation":"#aitune-torch-libs-exporting-preparation-TensorExportPreparation"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.prepare_tensor_export(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    device: torch.device | str | None = None
+) -> aitune.torch.libs.exporting.preparation.TensorExportPreparation
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare a structured module call for a tensor-only exporter.
+
+Uses recorded metadata without executing the module. Device placement applies
+only to sample tensors.
+
+For ``module(x, state={"bias": bias, "scale": 2})``, the pair contains an adapter that
+retains scale 2 and flat inputs ``(prepared_x, prepared_bias)``. The caller is responsible
+for placing the module on the appropriate device before export.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+Module to prepare.
+</ParamField>
+
+<ParamField path="sample" type="Sample">
+[`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Representative positional and keyword inputs.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Recorded input and output metadata.
+</ParamField>
+
+<ParamField path="device" type="torch.device | str | None" default="None">
+Optional destination for ordinary tensor leaves.
+</ParamField>
+
+**Returns:** [`TensorExportPreparation`](#aitune-torch-libs-exporting-preparation-TensorExportPreparation)
+
+The module adapter and its flat example inputs.
+
+
+</Indent>

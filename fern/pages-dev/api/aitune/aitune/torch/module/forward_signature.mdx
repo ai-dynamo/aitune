@@ -12,6 +12,7 @@ Bind module inputs to a forward signature.
 
 | Name | Description |
 |------|-------------|
+| [`ForwardCallLayout`](#aitune-torch-module-forward_signature-ForwardCallLayout) | Preserve positional and keyword layout for decorators that enforce call style. |
 | [`ForwardParameter`](#aitune-torch-module-forward_signature-ForwardParameter) | Serializable description of a forward parameter. |
 | [`ForwardSignature`](#aitune-torch-module-forward_signature-ForwardSignature) | Serializable forward signature used to normalize module calls. |
 
@@ -30,6 +31,95 @@ Bind module inputs to a forward signature.
 [`_PARAMETER_KINDS`](#aitune-torch-module-forward_signature-_PARAMETER_KINDS)
 
 ### API
+
+<Anchor id="aitune-torch-module-forward_signature-ForwardCallLayout">
+
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardInputPath":"#aitune-torch-module-forward_signature-ForwardInputPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_signature.ForwardCallLayout(
+    positional_paths: tuple[aitune.torch.module.forward_signature.ForwardInputPath, ...],
+    keyword_paths: tuple[tuple[str, aitune.torch.module.forward_signature.ForwardInputPath], ...]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Preserve positional and keyword layout for decorators that enforce call style.
+
+Graph matching binds values to parameter names so equivalent calls share metadata. Replay needs
+a separate layout: a decorator can reject positional arguments even when signature binding accepts
+them. Restoring the captured layout keeps batching and export preparation valid for those wrappers.
+
+Captured paths are parameter names for ordinary arguments, ``(name, index)`` for ``*args``,
+and ``(name, key)`` for ``**kwargs``. Tuple paths therefore contain one lookup after the parameter name;
+the shared ``ForwardInputPath`` type also permits deeper paths for nested input shape definitions.
+
+**Example**
+
+Given ``forward(x, *extras, **options)``, a call ``module(x, bias, mask=mask)`` records
+``positional_paths=("x", ("extras", 0))`` and
+``keyword_paths=(("mask", ("options", "mask")),)``. Restoration reads current values
+from the normalized arguments; it does not keep the original tensors.
+
+A call ``module(x=x)`` instead records no positional paths and the keyword pair ``("x", "x")``.
+This matters when a wrapper rejects ``module(x)`` despite exposing the same forward signature.
+
+
+<ParamField path="keyword_paths" type="tuple[tuple[str, ForwardInputPath], ...]">
+Pairs of supplied keyword names and their normalized argument paths.
+</ParamField>
+
+<ParamField path="positional_paths" type="tuple[ForwardInputPath, ...]">
+Argument paths in their original positional order.
+</ParamField>
+<Anchor id="aitune-torch-module-forward_signature-ForwardCallLayout-_resolve_argument_path">
+
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardInputPath":"#aitune-torch-module-forward_signature-ForwardInputPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardCallLayout._resolve_argument_path(
+    arguments: dict[str, typing.Any],
+    path: aitune.torch.module.forward_signature.ForwardInputPath
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Resolve a normalized argument value from a call-layout path.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-forward_signature-ForwardCallLayout-restore">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardCallLayout.restore(
+    arguments: dict[str, typing.Any]
+) -> tuple[tuple[typing.Any, ...], dict[str, typing.Any]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Restore the captured call layout from normalized arguments.
+
+
+</Indent>
+</Indent>
 
 <Anchor id="aitune-torch-module-forward_signature-ForwardParameter">
 
@@ -143,6 +233,26 @@ aitune.torch.module.forward_signature.ForwardSignature.__post_init__() -> None
 <Indent>
 
 Build the inspect signature used for call binding.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-forward_signature-ForwardSignature-capture_call_layout">
+
+<CodeBlock links={{"aitune.torch.module.forward_signature.ForwardCallLayout":"#aitune-torch-module-forward_signature-ForwardCallLayout"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_signature.ForwardSignature.capture_call_layout(
+    args: tuple[typing.Any, ...],
+    kwargs: dict[str, typing.Any]
+) -> aitune.torch.module.forward_signature.ForwardCallLayout
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Capture how a valid call supplied each normalized argument.
 
 
 </Indent>

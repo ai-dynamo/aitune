@@ -1,0 +1,210 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/exporting/onnx_exporter
+title: aitune.torch.libs.exporting.onnx_exporter
+---
+
+Export modules to ONNX through a flat tensor interface.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ONNXExporter`](#aitune-torch-libs-exporting-onnx_exporter-ONNXExporter) | Export a module to ONNX through AITune's flat tensor interface. |
+
+### Data
+
+[`logger`](#aitune-torch-libs-exporting-onnx_exporter-logger)
+
+### API
+
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.ONNXExporter(
+    output_path: pathlib.Path,
+    use_dynamo: bool = False,
+    opset_version: int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export a module to ONNX through AITune's flat tensor interface.
+
+For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, the artifact
+has tensor inputs for x and bias and one tensor output for result. Names come from recorded paths;
+Python containers and non-tensor sample values are handled by the adapter during export.
+Runtime code must supply the named tensors and restore the original output structure.
+
+Both export modes use the same prepared adapter. Dynamo receives Torch dynamic-shape constraints;
+the legacy tracer receives ONNX dynamic-axis annotations. The selected mode is used without fallback.
+Export returns the artifact path after ONNX structural validation, which does not establish numerical
+equivalence with the original module. An incomplete artifact is removed on failure when possible.
+
+**Parameters:**
+
+<ParamField path="output_path" type="Path">
+Destination for the ONNX artifact.
+</ParamField>
+
+<ParamField path="use_dynamo" type="bool" default="False">
+Use Dynamo export if True; otherwise use the legacy tracer.
+</ParamField>
+
+<ParamField path="opset_version" type="int | None" default="None">
+ONNX operator-set version, or None to use Torch's default.
+</ParamField>
+
+
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_create_dynamic_axes">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter._create_dynamic_axes(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> dict[str, list[int] | dict[int, str]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create dynamic-axis rules for the legacy ONNX tracer.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_export_dynamo">
+
+<CodeBlock links={{"aitune.torch.libs.exporting.preparation.TensorExportPreparation":"./preparation.mdx#aitune-torch-libs-exporting-preparation-TensorExportPreparation","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter._export_dynamo(
+    preparation: aitune.torch.libs.exporting.preparation.TensorExportPreparation,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    verbose: bool | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export the prepared adapter with the Dynamo-based ONNX exporter.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_export_trace">
+
+<CodeBlock links={{"aitune.torch.libs.exporting.preparation.TensorExportPreparation":"./preparation.mdx#aitune-torch-libs-exporting-preparation-TensorExportPreparation","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter._export_trace(
+    preparation: aitune.torch.libs.exporting.preparation.TensorExportPreparation,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    verbose: bool | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export the prepared adapter with the legacy ONNX tracer.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_input_names">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter._input_names(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return names for flat inputs in their recorded order.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-export">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter.export(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    verbose: bool = False,
+    device: torch.device | str | None = None
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare a tensor-only example call and export it to ONNX.
+
+``verbose`` controls Torch exporter output; AITune diagnostics use logger configuration.
+``device`` moves sample tensors only, so the caller must place the module separately.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-verify_model">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter.verify_model(
+    onnx_path: str | pathlib.Path
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Validate an ONNX artifact.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-logger">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.onnx_exporter.logger = logging.getLogger(__name__)
+```
+
+</CodeBlock>
+</Anchor>
+

@@ -261,7 +261,24 @@ aitune.torch.module.graph_spec.GraphSpec.make_batch(
 
 <Indent>
 
-Return a normalized call resized to the specified batch size.
+Return a call resized to the specified batch size while preserving its argument layout.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-output_names">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.output_names() -> tuple[str, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return names for flat module outputs in their recorded order.
 
 
 </Indent>

@@ -1,0 +1,507 @@
+---
+layout: overview
+slug: aitune/aitune/torch/libs/exporting
+title: aitune.torch.libs.exporting
+---
+
+Shared tools for exporting modules through a flat tensor interface.
+
+Models accept Python structures, while AITune uses ordered tensors as the compiled interface.
+Recorded metadata defines the same order for example inputs, shape constraints, and outputs.
+The adapter reconstructs the Python call inside the exported module, keeping backend code
+independent of the original argument structure.
+
+These are export building blocks. Backend integration and restoration of caller-visible input
+changes are added separately. See docs/guides/advanced/execution_graphs.md for the design example.
+
+## Submodules
+
+- **[`aitune.torch.libs.exporting.dynamic_shapes`](./dynamic_shapes.mdx)**
+- **[`aitune.torch.libs.exporting.onnx_exporter`](./onnx_exporter.mdx)**
+- **[`aitune.torch.libs.exporting.preparation`](./preparation.mdx)**
+- **[`aitune.torch.libs.exporting.tensor_export_adapter`](./tensor_export_adapter.mdx)**
+- **[`aitune.torch.libs.exporting.torch_exporter`](./torch_exporter.mdx)**
+
+## Package Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ONNXExporter`](#aitune-torch-libs-exporting-onnx_exporter-ONNXExporter) | Export a module to ONNX through AITune's flat tensor interface. |
+| [`TensorExportAdapter`](#aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter) | Adapt a structured module call to flat tensor inputs and outputs in recorded order. |
+| [`TensorExportPreparation`](#aitune-torch-libs-exporting-preparation-TensorExportPreparation) | Tensor-only module adapter and example inputs prepared for export. |
+| [`TorchExportResult`](#aitune-torch-libs-exporting-torch_exporter-TorchExportResult) | Program and dynamic-shape rules produced by Torch Export. |
+| [`TorchExporter`](#aitune-torch-libs-exporting-torch_exporter-TorchExporter) | Export a module through AITune's flat tensor interface. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`prepare_tensor_export`](#aitune-torch-libs-exporting-preparation-prepare_tensor_export) | Prepare a structured module call for a tensor-only exporter. |
+
+### API
+
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.ONNXExporter(
+    output_path: pathlib.Path,
+    use_dynamo: bool = False,
+    opset_version: int | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export a module to ONNX through AITune's flat tensor interface.
+
+For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, the artifact
+has tensor inputs for x and bias and one tensor output for result. Names come from recorded paths;
+Python containers and non-tensor sample values are handled by the adapter during export.
+Runtime code must supply the named tensors and restore the original output structure.
+
+Both export modes use the same prepared adapter. Dynamo receives Torch dynamic-shape constraints;
+the legacy tracer receives ONNX dynamic-axis annotations. The selected mode is used without fallback.
+Export returns the artifact path after ONNX structural validation, which does not establish numerical
+equivalence with the original module. An incomplete artifact is removed on failure when possible.
+
+**Parameters:**
+
+<ParamField path="output_path" type="Path">
+Destination for the ONNX artifact.
+</ParamField>
+
+<ParamField path="use_dynamo" type="bool" default="False">
+Use Dynamo export if True; otherwise use the legacy tracer.
+</ParamField>
+
+<ParamField path="opset_version" type="int | None" default="None">
+ONNX operator-set version, or None to use Torch's default.
+</ParamField>
+
+
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_create_dynamic_axes">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter._create_dynamic_axes(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> dict[str, list[int] | dict[int, str]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Create dynamic-axis rules for the legacy ONNX tracer.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_export_dynamo">
+
+<CodeBlock links={{"aitune.torch.libs.exporting.preparation.TensorExportPreparation":"./preparation.mdx#aitune-torch-libs-exporting-preparation-TensorExportPreparation","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter._export_dynamo(
+    preparation: aitune.torch.libs.exporting.preparation.TensorExportPreparation,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    verbose: bool | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export the prepared adapter with the Dynamo-based ONNX exporter.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_export_trace">
+
+<CodeBlock links={{"aitune.torch.libs.exporting.preparation.TensorExportPreparation":"./preparation.mdx#aitune-torch-libs-exporting-preparation-TensorExportPreparation","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter._export_trace(
+    preparation: aitune.torch.libs.exporting.preparation.TensorExportPreparation,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    verbose: bool | None = None
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export the prepared adapter with the legacy ONNX tracer.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_input_names">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter._input_names(
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> list[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return names for flat inputs in their recorded order.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-export">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter.export(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    verbose: bool = False,
+    device: torch.device | str | None = None
+) -> pathlib.Path
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare a tensor-only example call and export it to ONNX.
+
+``verbose`` controls Torch exporter output; AITune diagnostics use logger configuration.
+``device`` moves sample tensors only, so the caller must place the module separately.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-verify_model">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter.verify_model(
+    onnx_path: str | pathlib.Path
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Validate an ONNX artifact.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.TensorExportAdapter(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `Module`
+
+Adapt a structured module call to flat tensor inputs and outputs in recorded order.
+
+Flattening is the explicit interface shared by export and later backend execution. It separates
+tensor computation from Python containers, whose structure and identity must be restored outside
+the compiled runner. This adapter returns recorded user outputs; mutation outputs are added separately.
+
+Non-tensor arguments come from the recorded sample. Compatible inputs use a prepared PyTree
+recipe to keep reconstruction simple for strict Torch Export. Otherwise, recorded locators
+reconstruct the arguments, including custom objects supported by Locator but unknown to PyTree.
+This fallback preserves reconstruction support; export still depends on the module and exporter.
+
+Example:
+    For a module whose forward returns ``{"result": (x + state["bias"]) * state["scale"]}``,
+    preparation from ``module(x=x, state={"bias": bias, "scale": 2})`` records this interface:
+
+    ```python
+    Flat inputs:   (x, bias)
+    Rebuilt call:  module(x=x, state={"bias": bias, "scale": 2})
+    Flat outputs:  (result,)
+    ```
+
+    Each invocation supplies current tensors in the recorded order. The scale stays 2 because it
+    comes from the sample, and the call stays keyword-based. Outputs contain only recorded tensors;
+    restoring the caller's Python output structure belongs to backend integration.
+
+Reconstruction rules:
+    PyTree is used only when tensor identity and order agree with SampleMetadata and replacing
+    tensors with None preserves the tree structure and non-tensor leaf identity. Matching only
+    tensor counts could silently associate a flat input with the wrong argument. On mismatch,
+    locators reconstruct from a copied template instead. Rebuilt containers isolate ordinary
+    list and dict changes between calls; input tensors are references, so tensor writes can still
+    affect supplied tensors. Custom-object reconstruction does not guarantee traceability.
+
+
+<ParamField path="_call_layout">
+</ParamField>
+
+<ParamField path="_input_spec" type="= graph_spec.input_spec">
+</ParamField>
+
+<ParamField path="_output_spec" type="= graph_spec.output_spec">
+</ParamField>
+
+<ParamField path="training" type="= module.training">
+</ParamField>
+<Anchor id="aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter-_reconstruct_arguments">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.TensorExportAdapter._reconstruct_arguments(
+    flat_inputs: tuple[torch.Tensor, ...]
+) -> dict[str, typing.Any]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Rebuild normalized arguments with fresh containers for each call.
+
+A None TreeSpec means the PyTree compatibility checks failed. The locator fallback deep-copies
+the template and inserts tensors at recorded paths, preserving support for custom input objects
+without requiring global PyTree registration. The compatible path rebuilds PyTree containers
+around the saved non-tensor leaves and current tensor inputs.
+
+
+</Indent>
+<Anchor id="aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter-forward">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.TensorExportAdapter.forward(
+    flat_inputs: torch.Tensor = ()
+) -> tuple[torch.Tensor, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Run the module with rebuilt inputs and return flat tensor outputs.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-preparation-TensorExportPreparation">
+
+<CodeBlock links={{"aitune.torch.libs.exporting.tensor_export_adapter.TensorExportAdapter":"./tensor_export_adapter.mdx#aitune-torch-libs-exporting-tensor_export_adapter-TensorExportAdapter"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.TensorExportPreparation(
+    adapter: aitune.torch.libs.exporting.tensor_export_adapter.TensorExportAdapter,
+    flat_inputs: tuple[torch.Tensor, ...]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Tensor-only module adapter and example inputs prepared for export.
+
+The fields form a matched pair: ``adapter(*flat_inputs)`` reconstructs the prepared sample call
+and returns its recorded tensor outputs. Preparation may resize sample tensors to make dynamic
+axes visible, so the flat inputs need not have the original sample shapes.
+
+
+<ParamField path="adapter" type="TensorExportAdapter">
+Module that rebuilds the Python call using recorded tensor paths and non-tensor values.
+</ParamField>
+
+<ParamField path="flat_inputs" type="tuple[Tensor, ...]">
+Prepared example tensors in the adapter's recorded input order.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-torch_exporter-TorchExportResult">
+
+<CodeBlock links={{"aitune.torch.libs.exporting.dynamic_shapes.TorchDynamicShapes":"./dynamic_shapes.mdx#aitune-torch-libs-exporting-dynamic_shapes-TorchDynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.TorchExportResult(
+    exported_program: torch.export.ExportedProgram,
+    dynamic_shapes: aitune.torch.libs.exporting.dynamic_shapes.TorchDynamicShapes | None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Program and dynamic-shape rules produced by Torch Export.
+
+
+<ParamField path="dynamic_shapes" type="TorchDynamicShapes | None">
+Input constraints used for export, or None when all input dimensions are static.
+</ParamField>
+
+<ParamField path="exported_program" type="ExportedProgram">
+Program accepting flat tensors and returning a tuple of recorded output tensors.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-torch_exporter-TorchExporter">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.libs.exporting.TorchExporter(
+    use_auto: bool = True,
+    strict: bool | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Export a module through AITune's flat tensor interface.
+
+The returned program uses the adapter's tensor order, rather than the original Python call layout.
+For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, its module accepts
+``(x, bias)`` and returns ``(result,)``. Backend integration must restore the Python output structure.
+
+Default tracing tries strict export, then non-strict export for modules that strict tracing cannot
+capture. Each attempt prepares fresh sample containers and an adapter; the original module is shared,
+so this does not roll back changes to module state. An explicit strict setting disables the retry.
+
+**Parameters:**
+
+<ParamField path="use_auto" type="bool" default="True">
+Let Torch Export infer relationships for non-batch dynamic dimensions. If False,
+use named bounded dimensions; inferred dimensions with matching bounds share a dimension.
+</ParamField>
+
+<ParamField path="strict" type="bool | None" default="None">
+Select strict or non-strict export. ``None`` tries strict export first and then falls back.
+</ParamField>
+
+
+<Anchor id="aitune-torch-libs-exporting-torch_exporter-TorchExporter-export">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.libs.exporting.torch_exporter.TorchExportResult":"#aitune-torch-libs-exporting-torch_exporter-TorchExportResult"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.TorchExporter.export(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    device: torch.device | str | None = None
+) -> aitune.torch.libs.exporting.torch_exporter.TorchExportResult
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare a tensor-only example call and export the module.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-preparation-prepare_tensor_export">
+
+<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample","aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec","aitune.torch.libs.exporting.preparation.TensorExportPreparation":"#aitune-torch-libs-exporting-preparation-TensorExportPreparation"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.prepare_tensor_export(
+    module: torch.nn.Module,
+    sample: aitune.torch.module.sample_store.Sample,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec,
+    device: torch.device | str | None = None
+) -> aitune.torch.libs.exporting.preparation.TensorExportPreparation
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Prepare a structured module call for a tensor-only exporter.
+
+Uses recorded metadata without executing the module. Device placement applies
+only to sample tensors.
+
+For ``module(x, state={"bias": bias, "scale": 2})``, the pair contains an adapter that
+retains scale 2 and flat inputs ``(prepared_x, prepared_bias)``. The caller is responsible
+for placing the module on the appropriate device before export.
+
+**Parameters:**
+
+<ParamField path="module" type="nn.Module">
+Module to prepare.
+</ParamField>
+
+<ParamField path="sample" type="Sample">
+[`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Representative positional and keyword inputs.
+</ParamField>
+
+<ParamField path="graph_spec" type="GraphSpec">
+[`GraphSpec`](../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec) — Recorded input and output metadata.
+</ParamField>
+
+<ParamField path="device" type="torch.device | str | None" default="None">
+Optional destination for ordinary tensor leaves.
+</ParamField>
+
+**Returns:** [`TensorExportPreparation`](#aitune-torch-libs-exporting-preparation-TensorExportPreparation)
+
+The module adapter and its flat example inputs.
+
+
+</Indent>
