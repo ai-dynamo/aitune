@@ -193,7 +193,8 @@ def test_fewer_iterations_than_depths_leaves_deep_nodes_untimed(mocker, dataset)
     assert all(node.time_ms is not None for node in tree.nodes.values() if node.calls and len(node.path) <= 2)
     assert all(node.time_ms is None for node in tree.nodes.values() if len(node.path) > 2)
     warning.assert_called_once()
-    text = warning.call_args.args[1]
+    text = warning.call_args.args[0] % warning.call_args.args[1:]
+    assert "did not time depth" in text
     assert f"number_of_iterations must be at least {deepest}" in text
 
 

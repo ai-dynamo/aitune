@@ -276,8 +276,8 @@ from, so inspection takes longer:
 
 Some nodes get no time (`time_ms` is `null`):
 
-- deeper nodes, when there are fewer iterations than the tree has depths. `inspect` then logs a warning that names
-  them and the `number_of_iterations` that would time every depth;
+- deeper nodes, when there are fewer iterations than the tree has depths. `inspect` then logs a warning with the
+  `number_of_iterations` that would time every depth;
 - calls inside a compiled part, since they run inside the compiled code. The compiled part itself is timed as one
   call.
 

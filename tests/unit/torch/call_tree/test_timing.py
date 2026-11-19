@@ -136,7 +136,7 @@ def test_an_iteration_beyond_the_recorded_ones_times_nothing(mocker):
 
     assert all(node.time_ms is None for node in tree.nodes.values())
     text = _warning_text(warning)
-    assert "2 of the call tree's 2 nodes have no time" in text
+    assert "did not time depth 2 of 2" in text
     assert "number_of_iterations must be at least 2" in text
 
 
@@ -690,23 +690,7 @@ def test_the_timed_depth_resets_on_entry(mocker):
 
 def _warning_text(warning) -> str:
     warning.assert_called_once()
-    return warning.call_args.args[1]
-
-
-def test_a_node_that_did_not_run_is_reported(mocker):
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    tree = _tree_of([[("a",), ("a", "b")], [("a",)]])
-    model = nn.Linear(2, 2)
-
-    with TimingRecorder(tree) as timer:  # the child never runs although a timed depth covers it
-        for _ in range(2):  # the schedule times depth 2, then depth 1
-            timer.begin_iteration()
-            timer.end_call(timer.begin_call("a", model, "forward", ()))
-
-    text = _warning_text(warning)
-    assert "1 of the call tree's 2 nodes have no time" in text
-    assert "a > b" in text
+    return warning.call_args.args[0] % warning.call_args.args[1:]
 
 
 def test_a_depth_the_pass_never_timed_is_reported_with_the_needed_iterations(mocker):
@@ -725,14 +709,13 @@ def test_a_depth_the_pass_never_timed_is_reported_with_the_needed_iterations(moc
             timer.end_call(a)
 
     text = _warning_text(warning)
-    assert "1 of the call tree's 3 nodes have no time" in text
+    assert "did not time depth 3 of 3" in text
     assert "number_of_iterations must be at least 3" in text
-    assert "a > b > c" in text
 
 
-def test_calls_below_the_timed_depth_are_skipped_and_the_node_is_reported(mocker):
-    """A call nested inside a timed call is skipped entirely — the recorder never records it — so the node the
-    structure pass recorded is reported when no timed call ever runs it."""
+def test_calls_below_the_timed_depth_are_skipped(mocker):
+    """A call nested inside a timed call is skipped entirely — the recorder never records it — and its node,
+    whose depth is timed elsewhere, stays untimed without a warning."""
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
     warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
     root_path, child_path = ("root.forward",), ("root.forward", "root.child.forward")
@@ -752,221 +735,7 @@ def test_calls_below_the_timed_depth_are_skipped_and_the_node_is_reported(mocker
 
     assert child_path not in timer._samples  # the skip kept the child out of the recording entirely
     assert tree.nodes[child_path].time_ms is None
-    text = _warning_text(warning)
-    assert "1 of the call tree's 2 nodes have no time" in text
-    assert "child.forward" in text
-
-
-def test_a_node_without_a_time_is_listed_when_its_depth_was_timed_elsewhere(mocker):
-    """``a > x``'s depth is timed, but only in an iteration ``a > x`` never runs: it is reported, not skipped."""
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    a, ax, b, by = ("a",), ("a", "x"), ("b",), ("b", "y")
-    tree = _tree_of([[a, ax], [b, by], [b, by]])
-    assert depth_schedule(tree) == [1, 1, 2]  # depth 2 is timed only where ``a > x`` never runs
-    model = nn.Linear(2, 2)
-
-    with TimingRecorder(tree) as timer:
-        timer.begin_iteration()  # depth 1: a runs; a > x inside it is skipped
-        timer.end_call(timer.begin_call("a", model, "forward", ()))
-        timer.begin_iteration()  # depth 1: b runs
-        timer.end_call(timer.begin_call("b", model, "forward", ()))
-        timer.begin_iteration()  # depth 2: b and b > y run; a > x does not
-        frame = timer.begin_call("b", model, "forward", ())
-        timer.end_call(timer.begin_call("y", model, "forward", ()))
-        timer.end_call(frame)
-
-    node = tree.nodes[ax]
-    assert node.time_ms is None
-    text = _warning_text(warning)
-    assert "a > x" in text
-
-
-def _tree_with_a_compiled_module() -> tuple[CallTree, nn.Module]:
-    """root -> child where the root's module is compiled (``nn.Module.compile()``) and the child is inside it."""
-    compiled = nn.Sequential(nn.Linear(2, 2))
-    compiled._compiled_call_impl = lambda *args, **kwargs: None  # what nn.Module.compile() sets
-    root = CallNode(
-        path=("root.forward",),
-        label="root.forward",
-        owner_class="Seq",
-        method="forward",
-        module=compiled,
-        calls=1,
-    )
-    child = CallNode(
-        path=("root.forward", "root.child.forward"),
-        label="root.child.forward",
-        owner_class="Linear",
-        method="forward",
-        module=compiled[0],
-        calls=1,
-    )
-    root.children.append(child.path)
-    return (
-        CallTree(
-            nodes={root.path: root, child.path: child},
-            iterations=1,
-            sequences=[[root.path, child.path]],
-            modules=[("root", compiled)],
-        ),
-        compiled,
-    )
-
-
-def test_calls_inside_a_compiled_part_are_not_reported(mocker):
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    tree, compiled = _tree_with_a_compiled_module()
-
-    with TimingRecorder(tree) as timer:  # the compiled module runs as one call; the call inside never does
-        timer.begin_iteration()
-        timer.end_call(timer.begin_call("root.forward", compiled, "forward", ()))
-
-    assert tree.nodes[("root.forward",)].time_ms is not None
     warning.assert_not_called()
-
-
-def test_a_compiled_modules_other_methods_do_not_hide_calls_below_them(mocker):
-    """``compile()`` compiles the call (``forward``) only: another method of the compiled module runs eagerly,
-    so an untimed call below it is reported like any other."""
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    tree, compiled = _tree_with_a_compiled_module()
-    tree.nodes[("root.forward",)].method = "encode"  # the same compiled module, but a user-defined method
-
-    with TimingRecorder(tree) as timer:  # nothing runs: the call below the eager method is reported too
-        timer.begin_iteration()
-
-    text = _warning_text(warning)
-    assert "child" in text
-
-
-def test_an_optimized_module_is_the_exclusion_root(mocker):
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    inner = nn.Sequential(nn.Linear(2, 2))
-    optimized = torch.compile(inner, backend="eager")
-    assert isinstance(optimized, nn.Module)
-    root = CallNode(
-        path=("root.forward",), label="root.forward", owner_class="Seq", method="forward", module=optimized, calls=1
-    )
-    child = CallNode(
-        path=("root.forward", "root.child.forward"),
-        label="root.child.forward",
-        owner_class="Linear",
-        method="forward",
-        module=inner[0],
-        calls=1,
-    )
-    root.children.append(child.path)
-    tree = CallTree(
-        nodes={root.path: root, child.path: child},
-        iterations=1,
-        sequences=[[root.path, child.path]],
-        modules=[("b", optimized)],
-    )
-
-    with TimingRecorder(tree) as timer:  # nothing runs: the ``OptimizedModule`` node is reported, the inside not
-        timer.begin_iteration()
-
-    text = _warning_text(warning)
-    assert "1 of the call tree's 2 nodes have no time" in text
-    assert "child" not in text
-
-
-def test_an_eager_call_of_a_module_inside_a_compiled_part_is_reported(mocker):
-    """A module that is called eagerly *and* inside a compiled part: only the path below the compiled call is
-    inside, so the eager call — untimed here — is reported, not silenced."""
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    shared = nn.Linear(2, 2)
-    compiled = nn.Sequential(shared)  # ``shared`` is a strict submodule of the compiled module
-    compiled._compiled_call_impl = lambda *args, **kwargs: None
-    paths = {
-        "root": ("root.forward",),
-        "eager": ("root.forward", "root.eager.forward"),
-        "comp": ("root.forward", "root.comp.forward"),
-        "inner": ("root.forward", "root.comp.forward", "root.comp.inner.forward"),
-    }
-    root = CallNode(path=paths["root"], label="root.forward", owner_class="Root", method="forward", calls=2)
-    nodes = {
-        paths["eager"]: CallNode(
-            path=paths["eager"],
-            label="root.eager.forward",
-            owner_class="Linear",
-            method="forward",
-            module=shared,
-            calls=2,
-        ),
-        paths["comp"]: CallNode(
-            path=paths["comp"],
-            label="root.comp.forward",
-            owner_class="Seq",
-            method="forward",
-            module=compiled,
-            calls=2,
-        ),
-        paths["inner"]: CallNode(
-            path=paths["inner"],
-            label="root.comp.inner.forward",
-            owner_class="Linear",
-            method="forward",
-            module=shared,
-            calls=2,
-        ),
-    }
-    tree = CallTree(
-        nodes={root.path: root, **nodes},
-        iterations=2,
-        sequences=[[paths["root"], paths["eager"], paths["comp"], paths["inner"]]] * 2,
-        modules=[("root.comp", compiled)],
-    )
-    model = nn.Linear(2, 2)
-
-    with TimingRecorder(tree) as timer:  # only the root runs, at depth 1
-        for _ in range(2):
-            timer.begin_iteration()
-            timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
-
-    text = _warning_text(warning)
-    assert "2 of the call tree's 4 nodes have no time" in text
-    assert "eager" in text
-    assert "inner" not in text
-
-
-def test_a_compiled_module_that_did_not_run_is_reported(mocker):
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    tree, _ = _tree_with_a_compiled_module()
-
-    with TimingRecorder(tree) as timer:
-        timer.begin_iteration()
-
-    text = _warning_text(warning)
-    assert "1 of the call tree's 2 nodes have no time" in text
-    # only the compiled module's own node is listed; the call inside it is expected to have no time
-    assert "child" not in text
-
-
-def test_more_than_three_untimed_paths_get_an_ellipsis(mocker):
-    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
-    tree = _tree_of([
-        [("a",), ("a", "b1"), ("a", "b2"), ("a", "b3"), ("a", "b4")],
-        [("a",)],
-    ])
-    model = nn.Linear(2, 2)
-
-    with TimingRecorder(tree) as timer:  # the children never run although a timed depth covers them
-        for _ in range(2):  # the schedule times depth 2, then depth 1
-            timer.begin_iteration()
-            timer.end_call(timer.begin_call("a", model, "forward", ()))
-
-    text = _warning_text(warning)
-    assert "4 of the call tree's 5 nodes have no time" in text
-    assert "a > b1, a > b2, a > b3, …" in text
-    assert "b4" not in text
 
 
 def test_a_call_timed_when_its_depth_is_timed_does_not_warn(mocker):
