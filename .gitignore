@@ -323,6 +323,7 @@ cython_debug/
 .DS_Store
 
 ### Project specific files and directories ###
+/examples/*/uv.lock
 tests/data
 workspace/
 docs/README.md
