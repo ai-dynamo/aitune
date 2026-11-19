@@ -128,7 +128,7 @@ class _UntimedCalls(NamedTuple):
         never_timed_depth: Nodes at call-path depths the pass never timed.
         did_not_run: Nodes that were expected but never ran.
         missed: Nodes that ran only in iterations timing other depths.
-        count_differs: Nodes that ran a different number of times than in the structure pass.
+        count_differs: Nodes that ran a different number of times than in the structure pass in some iteration.
     """
 
     never_timed_depth: list[CallPath]
@@ -163,9 +163,9 @@ class TimingRecorder(CallRecorder):
     Each iteration times the depth ``depth_schedule`` plans for it from the structure pass's calls, so calls
     that only some samples make are timed too. A call can still stay untimed when a sample behaves differently in
     the timing pass than in the structure pass, for example under random sampling. When the ``with`` block
-    ends, one warning lists the nodes left without a time, grouped by cause, and the calls whose counts differ
-    between the passes; calls inside a part compiled with ``nn.Module.compile()`` are expected to have no time
-    and are not listed.
+    ends, one warning lists the nodes left without a time, grouped by cause, and the calls whose per-iteration
+    counts differ between the passes; calls inside a part compiled with ``nn.Module.compile()`` are expected to
+    have no time and are not listed.
 
     Example:
         >>> from aitune.torch.call_tree.nodes import CallNode
@@ -197,7 +197,7 @@ class TimingRecorder(CallRecorder):
         self._events: list[tuple[CallNode, Any, Any, int, int]] = []
         self._free_events: dict[int, list[Any]] = {}
         self._streams: dict[tuple[int, int, int], torch.cuda.Stream] = {}
-        self._calls: dict[CallPath, int] = {}
+        self._calls: dict[CallPath, Counter[int]] = {}
 
     @property
     def tree(self) -> CallTree:
@@ -273,7 +273,7 @@ class TimingRecorder(CallRecorder):
         """Look up a timing-pass call in the recorded nodes; time it when it is at the depth this iteration times."""
         path = (*self._stack[-1].path, label) if self._stack else (label,)
         node = self._tree.nodes.get(path)
-        self._calls[path] = self._calls.get(path, 0) + 1
+        self._calls.setdefault(path, Counter())[self._iteration - 1] += 1
         start = device = stream = None
         if node is not None and len(path) == self._depth:
             start, device, stream = self._start_timer()
@@ -323,23 +323,25 @@ class TimingRecorder(CallRecorder):
     def _inside_compiled(self, path: CallPath, roots: set[int]) -> bool:
         """Whether ``path`` runs inside a compiled part, where the timing pass cannot see its calls.
 
-        That is when a strict ancestor on the path is a compiled root's call: everything below it runs inside
-        the compiled code — a recursive call of the root included. The root's own node is not inside, it is
-        timed as one call; neither is an eager call of a module that also sits inside a compiled part, which has
-        a different path.
+        That is when a strict ancestor on the path is a compiled root's ``forward`` call: everything below it
+        runs inside the compiled code — a recursive call of the root included. ``compile()`` compiles the call
+        only, so the root's other methods (``encode()`` and the like) and calls below them run eagerly and are
+        not inside. The root's own node is not inside, it is timed as one call; neither is an eager call of a
+        module that also sits inside a compiled part, which has a different path.
         """
         for k in range(1, len(path)):
             node = self._tree.nodes.get(path[:k])
-            if node is not None and node.module is not None and id(node.module) in roots:
+            if node is not None and node.module is not None and node.method == "forward" and id(node.module) in roots:
                 return True
         return False
 
     def _report_untimed_calls(self) -> None:
         """Warn once about the nodes the pass left without a time and the calls that differ, grouped by cause.
 
-        Nodes that never ran are reported only when they are not inside a compiled part (``nn.Module.compile()``
-        or ``torch.compile(module)``): calls inside a compiled part run compiled in the timing pass and are
-        expected to have no time, while the compiled part itself is timed as one call.
+        Nodes that never ran are reported only when they are not inside a compiled part (below a compiled
+        module's ``forward`` call): calls inside run compiled in the timing pass and are expected to have no
+        time, while the compiled part itself is timed as one call. Other methods of a compiled module run
+        eagerly, so calls below them are reported like any other.
         """
         groups = self._untimed_groups()
         sentences = self._report_sentences(groups)
@@ -357,33 +359,40 @@ class TimingRecorder(CallRecorder):
         expected = self._expected_calls()
         never_timed_depth, did_not_run, missed, count_differs = [], [], [], []
         for path in self._tree.nodes:
-            ran = self._calls.get(path, 0)
+            ran_counts = self._calls.get(path, Counter())
+            ran = sum(ran_counts.values())
+            expected_total = sum(expected.get(path, Counter()).values())
             if len(path) not in self._timed_depths and not self._inside_compiled(path, roots):
                 never_timed_depth.append(path)
-            elif expected[path] > 0 and ran == 0 and not self._inside_compiled(path, roots):
+            elif expected_total > 0 and ran == 0 and not self._inside_compiled(path, roots):
                 did_not_run.append(path)
             elif (
                 len(path) in self._timed_depths and path not in self._samples and not self._inside_compiled(path, roots)
             ):
                 missed.append(path)
-            if ran > 0 and ran != expected[path]:
+            if ran > 0 and +ran_counts != +expected.get(path, Counter()):
                 count_differs.append(path)
         return _UntimedCalls(never_timed_depth, did_not_run, missed, count_differs)
 
-    def _expected_calls(self) -> Counter[CallPath]:
-        """The calls the timing pass should have made, from the scheduled depths and the recorded sequences.
+    def _expected_calls(self) -> dict[CallPath, Counter[int]]:
+        """The calls the timing pass should have made in each iteration.
+
+        Computed from the scheduled depths and the recorded sequences.
 
         An iteration only counts calls at its timed depth or shallower, so a path counts only from iterations
         whose scheduled depth is at least as deep. With no iteration started at all, expect every node's
-        recorded ``calls``.
+        recorded ``calls`` under the no-iteration index -1, matching the calls counted without
+        ``begin_iteration``.
         """
         if self._iteration == 0:
-            return Counter({path: node.calls for path, node in self._tree.nodes.items()})
-        expected: Counter[CallPath] = Counter()
-        for depth, sequence in zip(self._schedule[: self._iteration], self._tree.sequences, strict=False):
+            return {path: Counter({-1: node.calls}) for path, node in self._tree.nodes.items()}
+        expected: dict[CallPath, Counter[int]] = {}
+        for i, (depth, sequence) in enumerate(
+            zip(self._schedule[: self._iteration], self._tree.sequences, strict=False)
+        ):
             for path in sequence:
                 if depth is None or len(path) <= depth:
-                    expected[path] += 1
+                    expected.setdefault(path, Counter())[i] += 1
         return expected
 
     def _report_sentences(self, groups: _UntimedCalls) -> list[str]:
@@ -417,8 +426,9 @@ class TimingRecorder(CallRecorder):
             )
         if count_differs:
             sentences.append(
-                f"{len(count_differs)} ran a different number of times than in the structure pass, for example "
-                f"under sampling, so their times may be off: {_format_paths(count_differs)}."
+                f"{len(count_differs)} ran a different number of times than in the structure pass in some "
+                f"iteration, for example under sampling, so their times may be off: "
+                f"{_format_paths(count_differs)}."
             )
         return sentences
 

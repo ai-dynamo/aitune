@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Inspecting and patching modules."""
 
+import contextlib
 import time
 from collections.abc import Callable, Sequence
 from logging import getLogger
@@ -140,22 +141,32 @@ def _record_call_tree(
 ) -> CallTree:
     """Record the call tree without times, then time it in a second pass, one call-path depth per iteration."""
     logger.info("Recording the call tree's structure.")
-    with structure, torch.compiler.set_stance("force_eager"):
+    with contextlib.ExitStack() as stack:
+        with coordinator.raise_if_any_rank_fails("Starting the call tree's structure pass"):
+            stack.enter_context(structure)
         # Recording reads each weight access eagerly; Dynamo cannot trace the TorchFunctionMode.
+        stack.enter_context(torch.compiler.set_stance("force_eager"))
         for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
             structure.begin_iteration()
             _run_inference(inference_function, args, kwargs)
             structure.end_iteration()
-    tree = structure.result()
+        with coordinator.raise_if_any_rank_fails("Ending the call tree's structure pass"):
+            stack.close()
+    with coordinator.raise_if_any_rank_fails("Reading the call tree's structure"):
+        tree = structure.result()
     deepest = max((len(path) for path in tree.nodes), default=0)
     logger.info("Timing the call tree, one call-path depth per iteration (%d depths).", deepest)
-    with TimingRecorder(tree) as timer:
+    with contextlib.ExitStack() as stack:
+        with coordinator.raise_if_any_rank_fails("Starting the call tree timing pass"):
+            timer = stack.enter_context(TimingRecorder(tree))
         samples = samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations)
         for _, args, kwargs in samples:
             timer.begin_iteration()
             _run_inference(inference_function, args, kwargs)
             with coordinator.raise_if_any_rank_fails("Resolving call tree timings"):
                 timer.flush()
+        with coordinator.raise_if_any_rank_fails("Ending the call tree timing pass"):
+            stack.close()
     return synchronize_call_tree(tree)
 
 

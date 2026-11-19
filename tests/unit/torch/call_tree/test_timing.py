@@ -135,7 +135,7 @@ def test_an_iteration_beyond_the_recorded_ones_times_nothing(mocker):
         child = timer.begin_call("root.child.forward", model, "forward", ())
         timer.end_call(child)
         timer.end_call(root)
-        assert timer._expected_calls() == Counter({("root.forward",): 1})
+        assert timer._expected_calls() == {("root.forward",): Counter({0: 1})}
 
     assert all(node.time_ms is None for node in tree.nodes.values())
     assert "did not run in the timing pass" not in _warning_text(warning)
@@ -806,6 +806,26 @@ def test_a_different_call_count_is_reported_but_the_node_is_timed(mocker):
     assert "child.forward" in text
 
 
+def test_a_different_call_count_in_one_iteration_is_reported(mocker):
+    """The same total shifted between iterations — 1 then 3 recorded, 3 then 1 timed — still differs."""
+    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    a = ("root.forward",)
+    tree = _tree_of([[a], [a, a, a]])
+    model = nn.Linear(2, 2)
+
+    with TimingRecorder(tree) as timer:  # the schedule times depth 1 in both iterations; every call is counted
+        timer.begin_iteration()
+        for _ in range(3):  # runs 3 times where the structure pass made 1 call
+            timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
+        timer.begin_iteration()
+        timer.end_call(timer.begin_call("root.forward", model, "forward", ()))  # once where it made 3
+
+    text = _warning_text(warning)
+    assert "ran a different number of times than in the structure pass" in text
+    assert text.count("forward") == 1  # one entry for the path (rendered "forward"), not one per iteration
+
+
 def test_a_call_without_a_recorded_node_is_reported(mocker):
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
     warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
@@ -865,6 +885,21 @@ def test_calls_inside_a_compiled_part_are_not_reported(mocker):
 
     assert tree.nodes[("root.forward",)].time_ms is not None
     warning.assert_not_called()
+
+
+def test_a_compiled_modules_other_methods_do_not_hide_calls_below_them(mocker):
+    """``compile()`` compiles the call (``forward``) only: another method of the compiled module runs eagerly,
+    so an untimed call below it is reported like any other."""
+    mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    tree, compiled = _tree_with_a_compiled_module()
+    tree.nodes[("root.forward",)].method = "encode"  # the same compiled module, but a user-defined method
+
+    with TimingRecorder(tree) as timer:  # nothing runs: the call below the eager method is reported too
+        timer.begin_iteration()
+
+    text = _warning_text(warning)
+    assert "child" in text
 
 
 def test_an_optimized_module_is_the_exclusion_root(mocker):
