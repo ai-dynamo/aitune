@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""ONNX Model Info module for extracting information from ONNX models."""
+"""Extract metadata from ONNX models."""
 
 import logging
 from enum import Enum

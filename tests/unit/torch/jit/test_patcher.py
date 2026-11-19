@@ -4,12 +4,14 @@
 
 from unittest.mock import Mock
 
+import pytest
 import torch
 
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.patcher import Patcher, jit_reset, patch_for_jit_tuning, prepare_for_jit_tuning
+from aitune.torch.module.onnx_module import OnnxModule
 
 
 def _module_with_module_name(module_name: str) -> torch.nn.Module:
@@ -94,6 +96,25 @@ def test_is_allowed_to_tune():
     """Test is_allowed_to_tune function."""
     assert Patcher._is_allowed_to_tune(torch.nn.Linear(10, 5))
     assert not Patcher._is_allowed_to_tune(Mock(spec=torch._dynamo.eval_frame.OptimizedModule))
+
+
+@pytest.mark.parametrize(
+    ("mode", "exclusions", "expected"),
+    [
+        (JITMode.INSPECT, (), True),
+        (JITMode.TUNE_EAGER, (), False),
+        (JITMode.TUNE_DEFERRED, (), False),
+        (JITMode.INSPECT, ("aitune",), False),
+        (JITMode.INSPECT, ("aitune.torch.module.onnx_module.OnnxModule",), False),
+    ],
+)
+def test_onnx_module_inspection_respects_mode_and_user_exclusions(monkeypatch, tmp_path, mode, exclusions, expected):
+    monkeypatch.setattr(jit_config, "mode", mode)
+    monkeypatch.setattr(jit_config, "patch_exclude", exclusions)
+    module = OnnxModule(tmp_path / "unused.onnx")
+
+    assert Patcher._is_allowed_to_tune(module) is expected
+    assert not Patcher._is_allowed_to_tune(_module_with_module_name("aitune.torch.libs.exporting"))
 
 
 def test_is_allowed_to_tune_excludes_submodule_classes():

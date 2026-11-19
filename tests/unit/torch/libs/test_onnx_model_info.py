@@ -9,7 +9,7 @@ import onnx
 import pytest
 from onnx import TensorProto, helper, numpy_helper
 
-from aitune.torch.libs.onnx.onnx_model_info import ONNX_DTYPE_TO_PRECISION, ONNXModelInfo, ONNXPrecision
+from aitune.torch.libs.onnx_model_info import ONNX_DTYPE_TO_PRECISION, ONNXModelInfo, ONNXPrecision
 from tests.toy_models.onnx_models import ToyOnnxModel
 
 # ---------------------------------------------------------------------------
@@ -244,7 +244,7 @@ def test_input_shapes_mixed_dims():
 # ---------------------------------------------------------------------------
 
 
-@patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
+@patch("aitune.torch.libs.onnx_model_info.onnx.load")
 def test_input_shapes_static_dims(mock_load, tmp_path):
     inputs = [_make_value_info("x", [2, 3, 224, 224])]
     mock_load.return_value = _make_model(input_specs=inputs)
@@ -252,7 +252,7 @@ def test_input_shapes_static_dims(mock_load, tmp_path):
     assert info.input_shapes == {"x": [2, 3, 224, 224]}
 
 
-@patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
+@patch("aitune.torch.libs.onnx_model_info.onnx.load")
 def test_input_shapes_unknown_dim(mock_load, tmp_path):
     inputs = [_make_value_info("x", [None, 3])]
     mock_load.return_value = _make_model(input_specs=inputs)
@@ -265,7 +265,7 @@ def test_input_shapes_unknown_dim(mock_load, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
+@patch("aitune.torch.libs.onnx_model_info.onnx.load")
 def test_opset_version_none_when_no_opset(mock_load, tmp_path):
     model = _make_model()
     model.opset_import = []
@@ -285,7 +285,7 @@ def test_precision_fp32_model_returns_none():
     assert info.precision is None
 
 
-@patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
+@patch("aitune.torch.libs.onnx_model_info.onnx.load")
 def test_precision_fp16_model(mock_load, tmp_path):
     inits = [_make_initializer(10)] * 5  # dtype 10 = FLOAT16
     mock_load.return_value = _make_model(initializers=inits)
@@ -293,7 +293,7 @@ def test_precision_fp16_model(mock_load, tmp_path):
     assert info.precision == ONNXPrecision.FP16
 
 
-@patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
+@patch("aitune.torch.libs.onnx_model_info.onnx.load")
 def test_precision_int8_model(mock_load, tmp_path):
     inits = [_make_initializer(3)] * 10  # dtype 3 = INT8
     mock_load.return_value = _make_model(initializers=inits)
@@ -301,7 +301,7 @@ def test_precision_int8_model(mock_load, tmp_path):
     assert info.precision == ONNXPrecision.INT8
 
 
-@patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
+@patch("aitune.torch.libs.onnx_model_info.onnx.load")
 def test_precision_lowest_wins(mock_load, tmp_path):
     # FP16 + INT8 present → INT8 is lower precision, should be reported
     inits = [_make_initializer(10)] * 10 + [_make_initializer(3)] * 3
@@ -310,7 +310,7 @@ def test_precision_lowest_wins(mock_load, tmp_path):
     assert info.precision == ONNXPrecision.INT8
 
 
-@patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
+@patch("aitune.torch.libs.onnx_model_info.onnx.load")
 def test_precision_no_initializers_returns_none(mock_load, tmp_path):
     mock_load.return_value = _make_model(initializers=[])
     info = ONNXModelInfo(tmp_path / "model.onnx")
@@ -356,14 +356,12 @@ def test_graph_metadata_does_not_load_external_weights(tmp_path):
 
 
 def test_import_error_propagates(monkeypatch, tmp_path):
-    import aitune.torch.libs.onnx.onnx_model_info as module_under_test
-
-    monkeypatch.setattr(module_under_test.onnx, "load", MagicMock(side_effect=ImportError("no onnx")))
+    monkeypatch.setattr(onnx, "load", MagicMock(side_effect=ImportError("no onnx")))
     with pytest.raises(ImportError):
         ONNXModelInfo(tmp_path / "model.onnx")
 
 
-@patch("aitune.torch.libs.onnx.onnx_model_info.onnx.load")
+@patch("aitune.torch.libs.onnx_model_info.onnx.load")
 def test_load_error_propagates(mock_load, tmp_path):
     mock_load.side_effect = RuntimeError("corrupt model")
     with pytest.raises(RuntimeError, match="corrupt model"):
