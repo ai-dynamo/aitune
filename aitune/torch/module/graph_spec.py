@@ -84,7 +84,10 @@ class GraphSpec:
         arguments: dict[str, Any],
         tensor_mutation_policies: Mapping[int, TensorMutationPolicy] | None = None,
     ) -> Any:
-        """Restore input changes before rebuilding the user output through the forward contract.
+        """Delegate input mutation restoration and output reconstruction to the forward contract.
+
+        The contract applies recorded input changes first, then rebuilds the user output so returned
+        aliases refer to the updated caller-owned objects.
 
         flat_outputs must follow output_names(), including internal state results. arguments contains
         the current call's normalized live inputs, not the recorded sample. Optional mutation policies

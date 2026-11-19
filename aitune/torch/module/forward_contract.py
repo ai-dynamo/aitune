@@ -33,8 +33,11 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 class InputMutationKind(str, Enum):
     """How a recorded input leaf changed during forward.
 
-    COPY_TENSOR means the same tensor was written to with unchanged metadata. REPLACE_TENSOR means
-    a new tensor appeared or tensor metadata changed, requiring assignment rather than value copying.
+    COPY_TENSOR means the same tensor was written to in place with unchanged metadata. The name refers
+    to default restoration: copy the compiled result back into the existing input tensor. It does not
+    mean the recorded forward call copied the tensor; a backend policy can also select replacement.
+    REPLACE_TENSOR means a new tensor appeared or tensor metadata changed, requiring assignment rather
+    than value copying.
     REPLACE_CONSTANT stores an observed non-tensor value; it does not evaluate an update on future inputs.
     """
 
