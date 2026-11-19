@@ -96,7 +96,8 @@ def is_compiled_module(module: Any, forward: Callable[..., Any] | None = None) -
     """Whether ``module`` runs compiled.
 
     That is ``nn.Module.compile()`` (``_compiled_call_impl``), ``torch.compile()`` (an ``OptimizedModule``), or a
-    ``torch.compile``'d ``forward`` (``module.forward = torch.compile(module.forward)``).
+    ``torch.compile``'d ``forward`` (``module.forward = torch.compile(module.forward)``). A
+    ``torch.compiler.disable``'d ``forward`` is not compiled: it runs eagerly.
 
     ``forward`` defaults to ``module.forward``; the inspector passes the original it kept, because its wrapper
     shadows it during inspection. The check follows the ``__wrapped__`` chain, since not every wrapper copies the
@@ -125,6 +126,14 @@ def is_compiled_module(module: Any, forward: Callable[..., Any] | None = None) -
         >>> m.forward = torch.compile(m.forward, backend="eager")
         >>> is_compiled_module(m)
         True
+        >>> class D(nn.Module):
+        ...     @torch.compiler.disable
+        ...     def forward(self, x):
+        ...         return x
+        >>> d = M()
+        >>> d.forward = torch.compiler.disable(d.forward)
+        >>> is_compiled_module(D()), is_compiled_module(d)
+        (False, False)
     """
     if not isinstance(module, nn.Module):
         return False
@@ -134,7 +143,7 @@ def is_compiled_module(module: Any, forward: Callable[..., Any] | None = None) -
     for _ in range(10):  # bound the __wrapped__ walk
         if callable_ is None:
             return False
-        if hasattr(callable_, "_torchdynamo_orig_callable"):
+        if hasattr(callable_, "_torchdynamo_orig_callable") and not getattr(callable_, "_torchdynamo_disable", False):
             return True
         callable_ = getattr(callable_, "__wrapped__", None)
     return False
