@@ -35,6 +35,8 @@ jobs:
     name: Compatibility
     needs: ci
     uses: ./.github/workflows/dispatch.compatibility.yml
+    with:
+      run_functional_ci: true
 
   functional:
     name: Functional tests
