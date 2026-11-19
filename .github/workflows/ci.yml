@@ -49,6 +49,17 @@ defaults:
     shell: bash
 
 jobs:
+  compatibility:
+    name: Compatibility
+    uses: ./.github/workflows/dispatch.compatibility.yml
+    with:
+      run_nvcr_container: true
+      run_cuda_matrix: false
+      run_functional_ci: true
+    permissions:
+      contents: read
+      packages: read
+
   lint:
     name: Lint
     runs-on: linux-amd64-cpu4

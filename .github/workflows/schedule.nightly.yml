@@ -36,6 +36,7 @@ jobs:
     needs: ci
     uses: ./.github/workflows/dispatch.compatibility.yml
     with:
+      run_nvcr_container: false
       run_functional_ci: true
 
   functional:
