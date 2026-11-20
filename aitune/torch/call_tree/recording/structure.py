@@ -81,32 +81,6 @@ class StructureRecorder(CallRecorder):
         self._weight_access_mode: WeightAccessMode | None = None
         self._modules: dict[int, tuple[str, nn.Module]] = {}
 
-    def _start(self) -> None:
-        """Install the ``nn.Module._apply`` probe and the weight-access mode."""
-        self._original_apply = nn.Module._apply
-        try:
-            nn.Module._apply = self._make_apply_probe(self._original_apply)
-            self._weight_access_log.start(self._modules.values())
-            weight_access_mode = WeightAccessMode(
-                self._weight_access_log, lambda: self._stack[-1].node.path_str if self._stack else ""
-            )
-            weight_access_mode.__enter__()
-            self._weight_access_mode = weight_access_mode
-        except BaseException:
-            self._stop(completed=False)
-            raise
-
-    def _stop(self, completed: bool) -> None:
-        """End the structure pass and restore ``nn.Module._apply``, also when the recorded code raised."""
-        self._stack.clear()
-        self._current_sequence = None
-        if self._weight_access_mode is not None:
-            self._weight_access_mode.__exit__(None, None, None)
-            self._weight_access_mode = None
-        if self._original_apply is not None:
-            nn.Module._apply = self._original_apply
-            self._original_apply = None
-
     def register_module(self, label_prefix: str, module: nn.Module) -> None:
         """Register an instrumented module for parameter names and sizes.
 
@@ -168,27 +142,6 @@ class StructureRecorder(CallRecorder):
         self._stack.append(frame)
         return frame
 
-    def _input_leaves(
-        self, obj: Any, method: str, args: tuple[Any, ...], kwargs: dict[str, Any] | None
-    ) -> list[tuple[str, Any]]:
-        """The call's arguments bound to parameter names, walked into ``(name, leaf)`` pairs."""
-        bound = getattr(obj, method, None)
-        function = getattr(bound, "__func__", bound)  # per instance when the instance replaced the method
-        entry = self._declared_signatures.get(id(function))
-        if entry is None:
-            try:
-                declared = ForwardSignature.from_callable(bound)
-            except (TypeError, ValueError):
-                declared = None
-            entry = self._declared_signatures[id(function)] = (function, declared)
-        declared = entry[1]
-        arguments = {"args": args, "kwargs": kwargs or {}}
-        if declared is not None:
-            with contextlib.suppress(TypeError, ValueError):
-                arguments = dict(declared.normalize(args, kwargs or {}).arguments)
-        seen: set[int] = set()  # container ids seen in this call's input walk
-        return [leaf for parameter, value in arguments.items() for leaf in _named_leaves(value, parameter, seen)]
-
     def end_call(self, frame: _Frame | None, result: Any = NO_RESULT) -> None:
         """Record the end of a call started with ``begin_call``.
 
@@ -214,6 +167,78 @@ class StructureRecorder(CallRecorder):
             signature = signatures[key] = _signature(key)
             frame.node.signatures.append(signature)
         signature.call_indices.append(frame.call_index)
+
+    def begin_iteration(self) -> None:
+        """Mark the start of one iteration (for example one call of the inference function)."""
+        self._current_sequence = []
+        self._top_visible = _SourceIndex()  # a new top level: nothing links across iterations
+
+    def end_iteration(self) -> None:
+        """Mark the end of the current iteration."""
+        if self._current_sequence is not None:
+            self._sequences.append(self._current_sequence)
+        self._current_sequence = None
+
+    def result(self) -> CallTree:
+        """Return the recorded call tree.
+
+        The returned tree is a snapshot — a ``CallTree.copy()`` of the recorder's state — so later recording
+        does not change it.
+        """
+        return CallTree(
+            nodes=self._nodes,
+            iterations=len(self._sequences),
+            sequences=self._sequences,
+            weight_accesses=self._weight_access_log.snapshot(),
+            modules=list(self._modules.values()),
+        ).copy()
+
+    def _start(self) -> None:
+        """Install the ``nn.Module._apply`` probe and the weight-access mode."""
+        self._original_apply = nn.Module._apply
+        try:
+            nn.Module._apply = self._make_apply_probe(self._original_apply)
+            self._weight_access_log.start(self._modules.values())
+            weight_access_mode = WeightAccessMode(
+                self._weight_access_log, lambda: self._stack[-1].node.path_str if self._stack else ""
+            )
+            weight_access_mode.__enter__()
+            self._weight_access_mode = weight_access_mode
+        except BaseException:
+            self._stop(completed=False)
+            raise
+
+    def _stop(self, completed: bool) -> None:
+        """End the structure pass and restore ``nn.Module._apply``, also when the recorded code raised."""
+        self._stack.clear()
+        self._current_sequence = None
+        if self._weight_access_mode is not None:
+            self._weight_access_mode.__exit__(None, None, None)
+            self._weight_access_mode = None
+        if self._original_apply is not None:
+            nn.Module._apply = self._original_apply
+            self._original_apply = None
+
+    def _input_leaves(
+        self, obj: Any, method: str, args: tuple[Any, ...], kwargs: dict[str, Any] | None
+    ) -> list[tuple[str, Any]]:
+        """The call's arguments bound to parameter names, walked into ``(name, leaf)`` pairs."""
+        bound = getattr(obj, method, None)
+        function = getattr(bound, "__func__", bound)  # per instance when the instance replaced the method
+        entry = self._declared_signatures.get(id(function))
+        if entry is None:
+            try:
+                declared = ForwardSignature.from_callable(bound)
+            except (TypeError, ValueError):
+                declared = None
+            entry = self._declared_signatures[id(function)] = (function, declared)
+        declared = entry[1]
+        arguments = {"args": args, "kwargs": kwargs or {}}
+        if declared is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                arguments = dict(declared.normalize(args, kwargs or {}).arguments)
+        seen: set[int] = set()  # container ids seen in this call's input walk
+        return [leaf for parameter, value in arguments.items() for leaf in _named_leaves(value, parameter, seen)]
 
     def _link_inputs(self, path: CallPath, values: list[tuple[Any, Leaf]]) -> tuple[tuple[Leaf, ...], _SourceIndex]:
         """Source a call's arguments from what its caller sees; return its input signature key and what it sees.
@@ -252,31 +277,6 @@ class StructureRecorder(CallRecorder):
     def _visible_in_caller(self) -> _SourceIndex:
         """What the caller of a starting or ending call sees: the innermost open call's ``visible`` or the top level."""
         return self._stack[-1].visible if self._stack else self._top_visible
-
-    def begin_iteration(self) -> None:
-        """Mark the start of one iteration (for example one call of the inference function)."""
-        self._current_sequence = []
-        self._top_visible = _SourceIndex()  # a new top level: nothing links across iterations
-
-    def end_iteration(self) -> None:
-        """Mark the end of the current iteration."""
-        if self._current_sequence is not None:
-            self._sequences.append(self._current_sequence)
-        self._current_sequence = None
-
-    def result(self) -> CallTree:
-        """Return the recorded call tree.
-
-        The returned tree is a snapshot — a ``CallTree.copy()`` of the recorder's state — so later recording
-        does not change it.
-        """
-        return CallTree(
-            nodes=self._nodes,
-            iterations=len(self._sequences),
-            sequences=self._sequences,
-            weight_accesses=self._weight_access_log.snapshot(),
-            modules=list(self._modules.values()),
-        ).copy()
 
     def _make_apply_probe(self, original_apply: Callable) -> Callable:
         """Build the replacement for ``nn.Module._apply`` that ``_start`` installs.
