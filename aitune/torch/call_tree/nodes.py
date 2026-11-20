@@ -44,8 +44,9 @@ class CallNode:
 
     ``bytes_in`` and ``bytes_out`` measure the tensor data passed into and returned from the node's calls. Only
     tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
-    inside lists, tuples, dicts and ``ModelOutput`` count too. Everything else counts as 0 bytes: numbers, strings,
-    ``None``, and objects such as a ``DynamicCache``, including the tensors they hold.
+    inside lists, tuples, dicts and ``ModelOutput`` count too, and so do those in ``UserDict``s, such as
+    transformers' ``BatchFeature``, and in dataclass instances, walked into their fields. Everything else counts as
+    0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache``, including the tensors they hold.
 
     Attributes:
         key: Labels of the calling chain, outermost first. Identifies the node.

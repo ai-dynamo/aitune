@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import dataclasses
+from collections import UserDict
+from collections.abc import Mapping
+
 import pytest
 import torch
 from torch import nn
@@ -867,3 +871,179 @@ def test_the_bytes_walk_records_no_weight_access():
     tree = record(model, lambda: model(model.lin.weight), iterations=1)
 
     assert not tree.weight_accesses.get("lin.weight")
+
+
+class _Batch(UserDict):
+    """UserDict mapping like transformers' ``BatchFeature``: pytree leaves it unflattened."""
+
+
+def test_bytes_count_tensors_inside_a_userdict():
+    class Model(nn.Module):
+        def forward(self, batch):
+            return _Batch({"x": batch["x"], "fresh": torch.zeros(4, 8)})
+
+    model = Model()
+    a, b, c = torch.randn(4, 8), torch.randn(2, 8), torch.randn(8)
+
+    def call():
+        return model(_Batch({"x": a, "y": b, "nested": [c]}))
+
+    tree = record(model, call, iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    in_bytes = a.numel() * a.element_size() + b.numel() * b.element_size() + c.numel() * c.element_size()
+    out_bytes = 2 * a.numel() * a.element_size()  # x plus a fresh same-shaped tensor
+    assert node.bytes_in == in_bytes
+    assert node.bytes_out == out_bytes
+
+
+def test_bytes_count_a_tensor_in_a_userdict_and_an_arg_once():
+    class Model(nn.Module):
+        def forward(self, x, batch=None):
+            return x
+
+    model = Model()
+    t = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(t, batch=_Batch({"again": t})), iterations=1)
+
+    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+
+
+def test_bytes_count_tensors_inside_a_batch_feature():
+    from transformers.feature_extraction_utils import BatchFeature
+
+    class Model(nn.Module):
+        def forward(self, features):
+            return BatchFeature({"x": features["x"]})
+
+    model = Model()
+    a, b, c = torch.randn(4, 8), torch.randn(2, 8), torch.randn(8)
+
+    tree = record(model, lambda: model(BatchFeature({"x": a, "y": b, "nested": [c]})), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    in_bytes = a.numel() * a.element_size() + b.numel() * b.element_size() + c.numel() * c.element_size()
+    assert node.bytes_in == in_bytes
+    assert node.bytes_out == a.numel() * a.element_size()
+
+
+def test_bytes_count_a_userdict_that_contains_itself():
+    class Model(nn.Module):
+        def forward(self, batch):
+            return batch["x"]
+
+    model = Model()
+    t = torch.randn(4, 8)
+    batch = _Batch({"x": t})
+    batch["self"] = batch
+
+    tree = record(model, lambda: model(batch), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.bytes_out == t.numel() * t.element_size()
+
+
+@pytest.mark.parametrize("options", [{}, {"frozen": True}, {"slots": True}], ids=["plain", "frozen", "slots"])
+def test_bytes_count_tensors_inside_a_dataclass(options):
+    @dataclasses.dataclass(**options)
+    class Packed:
+        x: torch.Tensor
+        nested: list
+        label: str = "packed"
+
+    class Model(nn.Module):
+        def forward(self, packed):
+            return Packed(x=packed.x, nested=[torch.zeros(8)])
+
+    model = Model()
+    a, b = torch.randn(4, 8), torch.randn(2, 8)
+
+    tree = record(model, lambda: model(Packed(x=a, nested=[b])), iterations=1)
+
+    node = tree.nodes[("root.forward",)]
+    assert node.bytes_in == a.numel() * a.element_size() + b.numel() * b.element_size()
+    assert node.bytes_out == a.numel() * a.element_size() + 8 * 4
+
+
+def test_bytes_count_a_dataclass_that_contains_itself():
+    @dataclasses.dataclass
+    class Node:
+        x: torch.Tensor
+        parent: object = None
+
+    class Model(nn.Module):
+        def forward(self, node):
+            return node.x
+
+    model = Model()
+    t = torch.randn(4, 8)
+    node = Node(t)
+    node.parent = node
+
+    tree = record(model, lambda: model(node), iterations=1)
+
+    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+
+
+def test_bytes_skip_a_dataclass_field_without_a_value():
+    @dataclasses.dataclass(slots=True)
+    class Partial:
+        x: torch.Tensor
+        later: torch.Tensor = dataclasses.field(init=False)
+
+    class Model(nn.Module):
+        def forward(self, partial):
+            return partial.x
+
+    model = Model()
+    t = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(Partial(t)), iterations=1)
+
+    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+
+
+def test_bytes_walk_a_model_output_as_before():
+    from transformers.modeling_outputs import BaseModelOutput
+
+    class Model(nn.Module):
+        def forward(self, x):
+            return BaseModelOutput(last_hidden_state=x, hidden_states=(x, x[:2] * 0))
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(x), iterations=1)
+
+    assert tree.nodes[("root.forward",)].bytes_out == x.numel() * x.element_size() + 2 * 8 * 4
+
+
+def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
+    reads: list[str] = []
+
+    class LazyMap(Mapping):
+        def __getitem__(self, key):
+            reads.append("__getitem__")
+            raise KeyError(key)
+
+        def __iter__(self):
+            reads.append("__iter__")
+            return iter(())
+
+        def __len__(self):
+            reads.append("__len__")
+            return 0
+
+    class Model(nn.Module):
+        def forward(self, x, extra=None):
+            return x
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    tree = record(model, lambda: model(x, extra=LazyMap()), iterations=1)
+
+    assert tree.nodes[("root.forward",)].bytes_in == x.numel() * x.element_size()
+    assert reads == []
