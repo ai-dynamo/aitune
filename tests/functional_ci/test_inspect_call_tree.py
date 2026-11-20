@@ -10,7 +10,7 @@ from aitune.torch.call_tree.nodes import TensorLeaf
 from tests.functional_ci.models import seeded
 from tests.toy_models.call_tree_models import HIDDEN, VlaToy, vla_inputs
 
-ITERATIONS = 3
+ITERATIONS = 4  # the timing pass times one call-path depth per iteration; the VlaToy tree is 4 deep
 
 
 def _vla(device: torch.device):
@@ -44,7 +44,7 @@ def test_call_tree_records_the_calls_and_their_cuda_times(device: torch.device):
     assert tree.nodes[("root.forward",)].calls == ITERATIONS
     assert tree.nodes[("root.forward", "root.dit_forward")].calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes
-    assert all(node.time_ms > 0 for node in tree.nodes.values())
+    assert all(node.time_ms is not None and node.time_ms > 0 for node in tree.nodes.values())
     [dit] = tree.nodes_of(model.dit)
     assert dit.bytes_in > 0 and dit.bytes_out > 0
 
@@ -82,11 +82,11 @@ def test_call_tree_records_the_signatures_at_the_llm_to_dit_cut(device: torch.de
         "x": TensorLeaf("x", "torch.Tensor", torch.float32, (2, HIDDEN)),
         "t": TensorLeaf("t", "torch.Tensor", torch.float32, (2, 1)),
     }
-    assert tree.iteration_starts()[dit_key] == [0, 5, 10]
+    assert tree.iteration_starts()[dit_key] == [5 * i for i in range(ITERATIONS)]
 
     exported = tree.to_dict()
     [dit] = [node for node in exported["nodes"] if node["call_path"] == "forward > dit_forward"]
-    assert dit["iteration_starts"] == [0, 5, 10]
+    assert dit["iteration_starts"] == [5 * i for i in range(ITERATIONS)]
     assert dit["signatures"][0]["inputs"]["t"] == {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [2, 1]}
     tied = {"weight": {"dtype": "torch.float32", "shape": [16, HIDDEN]}}
     assert exported["modules"]["lm_head"]["parameters"] == tied

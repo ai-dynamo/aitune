@@ -5,7 +5,7 @@
 from typing import NamedTuple
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.nodes import CallPath, CallSignature
+from aitune.torch.call_tree.nodes import CallPath, CallSignature, TimedIteration
 from aitune.torch.distributed import coordinator
 
 
@@ -16,7 +16,7 @@ class _NodeRecord(NamedTuple):
     owner_class: str
     calls: int
     iteration_starts: list[int]
-    time_ms: float | None
+    timings: list[TimedIteration]
     bytes_in: int
     bytes_out: int
     signatures: list[CallSignature]
@@ -29,18 +29,21 @@ class _NodeRecord(NamedTuple):
 def synchronize_call_tree(tree: CallTree) -> CallTree:
     """Apply rank zero's call counts, timings, byte totals and recorded signatures to the local call tree.
 
+    Updates ``tree`` in place and returns it.
+
     Every rank must have recorded the same tree: the same call paths (adapter names), with the same owner class,
     call count and ``CallTree.iteration_starts`` per node, so each node's calls fall into the same iterations on
-    every rank. Times, tensor bytes and the per-node signatures are taken from rank zero so that every rank reports
-    the same values; the bytes and signatures are not compared, because tensor-parallel ranks can hold differently
-    sized shards. Sequences, ``.to()`` callers and recorded weight accesses stay local; they follow from the
-    verified structure, so rank zero's signature call indices map to the same iterations on every rank.
+    every rank. The measured timings, tensor bytes and the per-node signatures are taken from rank zero,
+    so every rank reports the same values; the bytes and signatures are not compared, because tensor-parallel
+    ranks can hold differently sized shards. Sequences, ``.to()`` callers and recorded weight accesses stay
+    local; they follow from the verified structure, so rank zero's signature call indices map to the same
+    iterations on every rank.
 
     Args:
         tree: The local call tree.
 
     Returns:
-        The same tree with rank zero's times, byte totals and signatures.
+        The same tree with rank zero's timings, byte totals and signatures.
 
     Raises:
         RuntimeError: If the local tree differs from rank zero's.
@@ -54,7 +57,7 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
                 node.owner_class,
                 node.calls,
                 iteration_starts[path],
-                node.time_ms,
+                node.timings,
                 node.bytes_in,
                 node.bytes_out,
                 node.signatures,
@@ -83,7 +86,7 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
                 )
     for record in rank_zero_records:
         node = tree.nodes[record.path]
-        node.time_ms = record.time_ms
+        node.timings = list(record.timings)
         node.bytes_in = record.bytes_in
         node.bytes_out = record.bytes_out
         node.signatures = list(record.signatures)

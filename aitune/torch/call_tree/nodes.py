@@ -106,12 +106,12 @@ class CallSignature:
 
     Example:
         >>> import torch
-        >>> from aitune.torch.call_tree.recorder import CallRecorder
+        >>> from aitune.torch.call_tree.recording import StructureRecorder
         >>> class Cache: ...
         >>> class Layer(torch.nn.Module):
         ...     def forward(self, x, state=None):
         ...         return x
-        >>> recorder, layer = CallRecorder(), Layer()
+        >>> recorder, layer = StructureRecorder(), Layer()
         >>> with recorder:
         ...     for args in (
         ...         ((torch.zeros(1, 4, 8),), {"state": Cache()}),
@@ -140,6 +140,21 @@ class CallSignature:
     call_indices: list[int] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class TimedIteration:
+    """What the timing pass measured for a node in one iteration: how many of its calls it timed and their time.
+
+    Attributes:
+        iteration: Index of the timing-pass iteration, the same as in ``CallTree.sequences``.
+        calls: Calls of the node timed in this iteration.
+        time_ms: Their total measured time in milliseconds.
+    """
+
+    iteration: int
+    calls: int
+    time_ms: float
+
+
 @dataclass
 class CallNode:
     """One node of the call tree.
@@ -160,7 +175,9 @@ class CallNode:
         method: Name of the called method (``forward`` for module calls).
         module: Module the method belongs to, or None for methods of plain objects.
         calls: Number of calls over all recorded iterations.
-        time_ms: Time in milliseconds over all recorded iterations.
+        timings: What the timing pass measured, one ``TimedIteration`` per iteration that timed the node.
+        time_ms: Estimated time in milliseconds over all recorded iterations, derived from ``timings``; None
+            when the node was never timed.
         bytes_in: Tensor bytes in the arguments, summed over all recorded iterations. Bytes per call:
             ``bytes_in / calls``.
         bytes_out: Tensor bytes in the results, summed over all recorded iterations.
@@ -169,6 +186,10 @@ class CallNode:
             appears exactly once. A signature whose calls raised has ``outputs`` None.
         children: Call paths of the called nodes in first-call order.
         first_seen: Position of the node's first call among all nodes.
+        inside_compiled_part: Whether the call runs inside a compiled part, so the timing pass cannot time it (it
+            runs compiled there). The compiled part's own call is not inside it and is timed as one call. Calls
+            below a ``torch.compiler.disable``'d call inside a compiled part count as inside too: they run
+            eagerly, but the timing pass does not see the disabled call, so it cannot match them to their nodes.
 
     Example:
         >>> node = CallNode(
@@ -187,12 +208,29 @@ class CallNode:
     method: str
     module: nn.Module | None = None
     calls: int = 0
-    time_ms: float = 0.0
+    timings: list[TimedIteration] = field(default_factory=list)
     bytes_in: int = 0
     bytes_out: int = 0
     signatures: list[CallSignature] = field(default_factory=list)
     children: list[CallPath] = field(default_factory=list)
     first_seen: int = 0
+    inside_compiled_part: bool = False
+
+    @property
+    def time_ms(self) -> float | None:
+        """Estimated time over all recorded iterations, derived from ``timings``; None when the node was never timed.
+
+        The timing pass times each node in some iterations only, so the total is extrapolated from them: the measured
+        time per call, which is the timed iterations' total time divided by their calls, times ``calls``. Every
+        measured call counts, so a stalled iteration raises the estimate rather than being dropped.
+        """
+        if not self.timings:
+            return None
+        timed_ms = sum(t.time_ms for t in self.timings)
+        timed_calls = sum(t.calls for t in self.timings)
+        # self.calls counts every call the structure pass recorded; it exceeds timed_calls when some iterations did
+        # not time this node, so the time per call is scaled up to all calls
+        return timed_ms / timed_calls * self.calls
 
     def calls_passing(self, name: str, side: Literal["inputs", "outputs"] = "inputs") -> list[int]:
         """The sorted indices of the calls that passed the argument ``name`` on ``side``.
