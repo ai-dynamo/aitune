@@ -43,6 +43,13 @@ def aitune_cache_dir(mocker, tmp_path):
     return cache_dir
 
 
+@pytest.fixture(autouse=True)
+def doctest_tmp_cwd(request, tmp_path, monkeypatch):
+    """Runs doctests in a temporary directory so files they write do not land in the repository."""
+    if isinstance(request.node, pytest.DoctestItem):
+        monkeypatch.chdir(tmp_path)
+
+
 @pytest.fixture
 def torch_device():
     """Returns the device specified in AITUNE_TESTS_USE_DEVICE environment variable if set,
