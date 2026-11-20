@@ -96,8 +96,8 @@ class TensorRTCudaGraphCache:
 
     def copy_input(self, name: str, tensor: torch.Tensor, stream) -> torch.Tensor:
         """Copy input data into stable storage on the inference stream."""
-        if self.active is None:
-            raise RuntimeError("No active CUDA graph profile; call select() first")
+        # Hot path: assert only narrows the type and is free under -O; the backend always calls select() first.
+        assert self.active is not None  # noqa: S101
         inputs = self.active.inputs
         stream.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(stream):
@@ -111,8 +111,8 @@ class TensorRTCudaGraphCache:
 
     def execute(self, stream):
         """Capture on the first request, then replay the selected profile's graph."""
-        if self.active is None:
-            raise RuntimeError("No active CUDA graph profile; call select() first")
+        # Hot path: assert only narrows the type and is free under -O; the backend always calls select() first.
+        assert self.active is not None  # noqa: S101
         if self.active.graph is None:
             self._capture(self.active, stream)
         else:
