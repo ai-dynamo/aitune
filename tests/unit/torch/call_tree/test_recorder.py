@@ -34,7 +34,7 @@ def test_same_module_from_two_callers_gives_two_nodes():
     tree = record(model, lambda: model(x))
 
     llm_nodes = [n for n in tree.nodes.values() if n.label == "root.llm.forward"]
-    assert [n.key[-2] for n in llm_nodes] == ["root.prefill", "root.generate"]
+    assert [n.path[-2] for n in llm_nodes] == ["root.prefill", "root.generate"]
     assert tree.nodes_of(model.llm) == llm_nodes
 
 
@@ -44,8 +44,8 @@ def test_nodes_of_finds_a_modules_nodes_by_identity_and_method():
 
     tree = record(model, lambda: model(tokens, image))
 
-    assert [n.path for n in tree.nodes_of(model.dit)] == ["forward > dit_forward > dit.forward"]
-    assert [n.path for n in tree.nodes_of(model, "dit_forward")] == ["forward > dit_forward"]
+    assert [n.path_str for n in tree.nodes_of(model.dit)] == ["forward > dit_forward > dit.forward"]
+    assert [n.path_str for n in tree.nodes_of(model, "dit_forward")] == ["forward > dit_forward"]
     assert tree.nodes_of(nn.Linear(2, 2)) == []
 
 
@@ -60,7 +60,7 @@ def test_calls_are_counted_over_iterations_and_children_keep_first_call_order():
     assert root.calls == 3
     dit = tree.nodes[("root.forward", "root.dit_forward")]
     assert dit.calls == 15
-    children = [tree.nodes[k].label for k in root.children]
+    children = [tree.nodes[p].label for p in root.children]
     assert children[:2] == ["root.vision.0.forward", "root.vision.1.forward"]
     assert children[-1] == "root.dit_forward"
     assert len(tree.sequences) == 3
@@ -412,7 +412,7 @@ def test_flush_synchronizes_every_end_event(mocker):
         recorder.end_iteration()
         recorder.flush()
 
-    assert recorder._ms[("root.forward",)] == 2.0
+    assert recorder._nodes[("root.forward",)].time_ms == 2.0
     cuda_synchronize.assert_not_called()
 
 

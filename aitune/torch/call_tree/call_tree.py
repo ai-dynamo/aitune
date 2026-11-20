@@ -7,7 +7,7 @@ from typing import Any
 
 from torch import nn
 
-from aitune.torch.call_tree.nodes import ROOT_LABEL, CallNode, NodeKey
+from aitune.torch.call_tree.nodes import ROOT_LABEL, CallNode, CallPath
 from aitune.torch.call_tree.weights.accesses import WeightAccess
 
 SCHEMA_VERSION = 1
@@ -23,9 +23,9 @@ class CallTree:
     """Call tree of one recording.
 
     Attributes:
-        nodes: All nodes by key.
+        nodes: All nodes by call path.
         iterations: Number of recorded iterations.
-        sequences: Per iteration, the keys of the entered nodes in call order.
+        sequences: Per iteration, the call paths of the entered nodes in call order.
         weight_accesses: For each parameter or buffer (by weight name: its object path, e.g.
             ``vlm.lm_head.weight``; a tied weight appears under each of its names), the ``WeightAccess`` records of
             accesses to it: reads, device checks and moves. Names stay valid when ``.to()`` or casts replace the
@@ -34,11 +34,11 @@ class CallTree:
 
     Example:
         >>> outer = CallNode(
-        ...     key=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
+        ...     path=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
         ... )
         >>> dit_module = nn.Linear(2, 2)
         >>> dit = CallNode(
-        ...     key=("root.forward", "root.dit.forward"),
+        ...     path=("root.forward", "root.dit.forward"),
         ...     label="root.dit.forward",
         ...     owner_class="Dit",
         ...     method="forward",
@@ -47,28 +47,28 @@ class CallTree:
         ...     time_ms=25.0,
         ...     first_seen=1,
         ... )
-        >>> outer.children.append(dit.key)
-        >>> tree = CallTree(nodes={n.key: n for n in (outer, dit)}, iterations=2)
-        >>> [n.path for n in tree.roots], tree.total_ms
+        >>> outer.children.append(dit.path)
+        >>> tree = CallTree(nodes={n.path: n for n in (outer, dit)}, iterations=2)
+        >>> [n.path_str for n in tree.roots], tree.total_ms
         (['forward'], 30.0)
-        >>> [n.path for n in tree.descendants(outer)]
+        >>> [n.path_str for n in tree.descendants(outer)]
         ['forward > dit.forward']
-        >>> [(n.path, n.calls) for n in tree.find("dit")]
+        >>> [(n.path_str, n.calls) for n in tree.find("dit")]
         [('forward > dit.forward', 10)]
-        >>> [n.path for n in tree.nodes_of(dit_module)]
+        >>> [n.path_str for n in tree.nodes_of(dit_module)]
         ['forward > dit.forward']
     """
 
-    nodes: dict[NodeKey, CallNode] = field(default_factory=dict)
+    nodes: dict[CallPath, CallNode] = field(default_factory=dict)
     iterations: int = 0
-    sequences: list[list[NodeKey]] = field(default_factory=list)
+    sequences: list[list[CallPath]] = field(default_factory=list)
     weight_accesses: dict[str, set[WeightAccess]] = field(default_factory=dict)
     modules: list[tuple[str, nn.Module]] = field(default_factory=list)
 
     @property
     def roots(self) -> list[CallNode]:
         """Outermost nodes in first-call order."""
-        return sorted((n for n in self.nodes.values() if len(n.key) == 1), key=lambda n: n.first_seen)
+        return sorted((n for n in self.nodes.values() if len(n.path) == 1), key=lambda n: n.first_seen)
 
     @property
     def total_ms(self) -> float:
@@ -124,7 +124,7 @@ class CallTree:
               ignore keys they don't know; it changes when a field is removed, renamed or changes meaning.
             - ``iterations``: number of recorded iterations.
             - ``total_ms``: time of the outermost calls over all iterations (``CallTree.total_ms``).
-            - ``nodes``: one dict per node, in first-call order, with ``call_path`` (``CallNode.path``, which
+            - ``nodes``: one dict per node, in first-call order, with ``call_path`` (``CallNode.path_str``, which
               identifies the node), ``owner_class``, ``calls``, ``time_ms``, ``bytes_in`` and ``bytes_out``.
             - ``modules``: for each instrumented module, by object path, its ``class`` (qualified name) and
               ``parameter_bytes``: ``numel() * element_size()`` summed over the parameters and buffers of the module
@@ -146,14 +146,14 @@ class CallTree:
 
         Example:
             >>> node = CallNode(
-            ...     key=("root.forward", "root.dit.forward"),
+            ...     path=("root.forward", "root.dit.forward"),
             ...     label="root.dit.forward",
             ...     owner_class="Dit",
             ...     method="forward",
             ...     first_seen=1,
             ... )
-            >>> outer = CallNode(key=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
-            >>> tree = CallTree(nodes={n.key: n for n in (outer, node)}, iterations=2)
+            >>> outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+            >>> tree = CallTree(nodes={n.path: n for n in (outer, node)}, iterations=2)
             >>> exported = tree.to_dict()["nodes"][1]
             >>> exported["call_path"], exported["owner_class"]
             ('forward > dit.forward', 'Dit')
@@ -177,7 +177,7 @@ class CallTree:
             "total_ms": self.total_ms,
             "nodes": [
                 {
-                    "call_path": node.path,
+                    "call_path": node.path_str,
                     "owner_class": node.owner_class,
                     "calls": node.calls,
                     "time_ms": node.time_ms,

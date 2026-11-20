@@ -1,17 +1,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Node keys and nodes of the context-keyed call tree.
+"""Call paths and nodes of the context-keyed call tree.
 
 A node is identified by its calling context: the chain of call labels that led to it, outermost first. The same
 module called from two places therefore gives two nodes (for example an LLM used for prefill and for generation).
 Labels come from the adapter that installed the wrappers: object paths in AOT mode.
 """
 
+import functools
 from dataclasses import dataclass, field
 
 from torch import nn
 
-NodeKey = tuple[str, ...]
+CallPath = tuple[str, ...]
 
 PATH_SEPARATOR = " > "
 
@@ -28,14 +29,14 @@ def short_label(label: str) -> str:
     return label.removeprefix(f"{ROOT_LABEL}.")
 
 
-def key_path(key: NodeKey) -> str:
-    """The written form of a node key: its labels without ``root.``, outermost first, joined by `` > ``.
+def format_call_path(path: CallPath) -> str:
+    """The written form of a call path: its labels without ``root.``, outermost first, joined by `` > ``.
 
     Example:
-        >>> key_path(("root.forward", "root.vlm.forward", "root.vlm.lm_head.forward"))
+        >>> format_call_path(("root.forward", "root.vlm.forward", "root.vlm.lm_head.forward"))
         'forward > vlm.forward > vlm.lm_head.forward'
     """
-    return PATH_SEPARATOR.join(short_label(label) for label in key)
+    return PATH_SEPARATOR.join(short_label(label) for label in path)
 
 
 @dataclass
@@ -49,7 +50,8 @@ class CallNode:
     0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache``, including the tensors they hold.
 
     Attributes:
-        key: Labels of the calling chain, outermost first. Identifies the node.
+        path: Labels of the calling chain, outermost first. Identifies the node and must not change after creation:
+            ``path_str`` is cached from it.
         label: Adapter name of this call, for example ``root.vlm.model.visual.forward``.
         owner_class: Class name of the object the method belongs to.
         method: Name of the called method (``forward`` for module calls).
@@ -59,18 +61,21 @@ class CallNode:
         bytes_in: Tensor bytes in the arguments, summed over all recorded iterations. Bytes per call:
             ``bytes_in / calls``.
         bytes_out: Tensor bytes in the results, summed over all recorded iterations.
-        children: Keys of the called nodes in first-call order.
+        children: Call paths of the called nodes in first-call order.
         first_seen: Position of the node's first call among all nodes.
 
     Example:
         >>> node = CallNode(
-        ...     key=("root.forward", "root.dit_forward"), label="root.dit_forward", owner_class="Vla", method="dit_forward"
+        ...     path=("root.forward", "root.dit_forward"),
+        ...     label="root.dit_forward",
+        ...     owner_class="Vla",
+        ...     method="dit_forward",
         ... )
-        >>> node.path, node.parent_key
+        >>> node.path_str, node.parent_path
         ('forward > dit_forward', ('root.forward',))
     """
 
-    key: NodeKey
+    path: CallPath
     label: str
     owner_class: str
     method: str
@@ -79,15 +84,15 @@ class CallNode:
     time_ms: float = 0.0
     bytes_in: int = 0
     bytes_out: int = 0
-    children: list[NodeKey] = field(default_factory=list)
+    children: list[CallPath] = field(default_factory=list)
     first_seen: int = 0
 
     @property
-    def parent_key(self) -> NodeKey:
-        """Key of the calling node; empty for outermost calls."""
-        return self.key[:-1]
+    def parent_path(self) -> CallPath:
+        """Call path of the calling node; empty for outermost calls."""
+        return self.path[:-1]
 
-    @property
-    def path(self) -> str:
-        """The node key in written form (``forward > dit_forward``): its call labels, outermost first."""
-        return key_path(self.key)
+    @functools.cached_property
+    def path_str(self) -> str:
+        """The call path in written form (``forward > dit_forward``): its call labels, outermost first."""
+        return format_call_path(self.path)
