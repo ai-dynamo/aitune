@@ -54,7 +54,7 @@ def _cell_ids(item) -> list[str]:
     backend = next((name for name, known in BACKENDS.items() if known is case), None)
     ids = []
     for template in marker.args:
-        if "/" not in template:
+        if "/" not in template and backend is not None:
             template = f"{template}/{{backend}}"
         if backend is None and "{backend" in template:
             raise pytest.UsageError(f"{item.nodeid}: matrix row {template!r} needs a resolvable backend")
