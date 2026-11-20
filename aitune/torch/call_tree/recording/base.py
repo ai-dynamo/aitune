@@ -84,18 +84,6 @@ class CallRecorder(ABC):
                 CallRecorder._active = None
                 CallRecorder._active_lock.release()
 
-    def _start(self) -> None:
-        """Hook: set up the pass after becoming the active recorder; the default does nothing."""
-        return None
-
-    def _stop(self, completed: bool) -> None:
-        """Hook: tear down the pass; ``completed`` is False when the block raised. The default does nothing."""
-        return None
-
-    def _skips_calls(self) -> bool:
-        """Whether the next call needs no recording at all; checked first in ``call``, so it must be cheap."""
-        return False
-
     @final
     def call(
         self,
@@ -143,3 +131,15 @@ class CallRecorder(ABC):
     @abstractmethod
     def end_call(self, frame: Any, result: Any = NO_RESULT) -> None:
         """Record the end of the call ``frame`` is for, with its return value or ``NO_RESULT`` when it raised."""
+
+    def _start(self) -> None:
+        """Hook: set up the pass after becoming the active recorder; the default does nothing."""
+        return None
+
+    def _stop(self, completed: bool) -> None:
+        """Hook: tear down the pass; ``completed`` is False when the block raised. The default does nothing."""
+        return None
+
+    def _skips_calls(self) -> bool:
+        """Whether the next call needs no recording at all; checked first in ``call``, so it must be cheap."""
+        return False
