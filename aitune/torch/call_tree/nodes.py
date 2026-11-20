@@ -10,7 +10,6 @@ Labels come from the adapter that installed the wrappers: object paths in AOT mo
 from __future__ import annotations
 
 import functools
-import statistics
 from dataclasses import dataclass, field
 from typing import Literal, NamedTuple
 
@@ -221,15 +220,17 @@ class CallNode:
     def time_ms(self) -> float | None:
         """Estimated time over all recorded iterations, derived from ``timings``; None when the node was never timed.
 
-        The median over the timed iterations of the time per call (the mean with fewer than three), times ``calls``.
-        The timing pass times each node in some iterations only, so the total is extrapolated from them; the median
-        is taken across iterations, not calls, because the calls of one iteration can differ systematically, for
-        example a prefill and the decode steps of ``generate``.
+        The timing pass times each node in some iterations only, so the total is extrapolated from them: the measured
+        time per call, which is the timed iterations' total time divided by their calls, times ``calls``. Every
+        measured call counts, so a stalled iteration raises the estimate rather than being dropped.
         """
         if not self.timings:
             return None
-        per_call = [t.time_ms / t.calls for t in self.timings]
-        return (statistics.median(per_call) if len(per_call) >= 3 else statistics.mean(per_call)) * self.calls
+        timed_ms = sum(t.time_ms for t in self.timings)
+        timed_calls = sum(t.calls for t in self.timings)
+        # self.calls counts every call the structure pass recorded; it exceeds timed_calls when some iterations did
+        # not time this node, so the time per call is scaled up to all calls
+        return timed_ms / timed_calls * self.calls
 
     def calls_passing(self, name: str, side: Literal["inputs", "outputs"] = "inputs") -> list[int]:
         """The sorted indices of the calls that passed the argument ``name`` on ``side``.
