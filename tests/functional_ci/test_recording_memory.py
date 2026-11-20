@@ -14,7 +14,7 @@ NUM_MODULES = 6
 SAMPLE_SIZE_BYTES = 8 * 1024 * 1024
 
 
-@pytest.mark.matrix("other.multi-module-recording-memory/functional-ci")
+@pytest.mark.matrix("other.multi-module-recording-memory")
 def test_multi_module_recording_does_not_retain_gpu_samples(tmp_path: Path, device: torch.device):
     """Persisted samples do not keep a GPU-sized tensor alive per module."""
     sample = torch.ones(SAMPLE_SIZE_BYTES // torch.float32.itemsize, device=device)
