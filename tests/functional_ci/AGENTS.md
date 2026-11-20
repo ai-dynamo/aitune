@@ -75,7 +75,7 @@ The backend id is the pytest parametrize id and the feature-matrix column.
 | `torch-eager` | `TorchEagerBackend` | default | - |
 | `inductor-aot` | `TorchInductorAotBackend` | default | `export` (`pt2`) |
 | `torch-tensorrt-aot` | `TorchTensorRTAotBackend` | `TENSORRT_FP32` | - |
-| `tensorrt` | `TensorRTBackend` | `TENSORRT_FP32` | `export` (`tensorrt_plan`), `onnx_input` |
+| `tensorrt` | `TensorRTBackend` | `TENSORRT_FP32` | `export` (`tensorrt_plan`), `onnx_input`, `cuda_graphs` |
 | `onnxruntime-cuda` | `ONNXRuntimeBackend` (CUDA EP) | `TENSORRT_FP32` | `export` (`onnx`), `onnx_input` |
 | `torchao-int8wo` | `TorchAOBackend` (`int8wo`) | `rtol=atol=5e-2` | - |
 | `inductor-jit` | `TorchInductorJitBackend` | default | - |
@@ -98,6 +98,7 @@ Before selecting tags for a test, read the actual `Tag` names and each backend's
 | `base` | Every backend; use-case tests | `test_<use_case>.py`, `test_backend_lifecycle`, `test_jit_tuning`, `test_shapes.py`, `test_partial_wrap_multigraph` |
 | `export` | `module.artifact()` runs in its native runtime | `test_exported_artifact` |
 | `onnx_input` | Tune an existing ONNX file (inline or external data) | `test_existing_onnx` |
+| `cuda_graphs` | Capture and replay a CUDA graph per static TensorRT profile | `test_cuda_graphs` |
 
 To add a tag, add the name to `Tag`, add it to the backends that pass, and use it in `with_backends`.
 
