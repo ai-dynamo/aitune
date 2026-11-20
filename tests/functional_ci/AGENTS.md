@@ -138,7 +138,7 @@ formatting is checked.
 | `modes` | `aot-tune`, `aot-save-load`, `aot-inspect-wrap`, `aot-export`, `aot-existing-onnx`, `jit-tune_eager`, `jit-tune_deferred`, `jit-inspect` | backend id or `kernel-selector` |
 | `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run`, `eager-after-offload` | `aot-tune`, `jit-tune`, `selection-checked` |
 | `topology` | backend id or `kernel-selector` | `single-gpu` |
-| `other` | `autocast-fp16`, `onnx-int8`, `modelopt-int8`, `modelopt-fp8`, `modelopt-nvfp4`, `cuda-graphs-fp32`, `multi-module-recording-memory` | `functional-ci` |
+| `other` | `autocast-fp16`, `onnx-int8`, `modelopt-int8`, `modelopt-fp8`, `modelopt-nvfp4`, `cuda-graphs-fp32`, `multi-module-recording-memory`, `tensorrt-multi-profile` | `functional-ci` |
 | `inspecting` | `call-tree`, `call-tree-signatures` | `aot` (later `jit`) |
 
 Examples:
