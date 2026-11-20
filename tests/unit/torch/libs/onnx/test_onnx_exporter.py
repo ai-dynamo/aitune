@@ -394,7 +394,6 @@ def test_should_work_with_wrapper(simple_module_and_args, tmp_path):
         kwargs={"x": x, "y": y, "z": z, "w": w},  # args order cannot be scrambled
         input_names=["x", "y", "z", "w"],
         output_names=["outputs"],
-        f="wrapper_module_may_args.onnx",
         dynamo=True,
     )
 
@@ -616,7 +615,6 @@ def test_does_onnx_export_work_with_nested_tensors(simple_module_and_args, torch
         kwargs={"x": x, "y": y, "zw": zw},
         input_names=["x", "y", "zw_z", "zw_w"],
         output_names=["outputs"],
-        f="nested_tensors.onnx",
         dynamo=True,
         dynamic_shapes=dynamic_shapes,
         **export_kwargs,
@@ -727,7 +725,6 @@ def test_does_onnx_export_work_with_nested_tensors_list(simple_module_and_args, 
         kwargs={"x": x, "y": y, "zw": zw},
         input_names=["x", "y", "zw_0", "zw_1"],
         output_names=["outputs"],
-        f="nested_tensors.onnx",
         dynamo=True,
         dynamic_shapes=dynamic_shapes,
         **export_kwargs,
