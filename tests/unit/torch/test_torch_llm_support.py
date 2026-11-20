@@ -34,32 +34,26 @@ class BaseKVCache(abc.ABC):
     @abc.abstractmethod
     def lazy_initialization(self, key_states: torch.Tensor):
         """Lazy initialization of the cache."""
-        pass
 
     @abc.abstractmethod
     def update(self, keys, values):
         """Update cache with new keys and values."""
-        pass
 
     @abc.abstractmethod
     def get_keys(self):
         """Return cached keys."""
-        pass
 
     @abc.abstractmethod
     def get_values(self):
         """Return cached values."""
-        pass
 
     @abc.abstractmethod
     def is_empty(self):
         """Return True if the cache is empty."""
-        pass
 
     @abc.abstractmethod
     def __len__(self):
         """Number of items in cache."""
-        pass
 
 
 class DynamicKVCache(BaseKVCache):

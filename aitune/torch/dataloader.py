@@ -426,14 +426,13 @@ def default_data_collator(batch: list) -> tuple | list | dict:
 
     if isinstance(first, torch.Tensor):
         return _list_data_collator([[tensor] for tensor in batch])
-    elif isinstance(first, str):
+    if isinstance(first, str):
         return _list_data_collator([[s] for s in batch])
-    elif isinstance(first, (tuple, list)):
+    if isinstance(first, (tuple, list)):
         return _list_data_collator(batch)
-    elif isinstance(first, Mapping):
+    if isinstance(first, Mapping):
         return _map_data_collator(batch)
-    else:
-        raise ValueError(f"Unsupported batch type: {type(first)}")
+    raise ValueError(f"Unsupported batch type: {type(first)}")
 
 
 def _list_data_collator(features: list[list]) -> list:

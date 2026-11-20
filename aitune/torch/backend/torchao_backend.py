@@ -325,7 +325,8 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         offload(self._orig_module, device="cpu")
 
         quantization_config = self._config.quantization_config
-        assert quantization_config is not None, "quantization_config is set in TorchAOBackendConfig.__post_init__"
+        if quantization_config is None:
+            raise RuntimeError("quantization_config must be set by TorchAOBackendConfig.__post_init__")
         quantize_(model, config=quantization_config, device=self.device, filter_fn=self._config.filter_fn)
         self._quant_module = torch.compile(
             model=model,

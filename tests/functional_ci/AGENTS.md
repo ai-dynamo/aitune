@@ -77,7 +77,6 @@ The backend id is the pytest parametrize id and the feature-matrix column.
 | `torch-tensorrt-aot` | `TorchTensorRTAotBackend` | `TENSORRT_FP32` | - |
 | `tensorrt` | `TensorRTBackend` | `TENSORRT_FP32` | `export` (`tensorrt_plan`), `onnx_input` |
 | `onnxruntime-cuda` | `ONNXRuntimeBackend` (CUDA EP) | `TENSORRT_FP32` | `export` (`onnx`), `onnx_input` |
-| `onnxruntime-tensorrt` | `ONNXRuntimeBackend` (TensorRT EP) | `TENSORRT_FP32` | - |
 | `torchao-int8wo` | `TorchAOBackend` (`int8wo`) | `rtol=atol=5e-2` | - |
 | `inductor-jit` | `TorchInductorJitBackend` | default | - |
 | `torch-tensorrt-jit` | `TorchTensorRTJitBackend` | `TENSORRT_FP32` | - |
@@ -139,7 +138,7 @@ formatting is checked.
 | `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run` | `aot-tune`, `jit-tune`, `selection-checked` |
 | `topology` | backend id or `kernel-selector` | `single-gpu` |
 | `other` | `autocast-fp16`, `onnx-int8`, `modelopt-int8`, `modelopt-fp8`, `modelopt-nvfp4`, `cuda-graphs-fp32` | `functional-ci` |
-| `inspecting` | `call-tree`, `call-tree-modules-unchanged` | `aot` (later `jit`) |
+| `inspecting` | `call-tree`, `call-tree-signatures` | `aot` (later `jit`) |
 
 Examples:
 

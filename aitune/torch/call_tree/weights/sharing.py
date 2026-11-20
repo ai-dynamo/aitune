@@ -57,7 +57,7 @@ def shared_weights_of(tree: CallTree, unit: UnitSpec) -> list[SharedWeight]:
 
     Args:
         tree: The call tree from ``ait.inspect(..., call_tree=True)``.
-        unit: A node path (``"forward > dit_forward"``, see ``CallNode.path``), a module (all its recorded
+        unit: A node path (``"forward > dit_forward"``, see ``CallNode.path_str``), a module (all its recorded
             ``forward`` calls), or a list of them as one unit.
 
     Returns:
@@ -128,11 +128,11 @@ def _accesses(
 ) -> dict[int, set[WeightAccess]]:
     """For each owned weight, the accesses from outside the unit.
 
-    An access inside the unit — ``by`` is a unit node's path or below one — does not count; an access from an
+    An access inside the unit — ``by`` is a unit node's ``path_str`` or below one — does not count; an access from an
     ancestor (a caller of the unit, e.g. its forward doing ``F.linear(x, unit.weight)``) is outside and counts.
     Unrecorded and outside-any-call markers start with ``<`` so they never match a unit path.
     """
-    unit_paths = {n.path for n in nodes}
+    unit_path_strs = {n.path_str for n in nodes}  # written, like ``by``
     out: dict[int, set[WeightAccess]] = {}
     for weight_name, records in tree.weight_accesses.items():
         tensor = name_to_tensor.get(weight_name)
@@ -142,7 +142,7 @@ def _accesses(
         if tensor_id not in owned:
             continue
         for access in records:
-            if any(access.by == p or access.by.startswith(p + " > ") for p in unit_paths):
+            if any(access.by == p or access.by.startswith(p + " > ") for p in unit_path_strs):
                 continue  # inside the unit
             out.setdefault(tensor_id, set()).add(WeightAccess(_code_name(access.by), access.kind))
     for tensor_id, paths in _opaque_reads(tree, nodes, owned).items():
@@ -152,26 +152,26 @@ def _accesses(
 
 
 def _opaque_reads(tree: CallTree, nodes: list[CallNode], owned: set[int]) -> dict[int, set[str]]:
-    """Owned tensors held directly by an outside module whose ``forward`` ran, as reads of that call.
+    """Owned tensors held directly by an outside module whose ``forward`` ran, as reads by its ``path_str``.
 
     The call may pass them to code torch functions do not see, such as a C++ or CUDA extension (TransformerEngine,
     apex), even when it touches its other tensors with visible ops. Counting them keeps those tensors;
     over-reporting only keeps more memory. A call of the unit's own module that leads into the unit (its
     ``forward`` around a method unit) is not a separate holder.
     """
-    unit_keys = {n.key for n in nodes}
+    unit_paths = {n.path for n in nodes}
     out: dict[int, set[str]] = {}
     for node in tree.nodes.values():
         if (
             node.module is None
             or node.method != "forward"
-            or any(node.key[: len(k)] == k for k in unit_keys)
-            or any(u.key[: len(node.key)] == node.key and u.module is node.module for u in nodes)
+            or any(node.path[: len(p)] == p for p in unit_paths)
+            or any(u.path[: len(node.path)] == node.path and u.module is node.module for u in nodes)
         ):
             continue
         direct = {id(t) for t in (*node.module.parameters(recurse=False), *node.module.buffers(recurse=False))}
         for tensor_id in direct & owned:
-            out.setdefault(tensor_id, set()).add(node.path)
+            out.setdefault(tensor_id, set()).add(node.path_str)
     return out
 
 

@@ -95,12 +95,12 @@ def make_tree(spec: dict, iterations: int = 1, modules: dict | None = None) -> C
     tree = CallTree(iterations=iterations)
     order = [0]
 
-    def add(parent_key, label, calls, time_ms, children):
-        key = (*parent_key, label)
+    def add(parent_path, label, calls, time_ms, children):
+        path = (*parent_path, label)
         method = label.rsplit(".", 1)[-1]
         module = modules.get(label)
         node = CallNode(
-            key=key,
+            path=path,
             label=label,
             owner_class=type(module).__name__ if module is not None else label.rsplit(".", 2)[-2],
             method=method,
@@ -110,11 +110,11 @@ def make_tree(spec: dict, iterations: int = 1, modules: dict | None = None) -> C
             first_seen=order[0],
         )
         order[0] += 1
-        tree.nodes[key] = node
-        if parent_key:
-            tree.nodes[parent_key].children.append(key)
+        tree.nodes[path] = node
+        if parent_path:
+            tree.nodes[parent_path].children.append(path)
         for child_label, child_spec in children.items():
-            add(key, child_label, *child_spec)
+            add(path, child_label, *child_spec)
 
     for label, node_spec in spec.items():
         add((), label, *node_spec)

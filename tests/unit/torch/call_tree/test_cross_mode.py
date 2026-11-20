@@ -20,7 +20,7 @@ ITERATIONS = 2
 
 
 def _canonical(tree: CallTree, node: CallNode) -> tuple:
-    return (node.owner_class, node.method, node.calls, tuple(_canonical(tree, tree.nodes[k]) for k in node.children))
+    return (node.owner_class, node.method, node.calls, tuple(_canonical(tree, tree.nodes[p]) for p in node.children))
 
 
 def _structure(tree: CallTree) -> list[tuple]:
@@ -64,4 +64,4 @@ def test_aot_and_jit_record_the_same_call_tree():
     assert not any(node.owner_class == "Sequential" for node in jit.nodes.values())
     # names differ by design
     assert ("root.forward",) in aot.nodes
-    assert all(key[0].startswith("VlaToy#") for key in jit.nodes)
+    assert all(path[0].startswith("VlaToy#") for path in jit.nodes)

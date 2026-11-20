@@ -233,8 +233,7 @@ def log_exception_details(
     if reraise:
         if reraise_as is not None:
             raise reraise_as from exception
-        else:
-            raise exception
+        raise exception
 
 
 def log_to_file(log_file: str | Path | None, message: str, exception: Exception | None = None) -> None:

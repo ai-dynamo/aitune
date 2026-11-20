@@ -77,8 +77,6 @@ _emoji_state = {
 class GraphBreakException(Exception):
     """Exception raised when graph break is detected."""
 
-    pass
-
 
 class PatchedModule:
     """Patched module.
@@ -609,10 +607,9 @@ class PatchedModule:
         """Check if the module should be tuned, dispatching based on the active JIT mode."""
         if config.mode == JITMode.TUNE_DEFERRED:
             return self._should_be_tuned_deferred()
-        elif config.mode == JITMode.TUNE_EAGER:
+        if config.mode == JITMode.TUNE_EAGER:
             return self._should_be_tuned_eager()
-        else:
-            raise ValueError(f"Unsupported mode: {config.mode}")
+        raise ValueError(f"Unsupported mode: {config.mode}")
 
     def _should_be_tuned_eager(self) -> bool:
         """Check if the module should be tuned in eager mode.
@@ -667,8 +664,7 @@ class PatchedModule:
             message = f"Graph break detected in {module._name} in {duration:.2f}s"
             _to_hist(message)
             raise GraphBreakException(message)
-        else:
-            _to_hist(f"No graph breaks in {module._name}. Checking took {duration:.2f}s")
+        _to_hist(f"No graph breaks in {module._name}. Checking took {duration:.2f}s")
 
     def _unpatch(self):
         """Unpatch the module.

@@ -52,8 +52,6 @@ class NestedDataClass:
 class TensorUserDict(UserDict):
     """Minimal UserDict subclass mimicking BatchEncoding shape."""
 
-    pass
-
 
 def test_locator_string_representation_sequence():
     # Test list access

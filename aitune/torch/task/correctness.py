@@ -45,12 +45,12 @@ def check_dynamic_shape_boundary_inference(
         infer: Inference callable to validate.
         name: Name of the module or backend being checked.
 
+    Returns:
+        None.
+
     Raises:
         CorrectnessDynamicShapeError: If inference fails on min or max shape inputs.
         CorrectnessTensorShapeError: If inferred output tensor shapes do not match the expected metadata.
-
-    Returns:
-        None.
     """
     for boundary_name, (args, kwargs) in zip(
         ("min", "max"), _dynamic_shape_boundary_samples(sample, graph_spec), strict=False
@@ -82,13 +82,13 @@ def check_inference_output_correctness(
         infer: Inference callable to validate.
         name: Name of the module or backend being checked.
 
+    Returns:
+        None.
+
     Raises:
         CorrectnessValueError: If any output value is NaN or infinite.
         CorrectnessTensorShapeError: If inferred output tensor shapes do not match the expected metadata.
         CorrectnessInputMutationError: If post-call inputs do not match eager execution.
-
-    Returns:
-        None.
     """
     for sample_index, (args, kwargs) in enumerate(data):
         with coordinator.raise_if_any_rank_fails(f"Inference correctness check (sample {sample_index})"):

@@ -133,13 +133,6 @@ BACKENDS: dict[str, BackendCase] = {
         ),
         artifact_format="onnx",
     ),
-    # "onnxruntime-tensorrt": BackendCase(
-    #     _onnx_runtime(ONNXExecutionProvider.TENSORRT),
-    #     TENSORRT_FP32,
-    #     _tags(
-    #         "base",
-    #     ),
-    # ),
     "torchao-int8wo": BackendCase(
         _torchao_int8_weight_only,
         Tolerance(rtol=5e-2, atol=5e-2),

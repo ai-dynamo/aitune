@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install onnxruntime-gpu==$ONNXRUNTIME_VERSION \
         --no-deps --force-reinstall --break-system-packages \
         --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/ && \
-    groupadd -g $_GROUP_ID runner -f && useradd -m -u $_USER_ID -g $_GROUP_ID runner || true && \
+    { groupadd -g $_GROUP_ID runner -f && useradd -m -u $_USER_ID -g $_GROUP_ID runner || true; } && \
     chown -R runner:runner ${AIT_DIR} && \
     chmod -R ug+rw ${AIT_DIR}
 
