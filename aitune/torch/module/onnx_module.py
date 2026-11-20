@@ -58,10 +58,12 @@ class OnnxModule(nn.Module):
             raise ValueError("OnnxModule requires at least one tensor input")
 
         device = values[0].device
-        assert all(value.device == device for value in values), "OnnxModule inputs must share a device"
-        assert self._device is None or self._device == device, (
-            f"OnnxModule is on {self._device}, but input is on {device}; call offload() to switch devices"
-        )
+        if any(value.device != device for value in values):
+            raise ValueError("OnnxModule inputs must share a device")
+        if self._device is not None and self._device != device:
+            raise ValueError(
+                f"OnnxModule is on {self._device}, but input is on {device}; call offload() to switch devices"
+            )
         self._ensure_session(device)
 
         inputs = prepare_onnx_inputs(self._session, args, kwargs)
