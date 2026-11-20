@@ -118,12 +118,13 @@ internal bug IDs.
 
 ## Feature matrix and IDs
 
-A cell ID has the form `<table>.<row>/<column>`. `@pytest.mark.matrix(*templates)` lists the cells that a test
-proves. `conftest.py` formats each template with `str.format`:
+A cell ID has the form `<table>.<row>` or `<table>.<row>/<column>`.
+`@pytest.mark.matrix(*templates)` lists the cells that a test proves.
+`conftest.py` formats each template with `str.format`:
 
 - `{backend}` is the backend id of the `case` param.
 - Other names are pytest params, for example `{case_id}`, `{strategy_id}`, `{mode.value}`.
-- A template without `/` gets `/{backend}` added, so it needs a `case` param from `with_backends`.
+- A template without `/` gets `/{backend}` added only when `case` resolves to a backend.
 
 Use-case cells prefix the table with the tuning type: `<tuning>.<table>.<row>/<backend>`.
 
