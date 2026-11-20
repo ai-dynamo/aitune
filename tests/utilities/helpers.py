@@ -11,7 +11,7 @@ import pytest
 import torch
 from packaging.version import Version
 
-from aitune.torch.module.forward_contract import ForwardContract, ForwardContractCapture
+from aitune.torch.module.forward_effects_spec import ForwardEffectsCapture, ForwardEffectsSpec
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -66,7 +66,7 @@ def make_graph_spec(
         input_spec=make_input_metadata(forward_signature, sample, strict=strict, batch_size=batch_size),
         output_spec=output_spec,
         forward_signature=forward_signature,
-        forward_contract=ForwardContract(output_spec.without_tensors(output)),
+        forward_effects_spec=ForwardEffectsSpec(output_spec.without_tensors(output)),
     )
 
 
@@ -78,12 +78,12 @@ def make_recorded_graph_spec(
     strict: bool = False,
     batch_size: int | None = None,
 ) -> GraphSpec:
-    """Create graph metadata and a forward contract from one observed call."""
+    """Create graph metadata and a forward effects specification from one observed call."""
     args, kwargs = deepcopy(sample)
     forward_signature = ForwardSignature.from_callable(module.forward)
     forward_inputs = forward_signature.normalize(args, kwargs)
     input_spec = SampleMetadata.from_inputs(forward_inputs.arguments, strict=strict, batch_size=batch_size)
-    contract_capture = ForwardContractCapture.before_call(forward_inputs.arguments)
+    effects_capture = ForwardEffectsCapture.before_call(forward_inputs.arguments)
     with torch.no_grad():
         output = module(*args, **kwargs)
     output_spec = SampleMetadata.from_outputs(output, strict=strict, batch_size=batch_size)
@@ -94,7 +94,7 @@ def make_recorded_graph_spec(
         output_spec=output_spec,
         forward_signature=forward_signature,
         post_input_spec=post_input_spec,
-        forward_contract=contract_capture.after_call(forward_inputs.arguments, output, output_spec),
+        forward_effects_spec=effects_capture.after_call(forward_inputs.arguments, output, output_spec),
     )
 
 

@@ -8,11 +8,11 @@ For example, a module can update a cache without returning it::
         state["cache"] = state["cache"] + 1
         return {"value": x + state["cache"]}
 
-The compiled interface returns (value, updated_cache). ForwardContract tells the backend to assign
+The compiled interface returns (value, updated_cache). ForwardEffectsSpec tells the backend to assign
 updated_cache to the caller's state and return {"value": value}. If forward also returns state,
 restoration reuses the caller's original container.
 
-Recording captures the contract once per graph and saves it with the graph for checkpoint reload.
+Recording captures the specification once per graph and saves it with the graph for checkpoint reload.
 It describes observed leaf changes, not arbitrary Python code.
 """
 
@@ -100,7 +100,7 @@ class OutputInputAlias:
 
 
 @dataclass(frozen=True)
-class ForwardContract:
+class ForwardEffectsSpec:
     """Recorded output structure and input changes for one graph.
 
     Example:
@@ -229,7 +229,7 @@ class _InputLeafSnapshot:
 
 
 @dataclass(frozen=True)
-class ForwardContractCapture:
+class ForwardEffectsCapture:
     """Compare normalized inputs before and after one module call.
 
     RecordingModule calls before_call for a new graph, executes the original module, and passes the
@@ -249,7 +249,7 @@ class ForwardContractCapture:
         cls,
         arguments: dict[str, Any],
         snapshot_arguments: dict[str, Any] | None = None,
-    ) -> ForwardContractCapture:
+    ) -> ForwardEffectsCapture:
         """Capture input leaves immediately before forward executes.
 
         Args:
@@ -273,8 +273,11 @@ class ForwardContractCapture:
         arguments: dict[str, Any],
         output: Any,
         output_spec: SampleMetadata,
-    ) -> ForwardContract:
-        """Describe supported input leaf changes observed after forward.
+    ) -> ForwardEffectsSpec:
+        """Capture output structure, input changes, and input/output aliases after forward.
+
+        Output structure and aliases are captured even when no input leaf changed. Compiled execution
+        still needs them to rebuild the Python output and reuse input objects returned by forward.
 
         Args:
             arguments: The same normalized argument dictionary captured before the call, now containing
@@ -283,8 +286,10 @@ class ForwardContractCapture:
             output_spec: Metadata for output, defining the user tensor order before mutation results are added.
 
         Returns:
-            A contract that reuses user tensor outputs where possible and assigns subsequent indices
-            to changed tensors that must be returned solely to restore input state.
+            A specification containing the output template, input mutations, and input/output aliases.
+            Tensor mutations reuse user tensor output indices where possible; changed tensors absent
+            from those outputs receive subsequent indices so compiled execution can return their values
+            solely to restore input state.
         """
         output_tensors = output_spec.flatten_tensors(output)
         output_input_aliases = _find_output_input_aliases(arguments, output)
@@ -307,7 +312,7 @@ class ForwardContractCapture:
                 next_output_index += 1
             mutations.append(InputMutation(locator, kind, output_index=output_index))
 
-        return ForwardContract(
+        return ForwardEffectsSpec(
             output_template=output_spec.without_tensors(output, aliased_output_values),
             input_mutations=tuple(mutations),
             output_input_aliases=output_input_aliases,
@@ -315,7 +320,12 @@ class ForwardContractCapture:
 
 
 def _find_output_input_aliases(arguments: dict[str, Any], output: Any) -> tuple[OutputInputAlias, ...]:
-    """Find the largest output values that share identity with an input value."""
+    """Find output tensors and containers that are also input objects.
+
+    Record an aliased output container once and skip its descendants: reusing that input container
+    also preserves the identity of its contents. This is what selecting the largest aliased values
+    means. Distinct tensor views that share storage are not treated as the same object.
+    """
     input_nodes = {
         id(value): locator
         for locator, value in Locator.find_nodes(arguments)
@@ -344,7 +354,12 @@ def _tensor_version(tensor: torch.Tensor) -> int | None:
 
 
 def _tensor_metadata(tensor: torch.Tensor) -> _TensorMetadata:
-    """Read metadata used to distinguish copying from replacement."""
+    """Read metadata used to distinguish copying from replacement.
+
+    Some tensor layouts do not support stride or storage offset queries. If either query raises
+    RuntimeError, store None for both fields so snapshots can still compare the remaining metadata.
+    None marks unavailable metadata, not a zero stride or offset.
+    """
     try:
         stride = tuple(tensor.stride())
         storage_offset = tensor.storage_offset()
@@ -392,7 +407,12 @@ def _snapshot_leaf(
 
 
 def _tensor_values_equal(left: torch.Tensor, right: torch.Tensor) -> bool:
-    """Compare tensors exactly when a version counter is unavailable."""
+    """Compare tensors exactly when a version counter is unavailable.
+
+    Floating-point and complex comparisons use zero tolerance and treat matching NaNs as equal.
+    Return False if comparison raises: equality could not be established, so mutation capture
+    conservatively records a tensor write.
+    """
     try:
         if left.dtype.is_floating_point or left.dtype.is_complex:
             return bool(torch.allclose(left, right, rtol=0, atol=0, equal_nan=True))
@@ -402,7 +422,12 @@ def _tensor_values_equal(left: torch.Tensor, right: torch.Tensor) -> bool:
 
 
 def _values_equal(left: Any, right: Any) -> bool:
-    """Compare arbitrary non-tensor leaves."""
+    """Compare non-tensor leaves by identity, then by equality.
+
+    Identical objects are accepted without inspecting their internal state. Otherwise, equality must
+    return a Python bool. Exceptions and other result types, such as elementwise comparison arrays,
+    return False so mutation capture conservatively records a replacement.
+    """
     if left is right:
         return True
     try:
@@ -415,7 +440,25 @@ def _values_equal(left: Any, right: Any) -> bool:
 
 
 def _mutation_kind(previous: _InputLeafSnapshot | None, value: Any) -> InputMutationKind | None:
-    """Classify a leaf change by the restoration behavior it requires."""
+    """Return the restoration kind for a detected input leaf change.
+
+    Args:
+        previous: Pre-call snapshot for this input path, or None if the path is new.
+        value: Post-call value at the same input path.
+
+    Returns:
+        COPY_TENSOR when the same tensor retains its metadata but a version change or value
+        comparison indicates a write. Also returned when unchanged values cannot be established
+        because no saved tensor value is available or comparison fails.
+        REPLACE_TENSOR for a new tensor object or changed tensor metadata.
+        REPLACE_CONSTANT for a new or changed non-tensor value; restoration assigns the recorded
+        value rather than replaying the operation that produced it.
+        None when no change is detected and no mutation record is needed. This does not describe
+        output structure or input/output aliases, which are captured separately.
+
+    COPY_TENSOR describes the default restoration action, not an operation performed by forward.
+    A backend's tensor mutation policy may select replacement instead of copying values back.
+    """
     if isinstance(value, torch.Tensor):
         if previous is None or not isinstance(previous.value, torch.Tensor) or previous.value is not value:
             return InputMutationKind.REPLACE_TENSOR

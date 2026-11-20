@@ -288,7 +288,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run the flat Torch-TensorRT module, then restore outputs and input changes.
 
-        The forward contract consumes user and extra state tensors in recorded order. PRESERVE_INPUT
+        The forward effects specification consumes user and extra state tensors in recorded order. PRESERVE_INPUT
         ensures recorded in-place changes update the original tensor and any retained references.
         It copies values back only when the result is a different object. Recorded tensor replacements
         still assign the result.

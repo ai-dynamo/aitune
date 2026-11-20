@@ -22,7 +22,7 @@ from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, B
 from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.libs.exporting import ONNXExporter
 from aitune.torch.libs.onnx.runtime import run_onnx
-from aitune.torch.module.forward_contract import TensorMutationPolicy
+from aitune.torch.module.forward_effects_spec import TensorMutationPolicy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
@@ -374,7 +374,7 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         # Adopt returned state buffers rather than copy back; see the tensor identity tradeoff above.
         mutation_policies = {
             mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
-            for mutation in graph_spec.forward_contract.input_mutations
+            for mutation in graph_spec.forward_effects_spec.input_mutations
             if mutation.output_index is not None
         }
         return graph_spec.restore_outputs(flat_outputs, arguments, tensor_mutation_policies=mutation_policies)

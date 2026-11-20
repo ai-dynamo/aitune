@@ -10,7 +10,7 @@ import torch
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch.config import AITuneConfig
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
-from aitune.torch.module.forward_contract import InputMutationKind
+from aitune.torch.module.forward_effects_spec import InputMutationKind
 from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.sample_store import SampleStore
 from tests.toy_models.torch_models import ToyTorchModel
@@ -181,8 +181,8 @@ def test_recording_tracks_input_metadata_before_and_after_call(tmp_path):
     pre_other = {locator.path: value for locator, value in graph_spec.input_spec.other_data}
     post_other = {locator.path: value for locator, value in graph_spec.post_input_spec.other_data}
     post_tensors = {locator.path: spec for locator, spec in graph_spec.post_input_spec.tensor_data}
-    assert graph_spec.forward_contract is not None
-    mutations = {mutation.locator.path: mutation.kind for mutation in graph_spec.forward_contract.input_mutations}
+    assert graph_spec.forward_effects_spec is not None
+    mutations = {mutation.locator.path: mutation.kind for mutation in graph_spec.forward_effects_spec.input_mutations}
 
     assert pre_other[("cache", 0)] is None
     assert pre_other[("feat_idx", 0)] == 0

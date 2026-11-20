@@ -16,7 +16,7 @@ from aitune.exceptions import AITuneUserInputError
 from aitune.torch.config import AITuneConfig
 from aitune.torch.config import config as global_config
 from aitune.torch.dynamic_shapes import DynamicShapes
-from aitune.torch.module.forward_contract import ForwardContract, ForwardContractCapture
+from aitune.torch.module.forward_effects_spec import ForwardEffectsCapture, ForwardEffectsSpec
 from aitune.torch.module.forward_signature import ForwardInputPath, ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
@@ -72,9 +72,9 @@ class RecordingModule:
         Before calling forward, we need to make input sample metadata and a copy of args and kwargs, since the
         forward call may have side effects on the inputs (like KV cache in LLM models).
 
-        For a new graph, capture its forward contract around this same call. Live inputs preserve
+        For a new graph, capture its forward effects specification around this same call. Live inputs preserve
         identity and version information; the sample copy supplies original tensor values when version
-        counters are unavailable. Later calls update shape observations without recapturing the contract.
+        counters are unavailable. Later calls update shape observations without recapturing the specification.
         """
         logger.debug("Calling recording %s module.", self._name)
         forward_inputs = self._forward_signature.normalize(args, kwargs)
@@ -88,9 +88,9 @@ class RecordingModule:
         # Binding is for metadata only: decorators may reject positional replay of valid keyword calls.
         sample_args, sample_kwargs = self._copy_inputs(args, kwargs)
         snapshot_inputs = self._forward_signature.normalize(sample_args, sample_kwargs)
-        contract_capture = None
+        effects_capture = None
         if inputs_metadata not in self._graph_specs:
-            contract_capture = ForwardContractCapture.before_call(
+            effects_capture = ForwardEffectsCapture.before_call(
                 forward_inputs.arguments,
                 snapshot_inputs.arguments,
             )
@@ -100,9 +100,9 @@ class RecordingModule:
             forward_inputs.arguments,
             strict=self._config.strict_mode,
         )
-        forward_contract = (
-            contract_capture.after_call(forward_inputs.arguments, outputs, outputs_metadata)
-            if contract_capture is not None
+        forward_effects_spec = (
+            effects_capture.after_call(forward_inputs.arguments, outputs, outputs_metadata)
+            if effects_capture is not None
             else None
         )
 
@@ -112,7 +112,7 @@ class RecordingModule:
             outputs_metadata,
             dynamic_shapes=dynamic_shapes,
             post_inputs_metadata=post_inputs_metadata,
-            forward_contract=forward_contract,
+            forward_effects_spec=forward_effects_spec,
         )
 
         return outputs
@@ -132,7 +132,7 @@ class RecordingModule:
         inputs,
         inputs_metadata,
         outputs_metadata,
-        forward_contract: ForwardContract | None,
+        forward_effects_spec: ForwardEffectsSpec | None,
         dynamic_shapes: DynamicShapes | None = None,
         post_inputs_metadata: SampleMetadata | None = None,
     ) -> None:
@@ -142,7 +142,7 @@ class RecordingModule:
             graph_spec = self._graph_specs[inputs_metadata]
             graph_spec.update_shapes_seen(inputs_metadata, outputs_metadata, post_inputs_metadata)
         else:
-            assert forward_contract is not None
+            assert forward_effects_spec is not None
             # create a new graph spec for the sample metadata
             graph_name = f"{next(self._graphs_counter)}"
             if inputs_metadata.llm_phase:
@@ -154,7 +154,7 @@ class RecordingModule:
                 forward_signature=self._forward_signature,
                 dynamic_shapes=dynamic_shapes or {},
                 post_input_spec=post_inputs_metadata,
-                forward_contract=forward_contract,
+                forward_effects_spec=forward_effects_spec,
             )
             if isinstance(self._module, OnnxModule):
                 self._module.preserve_tensor_names(self._graph_specs[inputs_metadata])
