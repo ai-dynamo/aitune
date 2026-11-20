@@ -12,6 +12,7 @@ from torch import nn
 
 import aitune.torch as ait
 from aitune.torch.backend import Backend, ONNXExecutionProvider, ONNXRuntimeBackend
+from aitune.torch.dynamic_shapes import DynamicShapes
 from aitune.torch.module import Module
 from tests.functional_ci.models import make_input
 
@@ -84,6 +85,7 @@ def run_lifecycle(
     value: torch.Tensor,
     checkpoint: Path,
     tolerance: Tolerance,
+    dynamic_shapes: DynamicShapes | None = None,
 ) -> Module:
     """Tune `backend` on a fresh model, check outputs, then return the checkpoint reloaded into another seeded model."""
     strategy = pinned_strategy(backend)
@@ -92,7 +94,11 @@ def run_lifecycle(
         expected = model(value)
 
     inspected = ait.inspect(model, [value], number_of_iterations=1, warmup_iterations=1)
-    tuned = ait.wrap(model, inspected.get_modules(), strategy=strategy)
+    tuned = (
+        ait.wrap(model, inspected.get_modules(), strategy=strategy)
+        if dynamic_shapes is None
+        else ait.Module(model, "model", strategy=strategy, dynamic_shapes=dynamic_shapes)
+    )
     assert isinstance(tuned, Module)
     ait.tune(tuned, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=value.device)
 

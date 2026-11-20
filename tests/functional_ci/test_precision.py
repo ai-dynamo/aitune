@@ -8,6 +8,7 @@ import pytest
 import torch
 from packaging.version import Version
 
+from aitune.torch import BatchDim
 from aitune.torch.backend import (
     ONNXAutoCastConfig,
     ONNXQuantizationConfig,
@@ -17,6 +18,8 @@ from aitune.torch.backend import (
     TorchEagerBackendConfig,
     TorchQuantizationConfig,
 )
+from aitune.torch.config import config
+from aitune.torch.dynamic_shapes import DynamicShapes
 from tests.functional_ci.backends import tensorrt_backend
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, assert_matches_eager, run_lifecycle
 from tests.functional_ci.models import IN_FEATURES, make_input, make_mlp
@@ -63,15 +66,27 @@ MODELOPT_TORCH_EXPORT_XFAIL = pytest.mark.xfail(
         for case_id in PRECISION_CASES
     ],
 )
-def test_tensorrt_precision_lifecycle(case_id: str, device: torch.device, tmp_path):
+def test_tensorrt_precision_lifecycle(case_id: str, device: torch.device, tmp_path, monkeypatch):
     """Tune, save, and reload a TensorRT engine with the requested precision or runtime option, then replay it."""
     config_kwargs, tolerance, min_capability = PRECISION_CASES[case_id]
     capability = torch.cuda.get_device_capability(device)
     if capability < min_capability:
         pytest.skip(f"{case_id} needs compute capability {min_capability}, GPU has {capability}")
 
+    if case_id == "profiles-samples-used":
+        monkeypatch.setattr(config, "max_num_samples_stored", 2)
+    dynamic_shapes: DynamicShapes | None = (
+        {"input": (BatchDim("batch", min=1, opt=2, max=4), IN_FEATURES)} if case_id == "profiles-explicit" else None
+    )
     backend = tensorrt_backend(**config_kwargs)
-    restored = run_lifecycle(backend, partial(make_mlp, device), make_input(device), tmp_path / "model.ait", tolerance)
+    restored = run_lifecycle(
+        backend,
+        partial(make_mlp, device),
+        make_input(device),
+        tmp_path / "model.ait",
+        tolerance,
+        dynamic_shapes=dynamic_shapes,
+    )
     # Two new inputs check that a replayed engine (for example a CUDA graph) does not reuse stale input buffers.
     assert_matches_eager(restored, make_mlp(device), device, tolerance, seeds=(11, 12))
 
