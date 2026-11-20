@@ -8,7 +8,8 @@ For example, a module can update a cache without returning it::
         state["cache"] = state["cache"] + 1
         return {"value": x + state["cache"]}
 
-The compiled interface returns (value, updated_cache). ForwardEffectsSpec tells the backend to assign
+Recording observes that forward changed state["cache"], and the export adapter appends its post-call value as an extra
+graph output. The compiled interface returns (value, updated_cache). ForwardEffectsSpec tells the backend to assign
 updated_cache to the caller's state and return {"value": value}. If forward also returns state,
 restoration reuses the caller's original container.
 
