@@ -3,6 +3,7 @@
 """Backend lifecycle and exported-artifact cases on a toy MLP."""
 
 from functools import partial
+from importlib import import_module
 from typing import cast
 
 import pytest
@@ -90,6 +91,7 @@ def test_exported_artifact(case: BackendCase, device: torch.device, tmp_path):
     ait.save(tuned, checkpoint)
     tuned.deactivate()
     restored = ait.load(make_mlp(device, seed=1), checkpoint)
+    assert isinstance(restored, ait.Module)
     restored_artifact = restored.artifact()
     assert restored_artifact.inputs == artifact.inputs
     assert restored_artifact.outputs == artifact.outputs
@@ -154,8 +156,7 @@ def test_tensorrt_multi_profile_artifact(device: torch.device, tmp_path, monkeyp
         input_name: {"min_shape": (2, 3, 8, 8), "opt_shape": (4, 3, 16, 16), "max_shape": (4, 3, 16, 16)}
     }
 
-    import tensorrt as trt
-
+    trt = import_module("tensorrt")
     plan = artifact.model.export_files(tmp_path / "export" / "model.plan")
     # TensorRT needs the logger and the runtime to outlive the engine.
     logger = trt.Logger(trt.Logger.WARNING)
@@ -174,6 +175,7 @@ def test_tensorrt_multi_profile_artifact(device: torch.device, tmp_path, monkeyp
     ait.save(tuned, checkpoint)
     tuned.deactivate()
     restored = ait.load(make_image_model(device, seed=1), checkpoint)
+    assert isinstance(restored, ait.Module)
     restored_artifact = restored.artifact()
     assert restored_artifact.inputs == artifact.inputs
     assert restored_artifact.outputs == artifact.outputs
