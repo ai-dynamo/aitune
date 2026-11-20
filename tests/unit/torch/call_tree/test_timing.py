@@ -162,8 +162,8 @@ def _perf_reads(durations_ms: list[float]) -> list[float]:
     return [t for d in durations_ms for t in (0.0, d / 1000)]
 
 
-def test_the_estimate_is_the_median_of_the_per_iteration_mean_times(mocker):
-    """A systematically slow first call per iteration must reach the estimate: mean per iteration, median across."""
+def test_the_estimate_counts_a_systematically_slow_call_of_each_iteration(mocker):
+    """A slow first call per iteration, like a prefill before decode steps, must reach the estimate."""
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
     mocker.patch(
         "aitune.torch.call_tree.recording.timing.time.perf_counter",
@@ -181,15 +181,15 @@ def test_the_estimate_is_the_median_of_the_per_iteration_mean_times(mocker):
 
     node = tree.nodes[a]
     assert node.timings == [TimedIteration(i, 3, 6.0) for i in range(3)]
-    # mean per iteration 2 ms; a flat per-call median over all nine calls would give 1 ms
+    # 18 ms over 9 calls; a per-call median would give 1 ms
     assert node.time_ms == pytest.approx(2.0 * node.calls)
 
 
-def test_the_estimate_ignores_a_slow_iteration(mocker):
+def test_a_slow_iteration_counts_in_the_estimate(mocker):
     mocker.patch("aitune.torch.call_tree.recording.timing.torch.cuda.is_available", return_value=False)
     mocker.patch(
         "aitune.torch.call_tree.recording.timing.time.perf_counter",
-        side_effect=_perf_reads([1.0, 3.0, 1.0, 3.0, 18.0, 22.0]),  # per-iteration means 2 ms, 2 ms, 20 ms
+        side_effect=_perf_reads([1.0, 3.0, 1.0, 3.0, 18.0, 22.0]),  # 4 ms, 4 ms and 40 ms per iteration
     )
     a = ("a",)
     tree = _tree_of([[a], [a], [a]])
@@ -202,7 +202,7 @@ def test_the_estimate_ignores_a_slow_iteration(mocker):
                 timer.end_call(timer.begin_call("a", model, "forward", ()))
 
     node = tree.nodes[a]
-    assert node.time_ms == pytest.approx(2.0 * node.calls)  # the median drops the 20 ms outlier iteration
+    assert node.time_ms == pytest.approx(8.0 * node.calls)  # 48 ms over 6 calls: the slow iteration counts
 
 
 def test_time_ms_is_none_without_timings():
@@ -211,20 +211,13 @@ def test_time_ms_is_none_without_timings():
     assert node.time_ms is None
 
 
-def test_time_ms_is_the_mean_per_call_times_calls_with_few_timed_iterations():
+def test_time_ms_is_the_measured_time_per_measured_call_times_calls():
     node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls=4)
     node.timings = [TimedIteration(0, 1, 4.0)]
     assert node.time_ms == 16.0  # 4 ms per call times 4 calls
 
-    node.timings = [TimedIteration(0, 1, 4.0), TimedIteration(1, 1, 6.0)]
-    assert node.time_ms == 20.0  # mean of the per-call times (4 and 6 ms) times 4 calls
-
-
-def test_time_ms_is_the_median_per_call_times_calls_with_three_timed_iterations():
-    node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls=3)
-    node.timings = [TimedIteration(0, 1, 4.0), TimedIteration(1, 1, 20.0), TimedIteration(2, 1, 6.0)]
-
-    assert node.time_ms == 18.0  # median per call 6 ms times 3 calls
+    node.timings = [TimedIteration(0, 1, 4.0), TimedIteration(1, 3, 6.0)]
+    assert node.time_ms == 10.0  # 10 ms over 4 calls times 4 calls; averaging 4 and 2 ms per call would give 12
 
 
 def test_the_pass_writes_one_timed_iteration_per_iteration_that_timed_the_node(mocker):
@@ -444,7 +437,7 @@ def test_unflushed_cuda_samples_keep_their_iteration(mocker):
 
     node = tree.nodes[a]
     assert node.timings == [TimedIteration(0, 1, 1.0), TimedIteration(1, 1, 1.0), TimedIteration(2, 1, 100.0)]
-    assert node.time_ms == 1.0 * node.calls  # the median per call drops the 100 ms iteration
+    assert node.time_ms == pytest.approx(102.0 / 3 * node.calls)  # 102 ms over 3 calls
 
 
 def test_flushed_events_are_reused_only_on_their_device(mocker):

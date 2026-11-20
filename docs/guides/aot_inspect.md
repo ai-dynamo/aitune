@@ -347,9 +347,9 @@ The exported data has this structure:
 
 `iterations` is the number of recorded iterations; `calls`, `bytes_in` and `bytes_out` are totals over them.
 Divide by `iterations` for per-iteration values, by `calls` for per-call values. `time_ms` estimates the same total:
-the node's time per call, as the median over the iterations that timed it (the mean with fewer than three), times
-`calls`. It is `null` when the timing pass never timed the node. `timings` holds the measurements behind it, one
-entry per iteration that timed the node, with that iteration's `calls` and their summed `time_ms`.
+the node's measured time per call, which is the total time of the iterations that timed it divided by their calls,
+times `calls`. It is `null` when the timing pass never timed the node. `timings` holds the measurements behind it,
+one entry per iteration that timed the node, with that iteration's `calls` and their summed `time_ms`.
 `inside_compiled_part` is true for calls inside a compiled part: they run inside the compiled code in the timing
 pass, so their `time_ms` is `null`; the compiled part's own call is timed.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
