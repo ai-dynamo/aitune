@@ -249,7 +249,11 @@ What is recorded:
   args/kwargs and in its result, nested containers and ModelOutputs included, each tensor counted once per call.
   `UserDict`s, such as transformers' `BatchFeature` and `BatchEncoding`, are walked into their values, and dataclass
   instances into their fields. Other objects that `torch.utils._pytree` does not flatten, such as caches or your own
-  classes that aren't dataclasses, are not looked into.
+  classes that aren't dataclasses, are not looked into;
+- per node, its `signatures`: each distinct set of arguments and results its calls passed, with the indices of
+  the calls that had it. Tensors are listed with dtype and exact shape, other objects by type name only;
+  primitives such as numbers and strings are not recorded. `node.calls_passing("x")` and `node.shapes("x")` give
+  the calls that passed `x` and the shapes it took.
 
 `call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. Parts compiled with
 `torch.compile` run compiled in the per-module pass, so calls inside them are not measured there; in the call-tree
@@ -288,15 +292,36 @@ The exported data has this structure:
   "nodes": [
     {"call_path": "forward", "owner_class": "Vla", "calls": 2, "time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
-     "calls": 10, "time_ms": 25.0, "bytes_in": 2560, "bytes_out": 2560, ...}
+     "calls": 10, "time_ms": 25.0, "bytes_in": 3670056, "bytes_out": 3670016,
+     "signatures": [
+         {"call_indices": [0, 5],
+          "inputs": {"hidden_states": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
+                                       "shape": [1, 220, 4096]},
+                     "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
+          "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
+                                 "shape": [1, 220, 4096]}}},
+         {"call_indices": [1, 2, 3, 4, 6, 7, 8, 9],
+          "inputs": {"hidden_states": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
+                                       "shape": [1, 1, 4096]},
+                     "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
+          "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
+                                 "shape": [1, 1, 4096]}}}],
+     "iteration_starts": [0, 5]}
   ],
-  "modules": {"dit": {"class": "my_pkg.Dit", "parameter_bytes": 8192}},
+  "modules": {"dit": {"class": "my_pkg.Dit",
+                      "parameters": {"weight": {"dtype": "torch.float32", "shape": [4, 4]}},
+                      "parameter_bytes": 8192}},
   "weights": {"dit.proj.weight": [{"by": "forward > dit_forward", "kind": "read"}]}
 }
 ```
 
 `iterations` is the number of recorded iterations and all node values (`calls`, `time_ms`, `bytes_in`,
 `bytes_out`) are totals over them — divide by `iterations` for per-iteration values, by `calls` for per-call.
+`signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
+the calls with exactly that signature, plus `inputs`/`outputs` dicts keyed by argument name (such as `x` or
+`inputs['input_ids']`), and `output` for the result, or `output[0]` and `output['logits']` for values nested in it.
+Every leaf has `type`, tensors also `dtype` and exact `shape`; `outputs` is null for a signature whose calls raised.
+`iteration_starts` gives how many of the node's calls were made before each iteration began.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:
 
@@ -309,7 +334,9 @@ The object path is the attribute path from the inspected object to the object wh
 `ModuleInfo.object_path`: when you inspect `model`, `model.visual` is `model.model.visual`, `language_model.layers.0`
 is `model.language_model.layers[0]`, and `""` is `model` itself (also for its own methods such as `dit_forward`).
 Split at the last dot: method names never contain one, object paths can. The keys of `modules` are object paths, so
-`modules[object_path]` gives a module node's class name and parameter bytes. `weights` lists the recorded accesses
+`modules[object_path]` gives a module node's class name, its own parameters and buffers in `parameters` (each with
+`dtype` and `shape` — a LayerNorm(2048) shows `weight: [2048]`, which is the input width the module expects), and
+`parameter_bytes` over the module and its submodules. `weights` lists the recorded accesses
 (reads, device lookups, moves) per weight. In distributed runs write the file on one rank.
 
 Later versions may add fields without changing `schema_version`, so readers should ignore keys they don't know.

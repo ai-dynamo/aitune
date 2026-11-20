@@ -2,15 +2,28 @@
 # SPDX-License-Identifier: Apache-2.0
 """The context-keyed call tree recorded by the call recorder."""
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
 from torch import nn
 
-from aitune.torch.call_tree.nodes import ROOT_LABEL, CallNode, CallPath
+from aitune.torch.call_tree.nodes import ROOT_LABEL, CallNode, CallPath, Leaf, TensorLeaf
 from aitune.torch.call_tree.weights.accesses import WeightAccess
 
 SCHEMA_VERSION = 1
+
+
+def _leaves_dict(leaves: dict[str, Leaf]) -> dict[str, dict]:
+    """A signature's leaves for export, keyed by name; the name is the key only, not repeated in the entry."""
+    entries: dict[str, dict[str, object]] = {}
+    for name, leaf in leaves.items():
+        entry: dict[str, object] = {"type": leaf.type}
+        if isinstance(leaf, TensorLeaf):
+            entry["dtype"] = str(leaf.dtype)
+            entry["shape"] = list(leaf.shape)
+        entries[name] = entry
+    return entries
 
 
 def _object_path(label_prefix: str) -> str:
@@ -25,7 +38,7 @@ class CallTree:
     Attributes:
         nodes: All nodes by call path.
         iterations: Number of recorded iterations.
-        sequences: Per iteration, the call paths of the entered nodes in call order.
+        sequences: Per iteration, the call paths of the entered nodes in the order the calls started.
         weight_accesses: For each parameter or buffer (by weight name: its object path, e.g.
             ``vlm.lm_head.weight``; a tied weight appears under each of its names), the ``WeightAccess`` records of
             accesses to it: reads, device checks and moves. Names stay valid when ``.to()`` or casts replace the
@@ -111,6 +124,32 @@ class CallTree:
         """Nodes whose label contains ``text``, in first-call order."""
         return sorted((n for n in self.nodes.values() if text in n.label), key=lambda n: n.first_seen)
 
+    def iteration_starts(self) -> dict[CallPath, list[int]]:
+        """For each node, how many of its calls were made before each iteration began.
+
+        ``iteration_starts()[path][i]`` is the index of the node's first call in iteration ``i`` when the node is
+        called there, so it maps the call indices in ``CallSignature.call_indices`` to iterations. It assumes that all
+        calls are recorded inside iterations, as ``inspect`` does.
+
+        Example:
+            >>> outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+            >>> step = CallNode(path=("root.forward", "root.step"), label="root.step", owner_class="Vla", method="step")
+            >>> tree = CallTree(
+            ...     nodes={n.path: n for n in (outer, step)},
+            ...     iterations=2,
+            ...     sequences=[[outer.path, step.path, step.path], [outer.path, step.path]],
+            ... )
+            >>> tree.iteration_starts()[step.path]
+            [0, 2]
+        """
+        seen: Counter[CallPath] = Counter()
+        starts: dict[CallPath, list[int]] = {path: [] for path in self.nodes}
+        for sequence in self.sequences:
+            for path in self.nodes:
+                starts[path].append(seen[path])
+            seen.update(sequence)
+        return starts
+
     def to_dict(self) -> dict[str, Any]:
         """The call tree as plain JSON data, for tools that read it without torch or aitune.
 
@@ -125,12 +164,20 @@ class CallTree:
             - ``iterations``: number of recorded iterations.
             - ``total_ms``: time of the outermost calls over all iterations (``CallTree.total_ms``).
             - ``nodes``: one dict per node, in first-call order, with ``call_path`` (``CallNode.path_str``, which
-              identifies the node), ``owner_class``, ``calls``, ``time_ms``, ``bytes_in`` and ``bytes_out``.
-            - ``modules``: for each instrumented module, by object path, its ``class`` (qualified name) and
-              ``parameter_bytes``: ``numel() * element_size()`` summed over the parameters and buffers of the module
-              and its submodules, also for ``meta`` tensors. Each tensor object counts once, so a weight tied by
-              assigning the same ``Parameter`` to two submodules counts once; different tensor objects that share
-              storage count separately, as in ``CallNode.bytes_in``.
+              identifies the node), ``owner_class``, ``calls``, ``time_ms``, ``bytes_in``, ``bytes_out`` and
+              ``signatures``: the node's distinct ``CallSignature``s in first-seen order, each with its
+              ``call_indices`` (the indices of the calls that had it) and ``inputs``/``outputs`` dicts of leaves
+              by path — ``outputs`` is null for a signature whose calls raised. Every leaf has ``type``; tensors
+              also ``dtype`` and ``shape``. ``iteration_starts``: ``iteration_starts[i]`` is how many of the
+              node's calls were made before iteration ``i`` began (``CallTree.iteration_starts``).
+            - ``modules``: for each instrumented module, by object path, its ``class`` (qualified name),
+              ``parameters`` and ``parameter_bytes``. ``parameters`` maps the local name of each of the module's own
+              parameters and buffers — not its submodules', which have their own entries if instrumented — to its
+              ``dtype`` and ``shape``, also for ``meta`` tensors. ``parameter_bytes`` is
+              ``numel() * element_size()`` summed over the parameters and buffers of the module and its submodules,
+              also for ``meta`` tensors. Each tensor object counts once, so a weight tied by assigning the same
+              ``Parameter`` to two submodules counts once; different tensor objects that share storage count
+              separately, as in ``CallNode.bytes_in``.
             - ``weights``: for each weight name, its recorded accesses as ``{"by": call_path, "kind": ...}``,
               ``kind`` being ``read``, ``device`` or ``move``.
 
@@ -166,11 +213,19 @@ class CallTree:
             if object_path not in modules:  # keep the first prefix that maps to the same object path
                 modules[object_path] = {
                     "class": f"{type(module).__module__}.{type(module).__qualname__}",
+                    "parameters": {
+                        name: {"dtype": str(t.dtype), "shape": list(t.shape)}
+                        for name, t in (
+                            *module.named_parameters(recurse=False, remove_duplicate=False),
+                            *module.named_buffers(recurse=False, remove_duplicate=False),
+                        )
+                    },
                     "parameter_bytes": sum(
                         t.numel() * t.element_size()
                         for t in {id(t): t for t in (*module.parameters(), *module.buffers())}.values()
                     ),
                 }
+        iteration_starts = self.iteration_starts()
         return {
             "schema_version": SCHEMA_VERSION,
             "iterations": self.iterations,
@@ -183,6 +238,15 @@ class CallTree:
                     "time_ms": node.time_ms,
                     "bytes_in": node.bytes_in,
                     "bytes_out": node.bytes_out,
+                    "signatures": [
+                        {
+                            "call_indices": list(sig.call_indices),
+                            "inputs": _leaves_dict(sig.inputs),
+                            "outputs": None if sig.outputs is None else _leaves_dict(sig.outputs),
+                        }
+                        for sig in node.signatures
+                    ],
+                    "iteration_starts": iteration_starts[node.path],
                 }
                 for node in sorted(self.nodes.values(), key=lambda n: n.first_seen)
             ],
