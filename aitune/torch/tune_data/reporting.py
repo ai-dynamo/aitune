@@ -10,7 +10,7 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import asdict, fields
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -118,7 +118,7 @@ def report_tune_run_start(mode: AITuneMode) -> None:
     check_disk_space(config.cache_dir)
     report = TuneRunReport(
         mode=mode,
-        started_at=datetime.now(tz=timezone.utc),
+        started_at=datetime.now(tz=UTC),
         aitune_config=snapshot_config(mode),
     )
     _run_start_ts.set(time.perf_counter())

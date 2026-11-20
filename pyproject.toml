@@ -235,35 +235,46 @@ markers = [
 preview = true
 line-length = 120
 indent-width = 4
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
+# Linter prefixes have no name form in ruff, so they stay as codes with the linter named alongside.
 select = [
-    "A",
-    "B",
-    "C",
-    "C4",
-    "C90",
-    "D",
-    "E",
-    "F",
-    "I",
-    "N",
-    "W",
-    "T",
-    "T10",
-    "T20",
-    "UP",
-    "CPY",
-    "G004"
+    "A",    # flake8-builtins: shadowing builtins, e.g. `list = []`
+    "B",    # flake8-bugbear: likely bugs, e.g. mutable default `def f(x=[])`
+    "C",    # flake8-comprehensions + mccabe (covers C4 and C90)
+    "C4",   # flake8-comprehensions: e.g. `list(x for x in y)` -> `[x for x in y]`
+    "C90",  # mccabe: function complexity above `max-complexity`
+    "D",    # pydocstyle: docstring presence and format (Google convention)
+    "E",    # pycodestyle errors: whitespace, indentation, statements
+    "F",    # Pyflakes: unused imports/variables, undefined names
+    "I",    # isort: import ordering
+    "N",    # pep8-naming: e.g. `class my_class` -> `class MyClass`
+    "W",    # pycodestyle warnings: trailing whitespace, blank lines
+    "T",    # flake8-debugger + flake8-print (covers T10 and T20)
+    "T10",  # flake8-debugger: leftover `breakpoint()` / `pdb.set_trace()`
+    "T20",  # flake8-print: `print()` / `pprint()` calls
+    "UP",   # pyupgrade: modern syntax for `target-version`, e.g. `Optional[X]` -> `X | None`
+    "CPY",  # flake8-copyright: SPDX header required (see `notice-rgx`)
+    "logging-f-string",          # `logger.info(f"x={x}")` -> `logger.info("x=%s", x)`
+    "custom-type-var-for-self",  # `def f(self: T) -> T` -> `def f(self) -> Self`
 ]
-ignore = ["D420", "D421", "E266", "E501", "N818"]
+ignore = [
+    "property-docstring-starts-with-verb",  # allow `"""Return the name."""` on properties
+    "line-too-long",                        # `ruff format` handles code; long strings/comments are allowed
+    "error-suffix-on-exception-name",       # allow exception classes without `Error` suffix
+    "replace-str-enum",                     # keep `class X(str, Enum)`; `StrEnum` changes `str()`/`format()` output
+]
 exclude = ["**/*.ipynb"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/__init__.py" = ["D104"]
-"**/__version__.py" = ["D100"]
-"**/{tests,docs,tools,examples}/*" = ["C416", "D", "T201"]
+"**/__init__.py" = ["undocumented-public-package"]  # no module docstring required in `__init__.py`
+"**/__version__.py" = ["undocumented-public-module"]
+"**/{tests,docs,tools,examples}/*" = [
+    "unnecessary-comprehension",  # allow `[x for x in y]` instead of `list(y)`
+    "D",                          # pydocstyle: docstrings optional
+    "print",                      # `print()` allowed
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
