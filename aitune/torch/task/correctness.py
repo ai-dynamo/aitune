@@ -5,13 +5,14 @@
 import copy
 import math
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
 
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
 
 
@@ -107,7 +108,12 @@ def check_inference_output_correctness(
                 post_forward_inputs.arguments,
                 strict=expected_post_inputs.strict,
             )
-            _check_post_input_metadata(expected_post_inputs, post_inputs_metadata, name)
+            _check_post_input_metadata(
+                expected_post_inputs,
+                post_inputs_metadata,
+                name,
+                ignored_input_paths=graph_spec.forward_contract.ignored_input_paths,
+            )
 
 
 def _dynamic_shape_boundary_samples(sample: tuple[tuple, dict], graph_spec: GraphSpec) -> list[tuple[tuple, dict]]:
@@ -196,22 +202,48 @@ def _check_output_tensor_shapes(expected: SampleMetadata, actual: SampleMetadata
         )
 
 
-def _check_post_input_metadata(expected: SampleMetadata, actual: SampleMetadata, name: str) -> None:
+def _check_post_input_metadata(
+    expected: SampleMetadata,
+    actual: SampleMetadata,
+    name: str,
+    *,
+    ignored_input_paths: tuple[Locator, ...] = (),
+) -> None:
     """Check that a backend reproduces the eager module's observable input mutations.
 
     Stateful modules may populate caches or advance indices through their inputs. A backend can
     return a valid output while missing these mutations, causing later calls to fail. This check
     compares tensor locations and shapes, plus non-tensor values as order-independent mappings.
     Tensor contents are not compared when their location and shape remain unchanged.
+    Paths explicitly ignored after the recorded eager call are excluded from actual metadata,
+    including descendants. Compiled execution may retain their pre-call values because ignored
+    replacements are not replayed. Unexpected paths outside these exclusions still fail validation.
 
     Args:
         expected: Input metadata recorded after eager execution.
         actual: Input metadata captured after backend execution.
         name: Qualified backend name included in correctness errors.
+        ignored_input_paths: Ignored object paths recorded in the forward contract, never inferred
+            from missing expected metadata or from the backend's result.
 
     Raises:
         CorrectnessInputMutationError: If post-call tensor metadata or non-tensor values differ.
     """
+    if ignored_input_paths:
+        actual = SampleMetadata(
+            tensor_data=tuple(
+                (locator, spec)
+                for locator, spec in actual.tensor_data
+                if not any(ignored.is_prefix_of(locator) for ignored in ignored_input_paths)
+            ),
+            other_data=tuple(
+                (locator, value)
+                for locator, value in actual.other_data
+                if not any(ignored.is_prefix_of(locator) for ignored in ignored_input_paths)
+            ),
+            strict=actual.strict,
+        )
+
     try:
         _check_output_tensor_shapes(expected, actual)
     except CorrectnessTensorShapeError as exc:
@@ -244,9 +276,12 @@ def _resize_sample_to_shape(
     forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
     for locator, tensor_spec in graph_spec.input_spec.tensor_data:
         target_shape = getattr(tensor_spec, shape_attr)
-        forward_inputs.arguments = locator.set_value(
-            forward_inputs.arguments,
-            _resize_tensor(locator.get_value(forward_inputs.arguments), target_shape),
+        forward_inputs.arguments = cast(
+            dict[str, Any],
+            locator.set_value(
+                forward_inputs.arguments,
+                _resize_tensor(cast(torch.Tensor, locator.get_value(forward_inputs.arguments)), target_shape),
+            ),
         )
     return call_layout.restore(forward_inputs.arguments)
 
