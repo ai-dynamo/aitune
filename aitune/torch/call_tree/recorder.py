@@ -26,6 +26,7 @@ import dataclasses
 import enum
 import functools
 import time
+import weakref
 from collections import UserDict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
@@ -37,7 +38,7 @@ from torch import nn
 from aitune.torch.call_tree.call_tree import CallNode, CallTree
 from aitune.torch.call_tree.callers import unrecorded_caller
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container
-from aitune.torch.call_tree.nodes import CallPath, CallSignature, Leaf, TensorLeaf
+from aitune.torch.call_tree.nodes import CallPath, CallSignature, Leaf, TensorLeaf, _Source
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, WeightAccessMode, storage_key
 from aitune.torch.module.forward_signature import ForwardSignature
 
@@ -73,7 +74,9 @@ class CallRecorder:
         self._declared_signatures: dict[int, tuple[Any, ForwardSignature | None]] = {}
         # per node: raw signature key -> its CallSignature, the same object as in the node's ``signatures``
         self._signatures: dict[CallPath, dict[_SignatureKey, CallSignature]] = {}
-        self._stack: list[CallNode] = []
+        self._stack: list[_Frame] = []
+        # what the outermost calls of the current iteration returned; inside a call, its frame's ``visible``
+        self._top_visible = _SourceIndex()
         self._events: list[tuple[CallNode, Any, Any]] = []
         self._sequences: list[list[CallPath]] = []
         self._current_sequence: list[CallPath] | None = None
@@ -95,7 +98,7 @@ class CallRecorder:
             nn.Module._apply = self._make_apply_probe(self._original_apply)
             self._weight_access_log.start(self._modules.values())
             weight_access_mode = WeightAccessMode(
-                self._weight_access_log, lambda: self._stack[-1].path_str if self._stack else ""
+                self._weight_access_log, lambda: self._stack[-1].node.path_str if self._stack else ""
             )
             weight_access_mode.__enter__()
             self._weight_access_mode = weight_access_mode
@@ -150,7 +153,7 @@ class CallRecorder:
         """
         if not self._active or is_transparent_container(obj) or is_transparent_call(args, kwargs):
             return None
-        parent_path = self._stack[-1].path if self._stack else ()
+        parent_path = self._stack[-1].node.path if self._stack else ()
         path = (*parent_path, label)
         node = self._nodes.get(path)
         if node is None:
@@ -164,16 +167,20 @@ class CallRecorder:
             )
             self._nodes[path] = node
             if self._stack:
-                self._stack[-1].children.append(path)
+                self._stack[-1].node.children.append(path)
         node.calls += 1
         with torch._C.DisableTorchFunction():
-            input_key, input_bytes = _key_and_bytes(self._input_leaves(obj, method, args, kwargs))
+            values, input_bytes = _leaves_and_bytes(self._input_leaves(obj, method, args, kwargs))
         node.bytes_in += input_bytes
         if self._current_sequence is not None:
             self._current_sequence.append(path)
-        self._stack.append(node)
+        input_key, visible = self._link_inputs(path, values)
         start, device = self._start_timer()
-        return _Frame(node=node, start=start, device=device, input_key=input_key, call_index=node.calls - 1)
+        frame = _Frame(
+            node=node, start=start, device=device, input_key=input_key, call_index=node.calls - 1, visible=visible
+        )
+        self._stack.append(frame)
+        return frame
 
     def _input_leaves(
         self, obj: Any, method: str, args: tuple[Any, ...], kwargs: dict[str, Any] | None
@@ -206,13 +213,15 @@ class CallRecorder:
         if frame is None:
             return
         self._stop_timer(frame)
+        if self._stack and self._stack[-1] is frame:
+            self._stack.pop()
         if result is _NO_RESULT:
             output_key = None
         else:
             with torch._C.DisableTorchFunction():
-                outputs = list(_named_leaves(result, "output"))
-                output_key, output_bytes = _key_and_bytes(outputs)
+                values, output_bytes = _leaves_and_bytes(list(_named_leaves(result, "output")))
             frame.node.bytes_out += output_bytes
+            output_key = self._link_outputs(frame.node.path, values, frame.visible)
         signatures = self._signatures.setdefault(frame.node.path, {})
         key = (frame.input_key, output_key)
         signature = signatures.get(key)
@@ -220,12 +229,49 @@ class CallRecorder:
             signature = signatures[key] = _signature(key)
             frame.node.signatures.append(signature)
         signature.call_indices.append(frame.call_index)
-        if self._stack and self._stack[-1] is frame.node:
-            self._stack.pop()
+
+    def _link_inputs(self, path: CallPath, values: list[tuple[Any, Leaf]]) -> tuple[tuple[Leaf, ...], _SourceIndex]:
+        """Source a call's arguments from what its caller sees; return its input signature key and what it sees.
+
+        An argument visible in the caller gets ``source`` set to where it was last seen: one of the caller's
+        arguments or what one of the caller's earlier child calls returned. The call's arguments then become visible
+        inside it.
+        """
+        caller = self._visible_in_caller()
+        own = _SourceIndex()
+        leaves = []
+        for obj, leaf in values:
+            source = caller.source_of(obj)
+            if source is not None:
+                leaf = replace(leaf, source=source)
+            own.add(obj, _Source(path, "inputs", leaf.name))
+            leaves.append(leaf)
+        return tuple(leaves), own
+
+    def _link_outputs(self, path: CallPath, values: list[tuple[Any, Leaf]], own: _SourceIndex) -> tuple[Leaf, ...]:
+        """Source a call's results from what it saw (``own``), make them visible in the caller; return the output key.
+
+        A result visible inside the call gets ``source`` set to where it was: one of the call's arguments or what one
+        of its child calls returned.
+        """
+        caller = self._visible_in_caller()
+        leaves = []
+        for obj, leaf in values:
+            source = own.source_of(obj)
+            if source is not None:
+                leaf = replace(leaf, source=source)
+            caller.add(obj, _Source(path, "outputs", leaf.name))
+            leaves.append(leaf)
+        return tuple(leaves)
+
+    def _visible_in_caller(self) -> _SourceIndex:
+        """What the caller of a starting or ending call sees: the innermost open call's ``visible`` or the top level."""
+        return self._stack[-1].visible if self._stack else self._top_visible
 
     def begin_iteration(self) -> None:
         """Mark the start of one iteration (for example one call of the inference function)."""
         self._current_sequence = []
+        self._top_visible = _SourceIndex()  # a new top level: nothing links across iterations
 
     def end_iteration(self) -> None:
         """Mark the end of the current iteration."""
@@ -325,7 +371,7 @@ class CallRecorder:
         def _apply(module: nn.Module, fn: Callable, *args: Any, **kwargs: Any) -> Any:
             # ``nn.Module._apply`` recurses through child ``_apply`` calls; only the outermost one records.
             if recorder._active and recorder._apply_depth == 0:
-                caller = recorder._stack[-1].path_str if recorder._stack else unrecorded_caller()
+                caller = recorder._stack[-1].node.path_str if recorder._stack else unrecorded_caller()
                 recurse = kwargs.get("recurse", args[0] if args else True)
                 with torch._C.DisableTorchFunction():
                     for submodule in module.modules() if recurse else [module]:
@@ -476,24 +522,70 @@ _PRIMITIVES = (
 )
 
 
-def _key_and_bytes(leaves: list[tuple[str, Any]]) -> tuple[tuple[Leaf, ...], int]:
-    """The raw signature key of the walked leaves and their tensor byte total in one pass.
+def _leaves_and_bytes(leaves: list[tuple[str, Any]]) -> tuple[list[tuple[Any, Leaf]], int]:
+    """The walked leaves as ``(object, Leaf)`` pairs, and their tensor byte total, in one pass.
 
-    The key holds a named ``Leaf`` for each tensor and non-primitive object; each tensor object counts its bytes
-    once. Callers run it with torch functions disabled so the metadata reads don't go through the weight-access mode.
+    There is a named ``Leaf`` for each tensor and non-primitive object, in walk order. ``_link_inputs`` and
+    ``_link_outputs`` set their sources and build the raw signature key from them. Each tensor object counts its
+    bytes once. Callers run it with torch functions disabled so the metadata reads don't go through the
+    weight-access mode.
     """
-    key: list[Leaf] = []
+    values: list[tuple[Any, Leaf]] = []
     seen: set[int] = set()
     total = 0
     for name, obj in leaves:
         if torch.is_tensor(obj):
-            key.append(TensorLeaf(name, _class_name(type(obj)), obj.dtype, tuple(obj.shape)))
+            values.append((obj, TensorLeaf(name, _class_name(type(obj)), obj.dtype, tuple(obj.shape))))
             if id(obj) not in seen:
                 seen.add(id(obj))
                 total += obj.numel() * obj.element_size()
         elif not isinstance(obj, _PRIMITIVES):
-            key.append(Leaf(name, _class_name(type(obj))))
-    return tuple(key), total
+            values.append((obj, Leaf(name, _class_name(type(obj)))))
+    return values, total
+
+
+class _SourceIndex:
+    """An index of the values visible inside one call, or at the top level of an iteration: where each was last seen.
+
+    Values are matched by identity. An entry is keyed by the object's ``id`` and holds a weak reference to it: the
+    reference confirms that the id still belongs to the same object, because CPython gives a freed object's id to
+    new objects, and it keeps recording from holding any value alive. Values that don't support weak references
+    are not tracked.
+
+    Example:
+        >>> index = _SourceIndex()
+        >>> x = torch.ones(2)
+        >>> index.add(x, _Source(("root.forward",), "inputs", "x"))
+        >>> index.source_of(x)
+        _Source(path=('root.forward',), side='inputs', name='x')
+        >>> index.source_of(torch.ones(2)) is None  # an equal tensor, but another object
+        True
+        >>> del x
+        >>> index.source_of(torch.ones(2)) is None  # even if the new tensor got the freed one's id
+        True
+        >>> size = (2, 3)  # a tuple doesn't support weak references
+        >>> index.add(size, _Source(("root.forward",), "inputs", "size"))
+        >>> index.source_of(size) is None
+        True
+    """
+
+    __slots__ = ("_entries",)
+
+    def __init__(self) -> None:
+        """Start with no visible values."""
+        self._entries: dict[int, tuple[weakref.ref[Any], _Source]] = {}
+
+    def add(self, obj: Any, source: _Source) -> None:
+        """Make ``obj`` visible here as last seen at ``source``, replacing an earlier entry for the same object."""
+        if type(obj).__weakrefoffset__:
+            self._entries[id(obj)] = (weakref.ref(obj), source)
+
+    def source_of(self, obj: Any) -> _Source | None:
+        """Where ``obj`` was last seen here, or None if it wasn't."""
+        entry = self._entries.get(id(obj))
+        if entry is None or entry[0]() is not obj:
+            return None
+        return entry[1]
 
 
 @functools.cache
@@ -514,15 +606,17 @@ def _signature(key: _SignatureKey) -> CallSignature:
 
 @dataclass
 class _Frame:
-    """An open call: its node, the start of its timer, the raw key of its inputs and its call index.
+    """An open call: its node, the start of its timer, the raw key of its inputs, its call index and what it sees.
 
     ``call_index`` is the call's position among the node's calls in start order (the same order
     ``CallTree.sequences`` records). The start is a CUDA event or a ``perf_counter`` value; ``device`` is the
-    CUDA device the start event was recorded on.
+    CUDA device the start event was recorded on. ``visible`` holds the values visible inside the call: its own
+    arguments and what its child calls returned.
     """
 
     node: CallNode
     start: Any
     input_key: tuple[Leaf, ...]
     call_index: int
+    visible: _SourceIndex
     device: int | None = None

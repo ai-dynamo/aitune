@@ -253,7 +253,13 @@ What is recorded:
 - per node, its `signatures`: each distinct set of arguments and results its calls passed, with the indices of
   the calls that had it. Tensors are listed with dtype and exact shape, other objects by type name only;
   primitives such as numbers and strings are not recorded. `node.calls_passing("x")` and `node.shapes("x")` give
-  the calls that passed `x` and the shapes it took.
+  the calls that passed `x` and the shapes it took;
+- per leaf, its `source`: where the same object was last seen in a recorded call, as that node's path, the side
+  (`"inputs"` or `"outputs"`) and the leaf's name there. A tensor that one call returns and a later call receives
+  links the two, so the leaves on one side of a cut whose source is on the other side are what crosses it. A value
+  made in the call's own code, read from an attribute or global, or passed from outside the recorded calls has no
+  source; neither has an object without weak-reference support, such as one whose class defines `__slots__`
+  without `__weakref__`.
 
 `call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. Parts compiled with
 `torch.compile` run compiled in the per-module pass, so calls inside them are not measured there; in the call-tree
@@ -296,7 +302,9 @@ The exported data has this structure:
      "signatures": [
          {"call_indices": [0, 5],
           "inputs": {"hidden_states": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
-                                       "shape": [1, 220, 4096]},
+                                       "shape": [1, 220, 4096],
+                                       "source": {"call_path": "forward > dit_forward", "side": "inputs",
+                                                  "name": "hidden_states"}},
                      "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
           "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
                                  "shape": [1, 220, 4096]}}},
@@ -321,6 +329,9 @@ The exported data has this structure:
 the calls with exactly that signature, plus `inputs`/`outputs` dicts keyed by argument name (such as `x` or
 `inputs['input_ids']`), and `output` for the result, or `output[0]` and `output['logits']` for values nested in it.
 Every leaf has `type`, tensors also `dtype` and exact `shape`; `outputs` is null for a signature whose calls raised.
+A leaf with a `source` names where its object was last seen: `call_path`, `side` and the leaf `name` there, which can
+be in any of that node's signatures. In the example, `dit.forward` received `hidden_states` as `dit_forward`'s own
+argument of that name.
 `iteration_starts` gives how many of the node's calls were made before each iteration began.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:

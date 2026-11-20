@@ -8,7 +8,7 @@ from typing import Any
 
 from torch import nn
 
-from aitune.torch.call_tree.nodes import ROOT_LABEL, CallNode, CallPath, Leaf, TensorLeaf
+from aitune.torch.call_tree.nodes import ROOT_LABEL, CallNode, CallPath, Leaf, TensorLeaf, format_call_path
 from aitune.torch.call_tree.weights.accesses import WeightAccess
 
 SCHEMA_VERSION = 1
@@ -22,6 +22,12 @@ def _leaves_dict(leaves: dict[str, Leaf]) -> dict[str, dict]:
         if isinstance(leaf, TensorLeaf):
             entry["dtype"] = str(leaf.dtype)
             entry["shape"] = list(leaf.shape)
+        if leaf.source is not None:
+            entry["source"] = {
+                "call_path": format_call_path(leaf.source.path),
+                "side": leaf.source.side,
+                "name": leaf.source.name,
+            }
         entries[name] = entry
     return entries
 
@@ -168,8 +174,10 @@ class CallTree:
               ``signatures``: the node's distinct ``CallSignature``s in first-seen order, each with its
               ``call_indices`` (the indices of the calls that had it) and ``inputs``/``outputs`` dicts of leaves
               by path — ``outputs`` is null for a signature whose calls raised. Every leaf has ``type``; tensors
-              also ``dtype`` and ``shape``. ``iteration_starts``: ``iteration_starts[i]`` is how many of the
-              node's calls were made before iteration ``i`` began (``CallTree.iteration_starts``).
+              also ``dtype`` and ``shape``. A leaf whose object a recorded call had before also has ``source``:
+              ``{"call_path": ..., "side": ..., "name": ...}``, where it was last seen (``Leaf.source``).
+              ``iteration_starts``: ``iteration_starts[i]`` is how many of the node's calls were made before
+              iteration ``i`` began (``CallTree.iteration_starts``).
             - ``modules``: for each instrumented module, by object path, its ``class`` (qualified name),
               ``parameters`` and ``parameter_bytes``. ``parameters`` maps the local name of each of the module's own
               parameters and buffers — not its submodules', which have their own entries if instrumented — to its

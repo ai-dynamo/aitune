@@ -200,11 +200,14 @@ def test_to_dict_exports_object_entries_as_type_only_and_stays_strict_json():
             return x
 
     model = Model()
-    x = torch.randn(2)
 
     tree = record(
         model,
-        lambda: (model(x, flag=True, cache=object()), model(x, flag=False, cache=object())),
+        # fresh tensors: reusing x would make the second call's input the first call's result
+        lambda: (
+            model(torch.randn(2), flag=True, cache=object()),
+            model(torch.randn(2), flag=False, cache=object()),
+        ),
         iterations=1,
     )
 
