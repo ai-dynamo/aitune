@@ -45,7 +45,7 @@ class Config:
     min_samples: int = 1  # minimum number of samples recorded before tuning
     batch_axis_required: bool = True  # if True, the batch axis must detected in the input data
     max_depth_level: int = 1  # maximum depth of the module hierarchy
-    min_parameters: int = 0  # minimum number of parameters to be tuned
+    min_parameters: int = 0  # inclusive minimum; 0 allows modules with no parameters
     detect_graph_breaks: bool = False  # if True, graph break detection is enabled before tuning
     skip_modules: list[str] = field(default_factory=list)  # list of modules (class names) to skip
 

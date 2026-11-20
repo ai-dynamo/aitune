@@ -1,9 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Dynamic shape and structured input/output cases."""
+"""Dynamic batch and spatial shape constraints across backends."""
 
-from collections.abc import Callable
-from dataclasses import replace
 from typing import cast
 from unittest.mock import patch
 
@@ -18,7 +16,7 @@ from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
-from aitune.torch.libs.torch import torch_exporter
+from aitune.torch.libs.exporting import torch_exporter
 from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.tuned_module import TunedModule
 from tests.functional_ci.backends import BACKENDS, BackendCase, with_backends
@@ -27,50 +25,6 @@ from tests.functional_ci.models import IN_FEATURES, make_image_model, make_input
 from tests.functional_ci.test_jit import JitMLP
 
 TORCH_2_8_TO_2_10 = Version(torch.__version__).release[:2] in ((2, 8), (2, 9), (2, 10))
-
-
-class StructuredModel(nn.Module):
-    """Model with nested dict and list inputs, non-tensor and optional arguments, and a nested dict/tuple output."""
-
-    def __init__(self, mlp: nn.Module):
-        """Wrap the toy MLP."""
-        super().__init__()
-        self.mlp = mlp
-
-    def forward(
-        self,
-        x,
-        extras: dict[str, torch.Tensor],
-        residuals: list[torch.Tensor],
-        scale: float = 1.0,
-        mask: torch.Tensor | None = None,
-    ):
-        """Return the scaled MLP output and two row statistics."""
-        hidden = self.mlp(x + extras["bias"] + residuals[0] - residuals[1]) * scale
-        if mask is not None:
-            hidden = hidden * mask
-        return {"out": hidden, "stats": (hidden.sum(-1), hidden.amax(-1))}
-
-
-class NestedInputModel(nn.Module):
-    """Model with only tensor inputs, shaped like the Flux transformer inputs in legacy test 044."""
-
-    def __init__(self, mlp: nn.Module):
-        """Wrap the toy MLP."""
-        super().__init__()
-        self.mlp = mlp
-
-    def forward(
-        self,
-        x,
-        extras: dict[str, torch.Tensor],
-        residuals: list[torch.Tensor],
-        positions: torch.Tensor,
-        timestep: torch.Tensor,
-    ):
-        """Return the MLP output for the shifted input, scaled per row by `timestep`."""
-        hidden = x + extras["bias"] + residuals[0] - residuals[1] + positions
-        return self.mlp(hidden * timestep[:, None])
 
 
 @pytest.mark.matrix("aot_tuning.models.dynamic-batch-recorded")
@@ -262,106 +216,3 @@ def test_spatial_dims_export_retry(device: torch.device):
     with torch.no_grad():
         for value, output in zip(values, expected, strict=True):
             TENSORRT_FP32.assert_close(tuned(value), output)
-
-
-@pytest.mark.matrix(
-    "aot_tuning.models.non-tensor-inputs",
-    "aot_tuning.models.nested-inputs",
-    "aot_tuning.models.structured-outputs",
-)
-@with_backends("base")
-def test_structured_io(case: BackendCase, device: torch.device):
-    """Nested dict and list inputs, a float and a `None` argument, and a nested dict/tuple output survive tuning."""
-    backend = case.factory()
-    # Row sums in `stats` accumulate the per-element error over `OUT_FEATURES` values, so widen `atol`.
-    tolerance = replace(case.tolerance, atol=5 * case.tolerance.atol)
-    bias = torch.linspace(-1, 1, IN_FEATURES, device=device)
-    residuals = [bias.flip(0), 0.5 * bias]
-    reference = StructuredModel(make_mlp(device))
-    tuned = ait.Module(StructuredModel(make_mlp(device)), "structured", strategy=pinned_strategy(backend))
-
-    def pipeline(model: Callable) -> Callable:
-        # Every tensor in the sample is batched, so the bias and residuals are repeated per row.
-        return lambda x: model(
-            x,
-            {"bias": bias.repeat(x.shape[0], 1)},
-            [residual.repeat(x.shape[0], 1) for residual in residuals],
-            scale=2.0,
-            mask=None,
-        )
-
-    ait.tune(pipeline(tuned), list(make_input(device, batch_size=8).unbind(0)), batch_sizes=[1, 4], device=device)
-
-    selected_backend(tuned, type(backend))
-    assert_matches_eager(pipeline(tuned), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
-
-
-@pytest.mark.matrix(
-    "jit_tuning.models.non-tensor-inputs",
-    "jit_tuning.models.nested-inputs",
-    "jit_tuning.models.structured-outputs",
-)
-@with_backends("base")
-def test_structured_io_jit(case: BackendCase, device: torch.device):
-    """Preserve nested inputs, scalar and optional arguments, and structured outputs through JIT tuning."""
-    backend = case.factory()
-    jit_config.mode = JITMode.TUNE_EAGER
-    jit_config.device = device
-    jit_config.min_samples = 2
-    jit_config.strategy = pinned_strategy(backend)
-    tolerance = replace(case.tolerance, atol=5 * case.tolerance.atol)
-    bias = torch.linspace(-1, 1, IN_FEATURES, device=device)
-    residuals = [bias.flip(0), 0.5 * bias]
-    reference = StructuredModel(make_mlp(device))
-    with prepare_for_jit_tuning():
-        model = StructuredModel(make_mlp(device))
-
-    def pipeline(model: Callable) -> Callable:
-        return lambda x: model(
-            x,
-            {"bias": bias.repeat(x.shape[0], 1)},
-            [residual.repeat(x.shape[0], 1) for residual in residuals],
-            scale=2.0,
-            mask=None,
-        )
-
-    with torch.no_grad():
-        pipeline(model)(make_input(device, batch_size=1))
-        pipeline(model)(make_input(device, batch_size=4))
-    (head,) = PatchedModule.heads
-    assert head._state == ModuleState.TUNED
-    (selected,) = cast(TunedModule, head._wrapper).backends.values()
-    assert type(selected) is type(backend)
-    assert_matches_eager(pipeline(model), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
-
-
-@pytest.mark.matrix("aot_tuning.models.nested-inputs/torch-tensorrt-aot")
-@pytest.mark.parametrize("batch_sizes", [[2], [2, 4]], ids=["static", "dynamic"])
-def test_nested_tensor_inputs(batch_sizes: list[int], device: torch.device):
-    """Torch-TensorRT AOT tunes nested tensor inputs passed as kwargs at static and dynamic batch, as in legacy 044.
-
-    The inputs are a dict, a list, an unbatched tensor, and a 1-D batched scalar. `test_structured_io` covers only a
-    nested dict and list, together with non-tensor arguments.
-    """
-    case = BACKENDS["torch-tensorrt-aot"]
-    backend = case.factory()
-    bias = torch.linspace(-1, 1, IN_FEATURES, device=device)
-    residuals = [bias.flip(0), 0.5 * bias]
-    reference = NestedInputModel(make_mlp(device))
-    tuned = ait.Module(NestedInputModel(make_mlp(device)), "nested", strategy=pinned_strategy(backend))
-
-    def pipeline(model: Callable) -> Callable:
-        # `positions` keeps one shape at every batch size, like `img_ids` in 044; the other tensors are batched.
-        return lambda x: model(
-            x,
-            extras={"bias": bias.repeat(x.shape[0], 1)},
-            residuals=[residual.repeat(x.shape[0], 1) for residual in residuals],
-            positions=bias.flip(0),
-            timestep=torch.linspace(0.5, 1.5, x.shape[0], device=device),
-        )
-
-    ait.tune(pipeline(tuned), list(make_input(device, batch_size=8).unbind(0)), batch_sizes=batch_sizes, device=device)
-
-    selected_backend(tuned, type(backend))
-    check_sizes = range(batch_sizes[0], batch_sizes[-1] + 1)
-    assert_matches_eager(pipeline(tuned), pipeline(reference), device, case.tolerance, batch_sizes=check_sizes)
