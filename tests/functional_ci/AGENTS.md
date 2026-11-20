@@ -60,7 +60,7 @@ their own strategies.
 | `test_wrap_shared_weights.py` | `wrap` on modules from `inspect(..., call_tree=True)` on toys from `tests/toy_models/call_tree_models.py` with shared weights: without the call tree they fail after offloading, with it they match eager (`export` backends, which build ahead of time and offload) |
 | `test_transformers_static_cache.py` | Real Transformers `StaticCache` with lazy and initialized state on every backend: AOT tuning and checkpoint reload, plus JIT tuning and consecutive decode updates; no model downloads |
 | `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py`, `test_multiple_graphs.py`, `test_pipelines.py`, `test_forward_hooks.py` |
-| other `test_*.py` | One file per feature area: lifecycle, shapes, topology, JIT, strategies, precision, ONNX input, pipelines, kernel selector, inspect call tree (`test_inspect_call_tree.py`, no backend) |
+| other `test_*.py` | One file per feature area: lifecycle, shapes, topology, JIT, strategies, precision, ONNX input, pipelines, kernel selector, recording memory, inspect call tree (`test_inspect_call_tree.py`, no backend) |
 
 ## Backends
 
@@ -139,9 +139,9 @@ formatting is checked.
 | --- | --- | --- |
 | `aot_tuning.models`, `jit_tuning.models` | `tensor-inputs`, `static-shapes`, `single-graph`, `multiple-graphs`, `graph-breaks`, `pipelines`, `forward-hooks`, `dynamic-batch-recorded`, `dynamic-batch-user`, `dynamic-non-batch`, `non-tensor-inputs`, `nested-inputs`, `structured-outputs`, `shared-weights-<toy>` | backend id or `kernel-selector` |
 | `modes` | `aot-tune`, `aot-save-load`, `aot-inspect-wrap`, `aot-export`, `aot-existing-onnx`, `jit-tune_eager`, `jit-tune_deferred`, `jit-inspect` | backend id or `kernel-selector` |
-| `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run` | `aot-tune`, `jit-tune`, `selection-checked` |
+| `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run`, `eager-after-offload` | `aot-tune`, `jit-tune`, `selection-checked` |
 | `topology` | backend id or `kernel-selector` | `single-gpu` |
-| `other` | `autocast-fp16`, `onnx-int8`, `modelopt-int8`, `modelopt-fp8`, `modelopt-nvfp4`, `cuda-graphs-fp32` | `functional-ci` |
+| `other` | `autocast-fp16`, `onnx-int8`, `modelopt-int8`, `modelopt-fp8`, `modelopt-nvfp4`, `cuda-graphs-fp32`, `multi-module-recording-memory` | `functional-ci` |
 | `other` | `input-float16`, `input-float32`, `input-bfloat16`, `input-int32`, `input-int64` | backend id |
 | `inspecting` | `call-tree`, `call-tree-signatures` | `aot` (later `jit`) |
 
