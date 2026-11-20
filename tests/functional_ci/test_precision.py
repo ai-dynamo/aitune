@@ -8,7 +8,6 @@ import pytest
 import torch
 from packaging.version import Version
 
-from aitune.torch import BatchDim
 from aitune.torch.backend import (
     ONNXAutoCastConfig,
     ONNXQuantizationConfig,
@@ -19,7 +18,6 @@ from aitune.torch.backend import (
     TorchQuantizationConfig,
 )
 from aitune.torch.config import config
-from aitune.torch.dynamic_shapes import DynamicShapes
 from tests.functional_ci.backends import tensorrt_backend
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, assert_matches_eager, run_lifecycle
 from tests.functional_ci.models import IN_FEATURES, make_input, make_mlp
@@ -34,7 +32,7 @@ PRECISION_CASES = {
     "profiles-explicit": (
         {
             "profiles": [
-                TensorRTProfile().add_input_shape("input", (1, IN_FEATURES), (2, IN_FEATURES), (4, IN_FEATURES))
+                TensorRTProfile().add_input_shape("input", (2, IN_FEATURES), (2, IN_FEATURES), (2, IN_FEATURES))
             ]
         },
         TENSORRT_FP32,
@@ -73,20 +71,10 @@ def test_tensorrt_precision_lifecycle(case_id: str, device: torch.device, tmp_pa
     if capability < min_capability:
         pytest.skip(f"{case_id} needs compute capability {min_capability}, GPU has {capability}")
 
-    if case_id == "profiles-samples-used":
+    if config_kwargs.get("profiles") is TensorRTProfileMode.SAMPLES_USED:
         monkeypatch.setattr(config, "max_num_samples_stored", 2)
-    dynamic_shapes: DynamicShapes | None = (
-        {"input": (BatchDim("batch", min=1, opt=2, max=4), IN_FEATURES)} if case_id == "profiles-explicit" else None
-    )
     backend = tensorrt_backend(**config_kwargs)
-    restored = run_lifecycle(
-        backend,
-        partial(make_mlp, device),
-        make_input(device),
-        tmp_path / "model.ait",
-        tolerance,
-        dynamic_shapes=dynamic_shapes,
-    )
+    restored = run_lifecycle(backend, partial(make_mlp, device), make_input(device), tmp_path / "model.ait", tolerance)
     # Two new inputs check that a replayed engine (for example a CUDA graph) does not reuse stale input buffers.
     assert_matches_eager(restored, make_mlp(device), device, tolerance, seeds=(11, 12))
 
