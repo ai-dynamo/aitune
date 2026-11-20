@@ -32,7 +32,6 @@ Tag = Literal[
     "base",
     "export",
     "onnx_input",
-    "cuda_graphs",
 ]
 Capability = Tag
 
@@ -121,7 +120,6 @@ BACKENDS: dict[str, BackendCase] = {
             "base",
             "export",
             "onnx_input",
-            "cuda_graphs",
         ),
         artifact_format="tensorrt_plan",
     ),
