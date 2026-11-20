@@ -64,8 +64,8 @@ class _StreamingConv(nn.Module):
 def padding_cache_integration(monkeypatch):
     """Run the Transformers integration against stand-ins for the Voxtral Realtime cache classes."""
     voxtral_realtime = types.ModuleType(_VOXTRAL_REALTIME_MODULE)
-    voxtral_realtime.VoxtralRealtimeConv1dPaddingCache = _PaddingCache
-    voxtral_realtime.VoxtralRealtimeConv1dCacheLayer = _PaddingCacheLayer
+    monkeypatch.setattr(voxtral_realtime, "VoxtralRealtimeConv1dPaddingCache", _PaddingCache, raising=False)
+    monkeypatch.setattr(voxtral_realtime, "VoxtralRealtimeConv1dCacheLayer", _PaddingCacheLayer, raising=False)
     monkeypatch.setitem(sys.modules, _VOXTRAL_REALTIME_MODULE, voxtral_realtime)
     # The device property is already patched when aitune.torch is imported; do not wrap it again.
     monkeypatch.setattr(device_integration, "patch_device_property", lambda cls: None)

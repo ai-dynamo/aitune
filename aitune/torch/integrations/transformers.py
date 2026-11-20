@@ -32,6 +32,7 @@ try:
     Locator.register_user_type(VoxtralRealtimeConv1dPaddingCache, only_tensors=True)
     Locator.register_user_type(VoxtralRealtimeConv1dCacheLayer, only_tensors=True)
 except ImportError:
+    # Voxtral Realtime cache support is optional and depends on the Transformers version.
     pass
 
 try:
