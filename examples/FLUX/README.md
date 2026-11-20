@@ -79,8 +79,9 @@ AITUNE_OUTPUT_DIR=output uv run inference \
   --prompt "A beautiful landscape with mountains and a lake"
 ```
 
-The inference command loads a fresh pipeline, generates an original image, loads the AITune checkpoint, and generates
-a tuned image. It logs both generation times and saves both images under `AITUNE_OUTPUT_DIR` (default: `output`).
+The inference command builds a fresh pipeline on the meta device and loads all weights from the AITune checkpoint.
+It generates original and tuned images, logs both generation times, and saves both under `AITUNE_OUTPUT_DIR`
+(default: `output`).
 
 ## Tune on multiple GPUs
 
