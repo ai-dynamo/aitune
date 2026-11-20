@@ -55,8 +55,7 @@ def _cell_ids(item) -> list[str]:
     ids = []
     for template in marker.args:
         if "/" not in template:
-            column = "functional-ci" if template.startswith("other.") else "{backend}"
-            template = f"{template}/{column}"
+            template = f"{template}/{{backend}}"
         if backend is None and "{backend" in template:
             raise pytest.UsageError(f"{item.nodeid}: matrix row {template!r} needs a resolvable backend")
         try:

@@ -40,7 +40,7 @@ def _tune_cuda_graphs(device, monkeypatch, static_batches, **cache_options):
     return tuned, selected
 
 
-@pytest.mark.matrix("other.cuda-graphs-fp32")
+@pytest.mark.matrix("other.cuda-graphs-fp32/tensorrt")
 def test_cuda_graphs(device: torch.device, monkeypatch: pytest.MonkeyPatch):
     """Record static profiles, then alternate between graph replay and uncaptured shapes."""
     static_batches = (1, 3, 5)
@@ -74,7 +74,7 @@ def test_cuda_graphs(device: torch.device, monkeypatch: pytest.MonkeyPatch):
     assert graphs.profiles.keys() == graphs.static_profile_indices
 
 
-@pytest.mark.matrix("other.cuda-graphs-fp32")
+@pytest.mark.matrix("other.cuda-graphs-fp32/tensorrt")
 def test_cuda_graph_capture_failure(device: torch.device, monkeypatch: pytest.MonkeyPatch):
     """Fall back on capture failure, release cached resources, and keep capture disabled."""
     tuned, selected = _tune_cuda_graphs(device, monkeypatch, (1, 3, 5))
@@ -121,7 +121,7 @@ def test_cuda_graph_capture_failure(device: torch.device, monkeypatch: pytest.Mo
         assert selected._output_allocator is selected._base_output_allocator
 
 
-@pytest.mark.matrix("other.cuda-graphs-fp32")
+@pytest.mark.matrix("other.cuda-graphs-fp32/tensorrt")
 @pytest.mark.parametrize(
     ("policy", "expected_residents"),
     [
