@@ -128,6 +128,7 @@ def test_cuda_graph_capture_failure(device: torch.device, monkeypatch: pytest.Mo
         ("lfu", ((1,), (1,), (1, 3), (1, 3), (1, 5), (5, 1))),
         ("lru", ((1,), (1,), (1, 3), (3, 5), (3, 5), (5, 1))),
     ],
+    ids=["lfu", "lru"],
 )
 def test_cuda_graph_cache_eviction(device: torch.device, monkeypatch: pytest.MonkeyPatch, policy, expected_residents):
     """LRU admits every miss; LFU admits a new profile only after it becomes more frequent."""
@@ -140,10 +141,11 @@ def test_cuda_graph_cache_eviction(device: torch.device, monkeypatch: pytest.Mon
     graphs = selected._cuda_graphs
     reference = make_mlp(device)
     # Map batches to profile indices without relying on the order of the tuning samples.
-    profile_indices = {
-        next(iter(selected._trt_optimization_profiles[index].values()))[0][0]: index
-        for index in graphs.static_profile_indices
-    }
+    profile_indices = {}
+    for index in graphs.static_profile_indices:
+        (shape_range,) = selected._trt_optimization_profiles[index].values()
+        minimum, _, _ = shape_range
+        profile_indices[minimum[0]] = index
     assert profile_indices.keys() == set(static_batches)
     assert not graphs.profiles
 
