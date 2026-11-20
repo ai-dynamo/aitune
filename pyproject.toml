@@ -256,6 +256,11 @@ select = [
     "T20",  # flake8-print: `print()` / `pprint()` calls
     "UP",   # pyupgrade: modern syntax for `target-version`, e.g. `Optional[X]` -> `X | None`
     "CPY",  # flake8-copyright: SPDX header required (see `notice-rgx`)
+    "PIE",  # flake8-pie: e.g. unnecessary `pass` or `...` in a body that has a docstring
+    "RSE",  # flake8-raise: e.g. `raise ValueError()` -> `raise ValueError`
+    "SLOT", # flake8-slots: `__slots__` required on `str`/`tuple` subclasses
+    "FURB", # refurb: modern idioms, e.g. `for x in xs: s.add(x)` -> `s.update(xs)`
+    "RET",  # flake8-return: e.g. no `else` after `return`
     "logging-f-string",          # `logger.info(f"x={x}")` -> `logger.info("x=%s", x)`
     "custom-type-var-for-self",  # `def f(self: T) -> T` -> `def f(self) -> Self`
 ]
@@ -264,6 +269,11 @@ ignore = [
     "line-too-long",                        # `ruff format` handles code; long strings/comments are allowed
     "error-suffix-on-exception-name",       # allow exception classes without `Error` suffix
     "replace-str-enum",                     # keep `class X(str, Enum)`; `StrEnum` changes `str()`/`format()` output
+    "unnecessary-assign",                   # allow `x = f(); return x`, which helps debugging
+    "unnecessary-return-none",              # allow explicit `return None` in functions that only return `None`
+    "implicit-return",                      # don't require `return None` at the end of non-`None` functions
+    "reimplemented-operator",               # allow `lambda x: x[0]` instead of `operator.itemgetter(0)`
+    "reimplemented-starmap",                # keep `f(a, b) for a, b in xs`; `starmap` is slower since Python 3.12
 ]
 exclude = ["**/*.ipynb"]
 
@@ -274,6 +284,8 @@ exclude = ["**/*.ipynb"]
     "unnecessary-comprehension",  # allow `[x for x in y]` instead of `list(y)`
     "D",                          # pydocstyle: docstrings optional
     "print",                      # `print()` allowed
+    "subclass-builtin",           # allow `class FakeDict(dict)` test doubles
+    "math-constant",              # allow literal values such as `3.14` in test data
 ]
 
 [tool.ruff.lint.pydocstyle]

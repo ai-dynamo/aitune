@@ -166,12 +166,11 @@ class Module(wrapt.CallableObjectProxy):
         if self._self_state == ModuleState.RECORDING:
             wrapper = cast(RecordingModule, self._self_wrapper)
             return wrapper.graph_specs
-        elif self._self_state == ModuleState.PASSTHROUGH and self._self_prev_recording:
+        if self._self_state == ModuleState.PASSTHROUGH and self._self_prev_recording:
             return self._self_prev_recording.graph_specs
-        elif self._self_state == ModuleState.TUNED and self._self_prev_recording:
+        if self._self_state == ModuleState.TUNED and self._self_prev_recording:
             return self._self_prev_recording.graph_specs
-        else:
-            raise ValueError("Module has not recorded any samples. Cannot collect graph specs.")
+        raise ValueError("Module has not recorded any samples. Cannot collect graph specs.")
 
     @property
     def state(self) -> ModuleState:
@@ -344,7 +343,7 @@ class Module(wrapt.CallableObjectProxy):
         """
         if self._self_state == ModuleState.TUNED:
             raise ValueError(f"Module: '{self._self_name}' has already been tuned. Reset it to do it again.")
-        elif self._self_state == ModuleState.INIT or self._self_state == ModuleState.PASSTHROUGH:
+        if self._self_state == ModuleState.INIT or self._self_state == ModuleState.PASSTHROUGH:
             raise ValueError(f"Module: '{self._self_name}' has not recorded any samples. Cannot tune it.")
 
         with report_module_tune(

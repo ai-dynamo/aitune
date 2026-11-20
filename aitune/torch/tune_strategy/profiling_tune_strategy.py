@@ -406,7 +406,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         """Records and returns the eager comparison so profiling logs use the same speedup."""
         metric = result.metric
         if self._baseline_result is None or self._baseline_result.metric <= 0 or metric <= 0:
-            return
+            return None
         speedup = self._speedup(result, self._baseline_result)
         perf_result = BackendPerfResult(
             backend_description=backend.describe(),

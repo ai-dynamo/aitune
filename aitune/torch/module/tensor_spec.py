@@ -59,8 +59,8 @@ class TensorSpec:
 
         return TensorSpec(
             shape=shape,
-            min_shape=shape[:],
-            max_shape=shape[:],
+            min_shape=shape.copy(),
+            max_shape=shape.copy(),
             dtype=tensor.dtype,
             _bs_multipliers=_bs_multipliers,
         )
@@ -97,9 +97,9 @@ class TensorSpec:
         description = f"shape=[{shapes}]"
         if info_level == InfoLevel.SHORT:
             return description
-        elif info_level == InfoLevel.MEDIUM:
+        if info_level == InfoLevel.MEDIUM:
             return f"{description} dtype={self.dtype}"
-        elif info_level == InfoLevel.FULL:
+        if info_level == InfoLevel.FULL:
             min_shape = ", ".join(str(dim) for dim in self.min_shape)
             max_shape = ", ".join(str(dim) for dim in self.max_shape)
             return f"{description} min_shape=[{min_shape}] max_shape=[{max_shape}] dtype={self.dtype}"  # type: ignore[bad-return-type]

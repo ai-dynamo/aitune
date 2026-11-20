@@ -275,8 +275,7 @@ class InspectModule:
             model_name: The name of the model to display in the HTML subtitle.
         """
         html_content = HTMLGenerator.generate_html_content(InspectModule, model_name)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(html_content)
+        Path(path).write_text(html_content, encoding="utf-8")
 
         InspectModule.report_saved = True
 

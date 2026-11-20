@@ -23,12 +23,10 @@ class MeasuringStopStrategy(ABC):
         Returns:
             True if the measurement should be stopped, False otherwise.
         """
-        pass
 
     @abstractmethod
     def get_events(self, results: list[ProfilingResultEvent]) -> list[ProfilingResultEvent]:
         """Get events to use for measuring stop strategy."""
-        pass
 
 
 class NumStepsMeasuringStopStrategy(MeasuringStopStrategy):

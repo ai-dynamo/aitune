@@ -25,11 +25,9 @@ class NoOpHardwareMetricsCollector:
 
     def start_scope(self, name: str) -> None:
         """Starts a new scope."""
-        pass
 
     def end_scope(self) -> None:
         """Ends the current scope."""
-        pass
 
 
 class HardwareMetricsCollector(NoOpHardwareMetricsCollector):

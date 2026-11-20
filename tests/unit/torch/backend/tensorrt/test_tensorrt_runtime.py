@@ -100,8 +100,7 @@ def test_load_engine(tmp_path):
     engine_path = tmp_path / "tensorrt" / "test_model.plan"
     engine_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(engine_path, "wb") as f:
-        f.write(engine_content)
+    engine_path.write_bytes(engine_content)
 
     # Create builder
     runtime = TensorRTRuntime()
