@@ -82,7 +82,8 @@ The backend id is the pytest parametrize id and the feature-matrix column.
 | `torch-tensorrt-jit` | `TorchTensorRTJitBackend` | `TENSORRT_FP32` | - |
 
 TensorRT-based configs run fp32 without TF32; `tensorrt` also runs without CUDA graphs. `tensorrt_backend(**overrides)` builds
-TensorRT variants; `test_precision.py` uses it for fp16, int8, fp8, nvfp4, and CUDA graphs.
+TensorRT variants; `test_precision.py` covers non-dynamo ONNX export, sample-based and explicit profiles,
+fp16/bf16 models, fp16, int8, fp8, nvfp4, CUDA graphs, and eager fp16/bf16 autocast.
 
 To add a backend, add one `BACKENDS` entry. Give it `base` and only the tags that pass on CI.
 
@@ -137,7 +138,7 @@ formatting is checked.
 | `modes` | `aot-tune`, `aot-save-load`, `aot-inspect-wrap`, `aot-export`, `aot-existing-onnx`, `jit-tune_eager`, `jit-tune_deferred`, `jit-inspect` | backend id or `kernel-selector` |
 | `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run` | `aot-tune`, `jit-tune`, `selection-checked` |
 | `topology` | backend id or `kernel-selector` | `single-gpu` |
-| `other` | `autocast-fp16`, `onnx-int8`, `modelopt-int8`, `modelopt-fp8`, `modelopt-nvfp4`, `cuda-graphs-fp32` | `functional-ci` |
+| `other` | `autocast-fp16`, `onnx-int8`, `modelopt-int8`, `modelopt-fp8`, `modelopt-nvfp4`, `cuda-graphs-fp32`, `onnx-export-fp32`, `profiles-samples-used`, `profiles-explicit`, `model-fp16`, `model-bf16`, `eager-autocast-fp16`, `eager-autocast-bf16` | `functional-ci` |
 | `inspecting` | `call-tree`, `call-tree-signatures` | `aot` (later `jit`) |
 
 Examples:
