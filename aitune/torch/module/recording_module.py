@@ -104,7 +104,8 @@ class RecordingModule:
             self._create_graph(
                 inputs_metadata,
                 outputs_metadata,
-                effects_capture.after_call(forward_inputs.arguments, outputs, outputs_metadata),
+                # The same graph_spec is None condition above initializes effects_capture; graph_spec is unchanged.
+                effects_capture.after_call(forward_inputs.arguments, outputs, outputs_metadata),  # pyrefly: ignore[unbound-name]
                 dynamic_shapes,
                 post_inputs_metadata,
             )
