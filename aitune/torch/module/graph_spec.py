@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Contains GraphSpec which represents a graph specification."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicShapes, ShapeDefinition
+from aitune.torch.module.forward_effects_spec import ForwardEffectsSpec, InputMutation, TensorMutationPolicy
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -23,6 +24,10 @@ class GraphSpec:
     graph. AITune treats each unique input specification as a separate graph which is tuned separately. This object
     represents such a computational graph with a name and input_spec information.
 
+    Input/output metadata describes tensor paths and shapes. The forward effects specification adds observable
+    Python behavior: input changes and outputs that reuse input objects. Export and inference share
+    the user tensor output order, followed by extra tensors needed only to restore changed inputs.
+
     Attributes:
         name (str) - symbolic name of the graph
         input_spec (SampleMetadata) - spec which describes the graph input before execution
@@ -30,12 +35,14 @@ class GraphSpec:
         forward_signature (ForwardSignature) - signature of the module's forward method
         dynamic_shapes (DynamicShapes) - explicit input shape definitions
         post_input_spec (SampleMetadata) - spec which describes the graph input after execution
+        forward_effects_spec (ForwardEffectsSpec) - output structure and input mutations captured during recording
     """
 
     name: str
     input_spec: SampleMetadata
     output_spec: SampleMetadata
     forward_signature: ForwardSignature
+    forward_effects_spec: ForwardEffectsSpec
     dynamic_shapes: DynamicShapes = field(default_factory=dict)
     post_input_spec: SampleMetadata | None = None
 
@@ -59,9 +66,39 @@ class GraphSpec:
                 self.post_input_spec.update_shapes_seen(post_inputs_metadata)
         self.output_spec.update_shapes_seen(outputs_metadata)
 
+    def extra_tensor_mutations(self) -> tuple[InputMutation, ...]:
+        """Return changed input tensors appended to the graph outputs."""
+        return self.forward_effects_spec.extra_tensor_mutations(len(self.output_spec.tensor_data))
+
     def output_names(self) -> tuple[str, ...]:
-        """Return names for flat module outputs in their recorded order."""
-        return tuple(format_tensor_name(locator.path, "output") for locator, _ in self.output_spec.tensor_data)
+        """Return names for user outputs followed by internal state outputs."""
+        user_names = tuple(format_tensor_name(locator.path, "output") for locator, _ in self.output_spec.tensor_data)
+        state_names = tuple(
+            format_tensor_name(mutation.locator.path, "state") for mutation in self.extra_tensor_mutations()
+        )
+        return user_names + state_names
+
+    def restore_outputs(
+        self,
+        flat_outputs: Any,
+        arguments: dict[str, Any],
+        tensor_mutation_policies: Mapping[int, TensorMutationPolicy] | None = None,
+    ) -> Any:
+        """Delegate input mutation restoration and output reconstruction to the forward effects specification.
+
+        The specification applies recorded input changes first, then rebuilds the user output so returned
+        aliases refer to the updated caller-owned objects.
+
+        flat_outputs must follow output_names(), including internal state results. arguments contains
+        the current call's normalized live inputs, not the recorded sample. Optional mutation policies
+        select copy-back or buffer replacement; see ForwardEffectsSpec.restore_outputs for ownership rules.
+        """
+        return self.forward_effects_spec.restore_outputs(
+            flat_outputs,
+            arguments,
+            self.output_spec,
+            tensor_mutation_policies,
+        )
 
     def make_batch(self, args: tuple, kwargs: dict[str, Any], batch_size: int) -> tuple[tuple, dict[str, Any]]:
         """Return a call resized to the specified batch size while preserving its argument layout."""
@@ -165,6 +202,7 @@ class GraphSpec:
             "forward_signature": self.forward_signature.to_dict(),
             "dynamic_shapes": self.dynamic_shapes,
             "post_input_spec": self.post_input_spec,
+            "forward_effects_spec": self.forward_effects_spec,
         }
 
     @staticmethod
@@ -177,6 +215,7 @@ class GraphSpec:
             input_spec=data["input_spec"],
             output_spec=data["output_spec"],
             forward_signature=ForwardSignature.from_dict(data["forward_signature"]),
+            forward_effects_spec=data["forward_effects_spec"],
             dynamic_shapes=data["dynamic_shapes"],
             post_input_spec=data.get("post_input_spec"),
         )

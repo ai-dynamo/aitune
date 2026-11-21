@@ -23,7 +23,7 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.pt2_artifact import PT2CallContract
 from tests.toy_models import ToyTorchModel
-from tests.utilities.helpers import make_sample_store, requires_cuda
+from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store, requires_cuda
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -60,15 +60,15 @@ def _graph_spec_for(model: nn.Module, samples: list[Sample]) -> GraphSpec:
     forward_signature = ForwardSignature.from_callable(model.forward)
     graph_spec = None
     for args, kwargs in samples:
+        if graph_spec is None:
+            graph_spec = make_recorded_graph_spec(model, (args, kwargs), name="structured", batch_size=args[0].shape[0])
+            continue
         normalized = forward_signature.normalize(args, kwargs)
         with torch.no_grad():
             output = model(*args, **kwargs)
         inputs = SampleMetadata.from_inputs(normalized.arguments, batch_size=args[0].shape[0])
         outputs = SampleMetadata.from_outputs(output, batch_size=args[0].shape[0])
-        if graph_spec is None:
-            graph_spec = GraphSpec("structured", inputs, outputs, forward_signature)
-        else:
-            graph_spec.update_shapes_seen(inputs, outputs)
+        graph_spec.update_shapes_seen(inputs, outputs)
     if graph_spec is None:
         raise ValueError("At least one sample is required")
     return graph_spec
@@ -423,6 +423,27 @@ def test_activate_reloads_runner(mock_aoti, backend, model, graph_spec, sample_d
 def test_to_dict_before_build_raises():
     with pytest.raises(RuntimeError, match="build"):
         TorchInductorAotBackend().to_dict()
+
+
+def test_infer_restores_mutable_structured_inputs(mocker):
+    class StatefulDecoder(nn.Module):
+        def forward(self, x, cache):
+            cache[0] = x + 1
+            return x * 2
+
+    model = StatefulDecoder()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [None]), {}), strict=True)
+    backend = TorchInductorAotBackend()
+    backend._graph_spec = graph_spec
+    backend._runner = mocker.Mock(return_value=(x * 2, x + 1))
+    cache = [None]
+
+    result = backend._infer(x, cache)
+
+    backend._runner.assert_called_once_with(x)
+    torch.testing.assert_close(result, x * 2)
+    torch.testing.assert_close(cache[0], x + 1)
 
 
 @requires_cuda
