@@ -30,6 +30,7 @@ env:
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: "3.12"
+  UV_CACHE_DIR: ${{ github.workspace }}/.cache/uv
   ONNXRUNTIME_VERSION: 1.26.0
 
   # This runner inherits NCCL_NET_PLUGIN=ofi, which forces the AWS EFA/Libfabric
@@ -88,8 +89,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", "3.13"]
-        torch: [torch29, torch210, torch211, torch212]
+        python_version: ["3.12"]
+        torch: [torch29, torch210, torch211, torch212, torch213]
         cuda:
           - &cu128
             uv_torch_backend: cu128
@@ -107,22 +108,24 @@ jobs:
             cuda: *cu128
           - torch: torch212
             cuda: *cu128
+          # no torch-tensorrt==2.13+cu12 in pypi/torch
+          - torch: torch213
+            cuda: *cu128
         include:
           - python_version: "3.14"
             torch: torch214
             cuda: *cu130
+          - python_version: "3.14"
+            torch: torch215
+            cuda:
+              - uv_torch_backend: cu132
+                cuda_image: 13.0.3-devel-ubuntu24.04
+                cuda_major: 13
+                uv_extra_args: ""
+
     container:
       image: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda.cuda_image }}:latest
     steps:
-      - name: Install Node for local act
-        if: ${{ env.ACT == 'true' }}
-        run: |
-          node_dir="$RUNNER_TEMP/node"
-          mkdir -p "$node_dir"
-          curl -fsSL https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz \
-            | tar -xz --strip-components=1 -C "$node_dir"
-          echo "$node_dir/bin" >> "$GITHUB_PATH"
-          "$node_dir/bin/node" --version
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
@@ -130,6 +133,7 @@ jobs:
         env:
           RUNNER_TOOL_CACHE: ${{ runner.temp }}/tool-cache
         with:
+          enable-cache: true
           python-version: ${{ matrix.python_version }}
           version: ${{ env.UV_VERSION }}
       # - run: nvidia-smi
