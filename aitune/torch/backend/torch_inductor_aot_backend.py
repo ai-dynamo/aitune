@@ -241,7 +241,8 @@ class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
         """
         graph_spec = cast(GraphSpec, self._graph_spec)
         with torch.no_grad():
-            assert self._runner is not None, "Active AOT Inductor backend must have a loaded runner."
+            # Internal lifecycle invariant: activation loads the runner before inference.
+            assert self._runner is not None, "Active AOT Inductor backend must have a loaded runner."  # noqa: S101
             forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
             flat_inputs = graph_spec.input_spec.flatten_tensors(forward_inputs.arguments)
             flat_outputs = self._runner(*flat_inputs)

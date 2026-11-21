@@ -31,9 +31,11 @@ def recording_module(strict_mode, tmp_path):
 def test_recording_module_same_rank_tensors(strict_mode, tmp_path):
     rec_module = recording_module(strict_mode=strict_mode, tmp_path=tmp_path)
     rec_module(torch.tensor(2))
+    effects_spec = rec_module.graph_specs[0].forward_effects_spec
     rec_module(torch.tensor(2))
 
     assert len(rec_module.graph_specs) == 1
+    assert rec_module.graph_specs[0].forward_effects_spec is effects_spec
 
 
 def test_recording_module_same_other_data(tmp_path):
@@ -69,8 +71,8 @@ def test_recording_module_call_multiple_graphs(tmp_path):
     rec_module(torch.randn(1, 1), torch.randn(2, 1))  # third graph
     rec_module(torch.randn(1, 3), torch.randn(2, 3))  # third graph batched dimensions
 
-    assert rec_module.record_sample
     assert len(rec_module.graph_specs) == 3
+    assert [len(rec_module.samples_for_graph_spec(graph)) for graph in rec_module.graph_specs] == [1, 2, 2]
     assert rec_module.graph_specs[0].input_spec.tensor_specs[0].shape == []
     assert rec_module.graph_specs[1].input_spec.tensor_specs[0].shape == ["dim0"]
     assert rec_module.graph_specs[2].input_spec.tensor_specs[0].shape == [1, "dim1"]

@@ -270,7 +270,8 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
     @nvtx.annotate(message="ONNXRuntimeBackend.infer", domain="AITune", color="green")
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run the ONNX session and restore recorded output and input state."""
-        assert self._session is not None, "ONNX session is not loaded. Call build() or deploy() first."
+        # Internal lifecycle invariant: activation loads the session before inference.
+        assert self._session is not None, "ONNX session is not loaded. Call build() or deploy() first."  # noqa: S101
         graph_spec = cast(GraphSpec, self._graph_spec)
         arguments = graph_spec.forward_signature.normalize(args, kwargs).arguments
         inputs = self._prepare_inputs(arguments)
