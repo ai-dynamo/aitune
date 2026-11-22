@@ -19,9 +19,12 @@ from yolo.model import sample_input
 def run_inference(checkpoint: Path, triton_url: str) -> None:
     """Compare Triton outputs with the restored compiled checkpoint."""
     tuned_model = cast(Module, load(onnx_checkpoint_placeholder(), checkpoint))
-    images = sample_input()
     try:
-        artifact_input_name = tuned_model.artifact().input_names[0]
+        artifact = tuned_model.artifact()
+        if len(artifact.inputs) != 1:
+            raise RuntimeError("YOLO checkpoint must have one image input")
+        images = sample_input(dtype=getattr(torch, artifact.inputs[0].dtype.value))
+        artifact_input_name = artifact.input_names[0]
         if artifact_input_name not in {"images", "input_x"}:
             raise RuntimeError(f"Unexpected YOLO input name: {artifact_input_name}")
         input_name = "images" if artifact_input_name == "images" else "x"

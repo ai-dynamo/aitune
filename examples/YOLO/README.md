@@ -15,6 +15,31 @@ cd examples/YOLO
 ./prepare_triton.sh
 ```
 
+FP16 is the default. The recipe downloads a supplied ONNX export at a pinned revision; it does not cast weights
+or apply additional quantization. Select another export with `--variant`:
+
+```bash
+./prepare_triton.sh --variant int8
+```
+
+| Variant | Supplied ONNX file |
+| --- | --- |
+| `fp16` (default) | `model_fp16.onnx` |
+| `int8` | `model_int8.onnx` |
+
+These are upstream export names. Quantized exports can retain floating-point operations and image inputs;
+the recipe reads the image dtype from the graph rather than inferring it from the variant name.
+The original FP32 `model.onnx` is excluded from selection and CI.
+
+Each variant has a separate CI job covering tuning, checkpoint restoration, Model Analyzer, and Triton inference.
+Python validation compares the restored checkpoint with that variant's source graph using `rtol=1e-2, atol=1e-2`;
+Triton validation compares the deployment with the checkpoint using the same tolerances. Backend build or validation
+failures are logged; the workflow requires at least one deployment-capable backend to succeed.
+
+When running commands individually, pass the same `--variant` to `yolo-tune`, `yolo-python-inference`, and
+`run_triton.sh`. The model-store and Triton client commands read precision from the checkpoint.
+Move aside previous checkpoints, model repositories, and Model Analyzer outputs when switching variants.
+
 The model uses fixed batch 1. Deterministic generated input verifies numerical agreement between the source,
 tuned checkpoint, and Triton deployment; it does not measure detection accuracy. The flow prints the selected
 configuration, request batch size, concurrency, instance group, throughput, and p95 and p99 latency.
