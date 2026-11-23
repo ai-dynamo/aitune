@@ -46,21 +46,23 @@ Run `make lint` before you push. It runs these checks:
 
 - **ruff** and **ruff-format**: lint, formatting (line length 120), import order, Google-style
   docstrings, complexity ≤ 10, mutable default arguments, bare `except:`, `assert` in `aitune/`,
-  `else` after `return` or `raise`, modern syntax such as `list[int]` and `X | None`, and the SPDX
-  header. The configuration is in `pyproject.toml`.
+  `else` after `return` or `raise`, and modern syntax such as `list[int]` and `X | None`. The
+  configuration is in `pyproject.toml`.
 - **pyupgrade**: modern Python syntax for the supported Python versions.
 - **pyrefly**: static type checks. CI fails on errors that are not in `pyrefly-baseline.json`.
   - Do not add new entries to the baseline.
   - If you edit a file that has baselined errors, fix them if the fix is small and changes only
     types (no runtime change).
   - After you fix baselined errors, run `pyrefly check --prune-baseline`.
+- **SPDX header**: every new file must begin with this header, written as comments for its file
+  type. ruff (`CPY`) checks it in Python files. The CI "License headers" job also checks `.sh`,
+  `.md`, `.yaml`, `.yml`, and `.toml` files. In Markdown, put it in the front matter, as in
+  `AGENTS.md`.
 
-Every production file must begin with this header:
-
-```python
-# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: Apache-2.0
-```
+  ```python
+  # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+  # SPDX-License-Identifier: Apache-2.0
+  ```
 
 If a tool and this file do not agree, follow the tool and update this file.
 Do not disable a tool rule for a line (`# noqa`, `# pyrefly: ignore`) unless you also write the reason.
