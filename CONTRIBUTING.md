@@ -192,7 +192,11 @@ the bottom to the top. Put the base work at the bottom, for example a new API be
 uses it.
 
 Use the [`gh stack`](https://github.com/github/gh-stack) GitHub CLI extension to create and manage
-stacks. Install it once:
+stacks. All branches of a stack must be in the `ai-dynamo/aitune` repository, so you need write
+access. If you work from a fork, open one pull request at a time. Open the next one after the one
+below it merges.
+
+Install `gh stack` once:
 
 ```bash
 gh extension install github/gh-stack
