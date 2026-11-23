@@ -54,10 +54,11 @@ Run `make lint` before you push. It runs these checks:
   - If you edit a file that has baselined errors, fix them if the fix is small and changes only
     types (no runtime change).
   - After you fix baselined errors, run `pyrefly check --prune-baseline`.
-- **SPDX header**: every new `.py`, `.sh`, `.md`, `.yaml`, `.yml`, and `.toml` file must begin with
-  this header, written as comments for its file type. In Markdown, put it in the front matter, as
-  in `AGENTS.md`. ruff (`CPY`) checks Python files. For the other file types, only the CI "License
-  headers" job checks the header, because `make lint` does not run it.
+- **SPDX header**: every new file must begin with this header, written as comments for its file
+  type. In Markdown, put it in the front matter, as in `AGENTS.md`. Files without comment syntax,
+  such as JSON, do not need it. ruff (`CPY`) checks Python files. The "License headers" job in
+  `.github/workflows/ci.yml` checks the other file types, for example shell, Markdown, YAML, TOML,
+  HTML, CSS, and `Makefile`. `make lint` does not run that job.
 
   ```python
   # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
