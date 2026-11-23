@@ -36,11 +36,11 @@ except ImportError:
 
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
-from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device, offload
+from aitune.torch.utils.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
 
