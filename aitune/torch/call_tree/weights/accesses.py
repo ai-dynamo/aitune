@@ -72,10 +72,10 @@ class WeightAccess(NamedTuple):
     """One access to a weight: which call or code did it, and how.
 
     Attributes:
-        by: The path of the recorded call it ran in (``forward > llm.embed.forward``, see ``CallNode.path``); outside
-            any recorded call, the code found by ``unrecorded_caller()`` (``<unrecorded: Pipe.encode>``) or
-            ``<outside any call>``. ``shared_weights_of`` reports unrecorded code by its qualified name
-            (``Pipe.encode``).
+        by: The path of the recorded call it ran in (``forward > llm.embed.forward``, see
+            ``CallNode.path_str``); outside any recorded call, the code found by ``unrecorded_caller()``
+            (``<unrecorded: Pipe.encode>``) or ``<outside any call>``. ``shared_weights_of`` reports unrecorded code
+            by its qualified name (``Pipe.encode``).
         kind: ``"read"`` (an op uses its data), ``"device"`` (its device is checked: ``.device``, ``is_cuda``,
             ``get_device()``), or ``"move"`` (``nn.Module._apply``: ``.to()``, ``.cuda()``, casts, reached it).
     """

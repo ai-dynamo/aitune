@@ -168,8 +168,7 @@ class Locator:
             if i > 0:  # we have to modify parent with changed child reference
                 parent_locator = Locator(self._access_path[:i], self._is_output)
                 return parent_locator.set_value(root, obj)
-            else:
-                return obj
+            return obj
         else:
             obj[accessor] = value  # type: ignore
         return root
@@ -295,11 +294,11 @@ class Locator:
         """
         if issubclass(obj_type, list | tuple):
             return Locator._iter_sequence
-        elif issubclass(obj_type, dict | UserDict):
+        if issubclass(obj_type, dict | UserDict):
             return Locator._iter_dict
-        elif dataclasses.is_dataclass(obj_type):
+        if dataclasses.is_dataclass(obj_type):
             return Locator._iter_dataclass
-        elif obj_type in Locator._user_types:
+        if obj_type in Locator._user_types:
             return Locator._iter_user_type
 
         return None
@@ -341,10 +340,6 @@ class Locator:
         filtering mode; registered user types override it for their contents. Mutation capture can also
         request selected non-tensor leaves without changing ordinary metadata traversal.
 
-        For a type registered with only_tensors=True and mutation_fields=("is_initialized",), an object
-        containing a tensor, is_initialized=False, and a string label normally yields only the tensor.
-        With include_mutation_fields=True, it also yields is_initialized; the label remains excluded.
-
         Args:
             obj: The object to walk.
             only_tensors: Whether to only return tensors.
@@ -360,6 +355,30 @@ class Locator:
         - if a user type is marked as ignore, it will not be traversed nor returned.
         - registered user types are traversed through public data fields. Their only_tensors setting
               controls filtering, with selected mutation fields included only when explicitly requested.
+
+        Example:
+            A cache has a tensor, an initialization flag, and an unrelated label. Ordinary traversal
+            yields only the tensor. Mutation capture also includes the registered flag, while the label
+            stays excluded. The returned locators identify these fields on the original cache object.
+
+            >>> import torch
+            >>> class Cache:
+            ...     def __init__(self):
+            ...         self.keys = torch.ones(1)
+            ...         self.is_initialized = False
+            ...         self.label = "decoder"
+            >>> cache = Cache()
+            >>> Locator.register_user_type(Cache, only_tensors=True, mutation_fields=("is_initialized",))
+            >>> try:
+            ...     print(sorted(locator.path for locator, value in Locator.find_leaves(cache)))
+            ...     print(sorted(
+            ...         locator.path
+            ...         for locator, value in Locator.find_leaves(cache, include_mutation_fields=True)
+            ...     ))
+            ... finally:
+            ...     Locator.unregister_user_type(Cache)
+            ['keys']
+            ['is_initialized', 'keys']
         """
         if type(obj) in Locator._ignored_types:
             return
@@ -443,12 +462,17 @@ class Locator:
     ):
         """Register traversal rules for a concrete user type.
 
+        Use mutation fields when ``nn.Module.forward`` changes Python state that an exported backend
+        must restore during inference. For example, lazy cache initialization changes ``is_initialized``
+        from False to True as well as allocating tensors. Mutation capture records the flag's new value,
+        and inference restores it alongside the tensor state so the next call can use the cache.
+
         Args:
             cls: Type whose public data fields should be traversed. Subclasses require their own registration.
             only_tensors: Override filtering for this type's contents, subject to nested registrations.
             mutation_fields: Field names included as leaves when find_leaves requests mutation fields,
-                even under tensor-only filtering. Use for recorded initialization state such as
-                is_initialized, not input-dependent Python counters; restoration assigns recorded values.
+                even under tensor-only filtering. Their recorded values are restored during inference;
+                input-dependent Python updates, such as incrementing a counter, are not recomputed.
 
         Re-registering replaces both settings and clears cached lookups. Registration also removes
         the type from the ignored set. Unrelated non-tensor fields remain excluded under tensor-only filtering.

@@ -33,8 +33,6 @@ except (ImportError, RuntimeError, OSError):
         """Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 
         Attributes:
-            enabled_precisions: Enabled TensorRT precisions. Defaults to None.
-            use_explicit_typing: Whether to use explicit typing. Defaults to True.
             workspace_size: TensorRT workspace size. Defaults to 0.
             min_block_size: Minimum number of operators in a TensorRT block. Defaults to 5.
             disable_tf32: Whether to disable TF32 in TensorRT layers. Defaults to False.
@@ -42,8 +40,6 @@ except (ImportError, RuntimeError, OSError):
                 Defaults to False.
         """
 
-        enabled_precisions: set[torch.dtype] | None = None
-        use_explicit_typing: bool = True
         workspace_size: int = 0
         min_block_size: int = 5
         disable_tf32: bool = False
@@ -86,7 +82,6 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
             self.compile_config,
             other.compile_config,
             exclude=["device"],
-            include=["enabled_precisions"],
         )
         parts = [f"compile_config=TorchTensorRTConfig({','.join(compile_config_parts)})"]
 

@@ -12,8 +12,6 @@ from pathlib import Path
 class IpcError(Exception):
     """Exception for IPC errors."""
 
-    pass
-
 
 def _read_exactly(stream, n: int) -> bytes:
     """Read exactly n bytes from stream, looping until all bytes are received."""

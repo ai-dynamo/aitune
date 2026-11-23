@@ -11,6 +11,7 @@ from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import PatchedModule
 from aitune.torch.jit.patcher import Patcher, jit_reset, patch_for_jit_tuning, prepare_for_jit_tuning
+from aitune.torch.jit.tune import deferred
 from aitune.torch.module.onnx_module import OnnxModule
 
 
@@ -63,6 +64,56 @@ def test_eager_jit_tunes_when_ready(mocker):
         module(torch.ones(1, 2))
 
     tune.assert_called_once_with()
+
+
+@pytest.mark.parametrize("mode", [JITMode.TUNE_EAGER, JITMode.TUNE_DEFERRED], ids=lambda mode: mode.value)
+@pytest.mark.parametrize(
+    ("parameter_count", "minimum", "eligible"),
+    [
+        pytest.param(0, 0, True, id="zero-at-default"),
+        pytest.param(0, 1, False, id="zero-below-positive-minimum"),
+        pytest.param(2, 3, False, id="below-minimum"),
+        pytest.param(3, 3, True, id="at-minimum"),
+        pytest.param(4, 3, True, id="above-minimum"),
+    ],
+)
+def test_jit_parameter_threshold_is_inclusive(mocker, mode, parameter_count, minimum, eligible):
+    """The parameter minimum controls eligibility in both JIT tuning workflows."""
+
+    class ThresholdModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.register_buffer("offset", torch.tensor(1.0))
+            self.weight = torch.nn.Parameter(torch.ones(parameter_count)) if parameter_count else None
+
+        def forward(self, x):
+            return x + self.offset if self.weight is None else x + self.offset + self.weight.sum()
+
+    jit_config.mode = mode
+    jit_config.device = torch.device("cpu")
+    jit_config.min_parameters = minimum
+    jit_config.min_samples = 1
+    jit_config.batch_axis_required = False
+    tune = mocker.patch.object(PatchedModule, "tune")
+    with prepare_for_jit_tuning():
+        model = ThresholdModel()
+
+    value = torch.ones(2)
+    with torch.no_grad():
+        output = model(value)
+        if mode == JITMode.TUNE_DEFERRED:
+            tune.assert_not_called()
+            deferred()
+            output = model(value)
+
+    torch.testing.assert_close(output, value + parameter_count + 1)
+    if eligible:
+        (head,) = PatchedModule.heads
+        assert head.__wrapped__ is model
+        tune.assert_called_once_with()
+    else:
+        assert not PatchedModule.heads
+        tune.assert_not_called()
 
 
 def test_prepare_for_tuning():

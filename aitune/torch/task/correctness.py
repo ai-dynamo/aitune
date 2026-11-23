@@ -46,12 +46,12 @@ def check_dynamic_shape_boundary_inference(
         infer: Inference callable to validate.
         name: Name of the module or backend being checked.
 
+    Returns:
+        None.
+
     Raises:
         CorrectnessDynamicShapeError: If inference fails on min or max shape inputs.
         CorrectnessTensorShapeError: If inferred output tensor shapes do not match the expected metadata.
-
-    Returns:
-        None.
     """
     for boundary_name, (args, kwargs) in zip(
         ("min", "max"), _dynamic_shape_boundary_samples(sample, graph_spec), strict=False
@@ -83,13 +83,13 @@ def check_inference_output_correctness(
         infer: Inference callable to validate.
         name: Name of the module or backend being checked.
 
+    Returns:
+        None.
+
     Raises:
         CorrectnessValueError: If any output value is NaN or infinite.
         CorrectnessTensorShapeError: If inferred output tensor shapes do not match the expected metadata.
         CorrectnessInputMutationError: If post-call inputs do not match eager execution.
-
-    Returns:
-        None.
     """
     for sample_index, (args, kwargs) in enumerate(data):
         with coordinator.raise_if_any_rank_fails(f"Inference correctness check (sample {sample_index})"):
@@ -112,7 +112,7 @@ def check_inference_output_correctness(
                 expected_post_inputs,
                 post_inputs_metadata,
                 name,
-                ignored_input_paths=graph_spec.forward_contract.ignored_input_paths,
+                ignored_input_paths=graph_spec.forward_effects_spec.ignored_input_paths,
             )
 
 
@@ -223,7 +223,7 @@ def _check_post_input_metadata(
         expected: Input metadata recorded after eager execution.
         actual: Input metadata captured after backend execution.
         name: Qualified backend name included in correctness errors.
-        ignored_input_paths: Ignored object paths recorded in the forward contract, never inferred
+        ignored_input_paths: Ignored object paths recorded in the forward effects specification, never inferred
             from missing expected metadata or from the backend's result.
 
     Raises:

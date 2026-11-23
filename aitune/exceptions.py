@@ -51,8 +51,6 @@ class AITuneUserInputError(AITuneError):
     Raised when user provided input (model, data or configuration option) is invalid.
     """
 
-    pass
-
 
 class AITunePublicationError(AITuneError):
     """Raised when an artifact cannot be published."""

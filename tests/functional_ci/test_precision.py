@@ -6,6 +6,7 @@ from functools import partial
 
 import pytest
 import torch
+from packaging.version import Version
 
 from aitune.torch.backend import ONNXAutoCastConfig, ONNXQuantizationConfig, TorchQuantizationConfig
 from tests.functional_ci.backends import tensorrt_backend
@@ -25,9 +26,24 @@ PRECISION_CASES = {
     "cuda-graphs-fp32": ({"use_cuda_graphs": True}, TENSORRT_FP32, (7, 0)),
 }
 
+TORCH_2_15_OR_NEWER = Version(torch.__version__).release[:2] >= (2, 15)
+MODELOPT_TORCH_EXPORT_XFAIL = pytest.mark.xfail(
+    TORCH_2_15_OR_NEWER,
+    reason="torch.export of a ModelOpt-quantized module fails on torch>=2.15: fake tensor in the exported program "
+    "constants (input_quantizer.lifted_tensor_0); no fix in nvidia-modelopt<=0.49.0rc0",
+    raises=AssertionError,
+    strict=True,
+)
+
 
 @pytest.mark.matrix("other.{case_id}/functional-ci")
-@pytest.mark.parametrize("case_id", PRECISION_CASES)
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        pytest.param(case_id, marks=MODELOPT_TORCH_EXPORT_XFAIL if case_id.startswith("modelopt-") else ())
+        for case_id in PRECISION_CASES
+    ],
+)
 def test_tensorrt_precision_lifecycle(case_id: str, device: torch.device, tmp_path):
     """Tune, save, and reload a TensorRT engine with the requested precision or runtime option, then replay it."""
     config_kwargs, tolerance, min_capability = PRECISION_CASES[case_id]

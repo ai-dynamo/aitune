@@ -11,10 +11,9 @@ import shlex
 import site
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
-
-import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from metadata import FunctionalTestConfig, FunctionalVariantConfig  # noqa: E402

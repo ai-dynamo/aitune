@@ -215,8 +215,7 @@ def _aot_managed_module_ids() -> set[int]:
         wrapped = getattr(wrapper, "__wrapped__", None)
         if not isinstance(wrapped, nn.Module):
             continue
-        for module in wrapped.modules():
-            ids.add(id(module))
+        ids.update(id(module) for module in wrapped.modules())
     return ids
 
 

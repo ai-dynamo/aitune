@@ -8,7 +8,7 @@ import functools
 import torch
 
 from aitune.torch.libs.exporting import TensorExportAdapter
-from aitune.torch.module.forward_contract import ForwardContract, InputMutation, InputMutationKind
+from aitune.torch.module.forward_effects_spec import ForwardEffectsSpec, InputMutation, InputMutationKind
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.utilities.helpers import make_graph_spec
 
@@ -95,7 +95,7 @@ def test_adapter_appends_mutated_tensor_state_to_graph_outputs():
     sample = ((x, [state]), {})
     adapter, graph_spec = make_adapter(module, sample)
     state_locator = graph_spec.input_spec.tensor_data[1][0]
-    graph_spec.forward_contract = ForwardContract(
+    graph_spec.forward_effects_spec = ForwardEffectsSpec(
         output_template=None,
         input_mutations=(InputMutation(state_locator, InputMutationKind.COPY_TENSOR, output_index=1),),
     )

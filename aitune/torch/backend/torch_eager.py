@@ -154,7 +154,6 @@ class TorchEagerBackend(Backend[TorchEagerBackendConfig]):
 
     def _deactivate(self):
         """Deactivates runner."""
-        pass
 
     def _deploy(self):
         """Deploys the backend."""

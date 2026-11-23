@@ -30,7 +30,6 @@ class MeasuringStrategy(ABC):
         Returns:
             List of ProfilingResultEvent(s).
         """
-        pass
 
 
 class ModelExecutionTimeMeasuringStrategy(MeasuringStrategy):

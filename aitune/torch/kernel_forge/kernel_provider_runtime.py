@@ -42,7 +42,8 @@ class KernelProviderRuntime:
         hooks = []
         try:
             if self.plan.providers:
-                hooks.append(self.module.register_forward_pre_hook(self._create_pre_hook()))
+                # Register one at a time so a failure still removes the hooks already registered.
+                hooks.append(self.module.register_forward_pre_hook(self._create_pre_hook()))  # noqa: FURB113
                 hooks.append(self.module.register_forward_hook(self._create_post_hook(), always_call=True))
         except Exception:
             for hook in hooks:

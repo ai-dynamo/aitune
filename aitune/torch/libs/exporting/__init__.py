@@ -7,8 +7,8 @@ Recorded metadata defines the same order for example inputs, shape constraints, 
 The adapter reconstructs the Python call inside the exported module, keeping backend code
 independent of the original argument structure.
 
-The adapter also exposes recorded tensor mutations as outputs. Backends use GraphSpec's forward
-contract to apply those changes to current inputs and restore the Python result. See
+The adapter also exposes recorded tensor mutations as outputs. Backends use GraphSpec's forward effects
+specification to apply those changes to current inputs and restore the Python result. See
 docs/guides/advanced/execution_graphs.md for the flat interface design example.
 
 Torch and ONNX export share this implementation so argument reconstruction, tensor ordering, and

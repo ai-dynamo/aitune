@@ -43,7 +43,7 @@ class TorchExporter:
     The returned program uses the adapter's tensor order, rather than the original Python call layout.
     For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, its module accepts
     ``(x, bias)`` and returns ``(result,)``. Backend integration must restore the Python output structure.
-    Mutating modules can return additional state tensors described by the graph's forward contract;
+    Mutating modules can return additional state tensors described by the graph's forward effects specification;
     backends consume these internally to restore input changes before returning user outputs.
 
     Default tracing tries strict export, then non-strict export for modules that strict tracing cannot

@@ -179,17 +179,15 @@ class SampleMetadata:
             return dict(self._tensor_data) == dict(__value._tensor_data) and dict(self._other_data) == dict(
                 __value._other_data
             )
-        else:
-            # LLM integration: check only LLM phase
-            return self._llm_phase == __value._llm_phase
+        # LLM integration: check only LLM phase
+        return self._llm_phase == __value._llm_phase
 
     def __hash__(self) -> int:
         """Compute hash of sample metadata."""
         if self._llm_phase is None:
             return hash(frozenset(self._tensor_data)) ^ self._hash_other_data()
-        else:
-            # LLM integration: hash only LLM phase
-            return hash(self._llm_phase)
+        # LLM integration: hash only LLM phase
+        return hash(self._llm_phase)
 
     def _hash_other_data(self) -> int:
         """Compute an order-independent hash for non-tensor data."""
