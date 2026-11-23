@@ -201,7 +201,7 @@ names = [name for module in modules for name, param in module.named_parameters()
 ```python
 names = []
 for module in modules:
-    names.extend(name for name, param in module.named_parameters() if param.requires_grad)
+    names.extend(name for name, param in module.named_parameters() if param.requires_grad and name)
 ```
 
 ## Typing
