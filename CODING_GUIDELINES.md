@@ -124,6 +124,10 @@ Use this order in a module:
 3. Public classes and functions.
 4. Private helpers (names that start with `_`), in the order of their first call.
 
+Python must define a name before a definition at module level uses it, for example as a base
+class, a decorator, or a default value. Put such a private name before the public definition that
+uses it.
+
 ### Class layout
 
 Use this order in a class:
@@ -133,8 +137,8 @@ Use this order in a class:
 3. Public methods, properties, and other special methods (for example `__call__` and `__repr__`).
 4. Private methods (names that start with `_`), in the order of their first call.
 
-If two public methods call the same helper, put the helper after the first one that calls it.
-If one helper calls another helper, put the second helper after the first.
+To order the helpers, read the code from the top and list each helper at its first call, including
+calls from other helpers. A helper that several methods call appears once, at its first call.
 
 **Why:** The public API is what a module or class offers, so a reviewer starts there. Ordering the
 helpers by their first call keeps the file readable from the top down, and the reviewer does not
