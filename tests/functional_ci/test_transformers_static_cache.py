@@ -103,7 +103,7 @@ def test_static_cache_aot(case: BackendCase, device: torch.device, tmp_path: Pat
 @pytest.mark.matrix("jit_tuning.models.transformers-static-cache-{cache_state}")
 @with_backends(
     "base",
-    marks={"torch-tensorrt-aot": TORCH_TENSORRT_AOT_XFAIL, "torch-tensorrt-jit": TORCH_TENSORRT_JIT_XFAIL},
+    marks={"torch-tensorrt-jit": TORCH_TENSORRT_JIT_XFAIL},
 )
 @pytest.mark.parametrize("cache_state", ["lazy", "initialized"])
 def test_static_cache_jit(case: BackendCase, device: torch.device, cache_state: str):
