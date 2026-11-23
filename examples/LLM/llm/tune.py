@@ -4,9 +4,10 @@
 
 import logging
 from logging import basicConfig
+from typing import cast
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 from transformers import pipeline as create_text_pipeline
 
 from aitune.torch import Module, OneBackendStrategy
@@ -28,7 +29,9 @@ def get_model_and_tokenizer(model_id="Qwen/Qwen3-0.6B", multi_gpu=False):
     if multi_gpu:
         model_args["tp_plan"] = "auto"
     model = AutoModelForCausalLM.from_pretrained(model_id, **model_args)
-    tokenizer = AutoTokenizer.from_pretrained(model_id, padding_side="left")
+    tokenizer = cast(
+        PreTrainedTokenizer | PreTrainedTokenizerFast, AutoTokenizer.from_pretrained(model_id, padding_side="left")
+    )
     tokenizer.pad_token = tokenizer.eos_token  # Some causal models do not define a padding token.
     if not multi_gpu:
         model = model.to("cuda")

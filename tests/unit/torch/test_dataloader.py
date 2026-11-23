@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+from typing import cast
+
 import datasets
 import numpy as np
 import pytest
 import torch
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from transformers.data.data_collator import DataCollatorWithPadding
 
 from aitune.torch.dataloader import (
@@ -244,7 +246,7 @@ def test_dynamic_shapes_fails():
 
 
 def test_llm_padding_collator():
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained("gpt2"))
 
     # Add padding token (fix for gpt2)
     tokenizer.pad_token = tokenizer.eos_token

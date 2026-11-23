@@ -18,6 +18,7 @@ from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
 from aitune.torch.jit.patcher import prepare_for_jit_tuning
 from aitune.torch.module.tuned_module import TunedModule
+from aitune.torch.task.correctness import CorrectnessTensorShapeError
 from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.lifecycle import Tolerance, pinned_strategy
 from tests.functional_ci.models import seeded
@@ -30,7 +31,12 @@ DECODE_STEPS = 3
 TENSORRT_CACHE_TOLERANCE = Tolerance(rtol=3e-3, atol=3e-3)
 TORCH_TENSORRT_JIT_XFAIL = pytest.mark.xfail(
     reason="Torch-TensorRT JIT loses consecutive StaticCache updates; related upstream fix: pytorch/TensorRT#4894",
-    raises=AssertionError,
+    raises=(AssertionError, CorrectnessTensorShapeError),
+    strict=True,
+)
+TORCH_TENSORRT_AOT_XFAIL = pytest.mark.xfail(
+    reason="Torch-TensorRT AOT fails scalar StaticCache cumulative_length execution or serialization (aitune#188)",
+    raises=(RuntimeError, IndexError, AssertionError),
     strict=True,
 )
 
@@ -51,7 +57,10 @@ class StaticCacheModel(nn.Module):
 
 
 @pytest.mark.matrix("aot_tuning.models.transformers-static-cache-{cache_state}")
-@with_backends("base", marks={"torch-tensorrt-jit": TORCH_TENSORRT_JIT_XFAIL})
+@with_backends(
+    "base",
+    marks={"torch-tensorrt-aot": TORCH_TENSORRT_AOT_XFAIL, "torch-tensorrt-jit": TORCH_TENSORRT_JIT_XFAIL},
+)
 @pytest.mark.parametrize("cache_state", ["lazy", "initialized"])
 def test_static_cache_aot(case: BackendCase, device: torch.device, tmp_path: Path, cache_state: str):
     """Tune all cache states, compare consecutive updates, and repeat after checkpoint reload."""
@@ -92,7 +101,10 @@ def test_static_cache_aot(case: BackendCase, device: torch.device, tmp_path: Pat
 
 
 @pytest.mark.matrix("jit_tuning.models.transformers-static-cache-{cache_state}")
-@with_backends("base", marks={"torch-tensorrt-jit": TORCH_TENSORRT_JIT_XFAIL})
+@with_backends(
+    "base",
+    marks={"torch-tensorrt-aot": TORCH_TENSORRT_AOT_XFAIL, "torch-tensorrt-jit": TORCH_TENSORRT_JIT_XFAIL},
+)
 @pytest.mark.parametrize("cache_state", ["lazy", "initialized"])
 def test_static_cache_jit(case: BackendCase, device: torch.device, cache_state: str):
     """JIT tuning must handle initialization and subsequent updates with the requested backend."""

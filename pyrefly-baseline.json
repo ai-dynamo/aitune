@@ -1716,24 +1716,10 @@
       "severity": "error"
     },
     {
-      "column": 16,
-      "path": "tests/functional/dataloader/003_transformers_t5_tokenizer_test.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `Literal[False]`",
-      "severity": "error"
-    },
-    {
       "column": 36,
       "path": "tests/functional/dataloader/003_transformers_t5_tokenizer_test.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `datasets.arrow_dataset.Dataset | DatasetDict` is not assignable to parameter `dataset` with type `torch.utils.data.dataset.Dataset[Unknown] | Sequence[Unknown]` in function `aitune.torch.dataloader.DataLoaderFactory.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 21,
-      "path": "tests/functional/dataloader/004_resnet_test.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `tuple[BaseImageProcessorFast, dict[str, Unknown]]`",
       "severity": "error"
     },
     {
@@ -4933,20 +4919,6 @@
       "path": "tests/utilities/generate_onnx.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Tensor` is not assignable to parameter `args` with type `tuple[Any, ...]` in function `torch.onnx.export`",
-      "severity": "error"
-    },
-    {
-      "column": 68,
-      "path": "tests/utilities/transformers_native_tp.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `backends`",
-      "severity": "error"
-    },
-    {
-      "column": 46,
-      "path": "tests/utilities/transformers_native_tp.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `tp_size` in function `transformers.distributed.configuration_utils.DistributedConfig.__init__`",
       "severity": "error"
     }
   ]
