@@ -34,8 +34,8 @@ Only FP32 and FP16 exports are supported. The INT8 export is excluded because Te
 Each variant has a separate CI job covering tuning, checkpoint restoration, Model Analyzer, and Triton inference.
 Python validation checks the restored checkpoint's input dtype against the selected source graph and verifies
 detection output shape and finite values. Triton validation generates one image sample in the checkpoint's input
-dtype, runs the Python checkpoint, and sends the exact same image values to Triton. It checks detection output
-shape and finite values, then compares the outputs using `rtol=1e-2, atol=1e-2`. Backend build or validation
+dtype, runs the Python checkpoint, and sends the exact same image values to Triton. It compares the outputs
+using `rtol=1e-2, atol=1e-2`. Backend build or validation
 failures are logged; the workflow requires at least one deployment-capable backend to succeed.
 
 When running commands individually, pass the same `--variant` to `yolo-tune`, `yolo-python-inference`, and

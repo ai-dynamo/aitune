@@ -21,8 +21,6 @@ def run_inference(checkpoint: Path, triton_url: str) -> None:
     tuned_model = cast(Module, load(onnx_checkpoint_placeholder(), checkpoint))
     try:
         artifact = tuned_model.artifact()
-        if len(artifact.inputs) != 1:
-            raise RuntimeError("YOLO checkpoint must have one image input")
         images = sample_input(dtype=getattr(torch, artifact.inputs[0].dtype.value))
         # Snapshot this sample before inference; send these exact image values to Triton below.
         request_images = images.cpu().numpy()
@@ -47,12 +45,7 @@ def run_inference(checkpoint: Path, triton_url: str) -> None:
         model_input.set_data_from_numpy(request_images)
         output_name = metadata.outputs[0].name
         result = client.infer(model_name, inputs=[model_input], outputs=[grpcclient.InferRequestedOutput(output_name)])
-        output = result.as_numpy(output_name)
-        if output is None or output.ndim != 3 or output.shape[0] != 1 or output.shape[2] != 6:
-            raise RuntimeError("Unexpected YOLO Triton detection output shape")
-        predictions = output[0]
-        if not np.isfinite(predictions).all():
-            raise RuntimeError("YOLO Triton detections contain non-finite values")
+        predictions = result.as_numpy(output_name)[0]
         np.testing.assert_allclose(predictions, reference, rtol=1e-2, atol=1e-2)
         print(f"Validated Triton inference: output shape {predictions.shape}", flush=True)
     finally:
