@@ -19,8 +19,6 @@ ONNX_VARIANTS = {
 
 def onnx_model(variant: str = "fp16") -> OnnxModule:
     """Load the selected pre-exported YOLOv10n graph without converting its weights."""
-    if variant not in ONNX_VARIANTS:
-        raise ValueError(f"Unknown YOLO variant {variant!r}; choose from {', '.join(ONNX_VARIANTS)}")
     model_path = Path(
         hf_hub_download("onnx-community/yolov10n", f"onnx/{ONNX_VARIANTS[variant]}", revision=ONNX_REVISION)
     )
