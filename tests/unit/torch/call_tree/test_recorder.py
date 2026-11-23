@@ -803,7 +803,10 @@ def test_bytes_out_counts_the_tensors_of_a_model_output():
 
     class Model(nn.Module):
         def forward(self, x):
-            return BaseModelOutputWithPast(last_hidden_state=x, past_key_values=DynamicCache())
+            output = BaseModelOutputWithPast(last_hidden_state=x)
+            # Set the cache through ModelOutput's mapping API; newer constructor annotations omit this field.
+            output["past_key_values"] = DynamicCache()
+            return output
 
     model = Model()
     t = torch.randn(4, 8)

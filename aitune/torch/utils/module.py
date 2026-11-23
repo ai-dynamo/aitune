@@ -134,7 +134,8 @@ def move_module_to_device(module: nn.Module, device: str | torch.device) -> None
 def move_tensors_to_device(value: Any, device: str | torch.device) -> Any:
     """Recursively move ordinary tensor leaves while preserving distributed tensors."""
     for locator, tensor in Locator.find_leaves(value, only_tensors=True):
-        if isinstance(tensor, DTensor):
+        # Registered types can expose non-tensor metadata even when traversal requests tensors only.
+        if not isinstance(tensor, torch.Tensor) or isinstance(tensor, DTensor):
             continue
 
         value = locator.set_value(value, tensor.to(device))

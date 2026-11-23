@@ -38,14 +38,21 @@ class Locator:
     The primary entry point for this class is the `find_leaves` method, which yields all leaves
     found within a nested structure.
 
+    Registered types can keep ordinary traversal tensor-only while exposing selected non-tensor fields
+    to mutation capture. For example, a cache's is_initialized flag must be restored after lazy
+    initialization, but does not belong in its ordinary tensor metadata. Call find_leaves with
+    include_mutation_fields=True to include those registered fields.
+
     Attributes:
         _user_types: Class-level dict of registered user-defined types that should be traversed like dataclasses.
         If the value is True, only tensors are returned, otherwise all objects are returned.
+        _mutation_fields: Non-tensor leaf names per concrete registered type, included only when requested.
         _ignored_types: Class-level set of types that should not be traversed nor returned by find_leaves.
 
     """
 
     _user_types: ClassVar[dict[type, bool]] = dict[type, bool]()
+    _mutation_fields: ClassVar[dict[type, frozenset[str]]] = {}
     _ignored_types: ClassVar[set[type]] = set()
 
     def __init__(self, access_path: tuple[tuple[int | str, ObjectType], ...], is_output: bool = False):
@@ -305,32 +312,73 @@ class Locator:
         return parent_only_tensors
 
     @staticmethod
+    @cache
+    def _resolve_mutation_fields(obj_type: type) -> frozenset[str]:
+        """Return mutation fields registered for this concrete type, without inheriting registrations."""
+        return Locator._mutation_fields.get(obj_type, frozenset())
+
+    @staticmethod
+    def is_ignored(value: object) -> bool:
+        """Return whether this concrete type is excluded from traversal and leaf capture."""
+        return type(value) in Locator._ignored_types
+
+    @staticmethod
     def is_traversable(value: object) -> bool:
         """Return whether this locator can visit children of ``value``."""
         return Locator._get_iter_handler(type(value)) is not None
 
     @staticmethod
     def find_leaves(
-        obj: object, only_tensors: bool = False, is_output: bool = False
+        obj: object,
+        only_tensors: bool = False,
+        is_output: bool = False,
+        include_mutation_fields: bool = False,
     ) -> Generator[tuple["Locator", object], None, None]:
         """Walks the object and yields locators and their leaf values.
 
-        Leaf value is anything that is stored in a sequence, dictionary, or dataclass. If `only_tensors` is True,
-        only tensors are returned, otherwise all objects are returned.
+        Containers are traversed until a value has no traversal handler. only_tensors supplies the initial
+        filtering mode; registered user types override it for their contents. Mutation capture can also
+        request selected non-tensor leaves without changing ordinary metadata traversal.
 
         Args:
             obj: The object to walk.
             only_tensors: Whether to only return tensors.
             is_output: Whether the locators point into forward outputs.
+            include_mutation_fields: Include registered field names when encountered as leaves, even
+                under tensor-only filtering. Missing attributes are not synthesized, and registering
+                a container field does not automatically include every non-tensor leaf below it.
 
         Yields:
             A tuple of (locator, value) where locator is the path to the leaf and value is the leaf value.
 
         Note:
         - if a user type is marked as ignore, it will not be traversed nor returned.
-        - if a user type is registered, it will be traversed like a dataclass. If it was registered with
-              `only_tensors=True`, only tensors are returned irrespective of method argument `only_tensors`.
-              Such a case may happen when we want to handle LLM cache and look only for tensors inside cache object.
+        - registered user types are traversed through public data fields. Their only_tensors setting
+              controls filtering, with selected mutation fields included only when explicitly requested.
+
+        Example:
+            A cache has a tensor, an initialization flag, and an unrelated label. Ordinary traversal
+            yields only the tensor. Mutation capture also includes the registered flag, while the label
+            stays excluded. The returned locators identify these fields on the original cache object.
+
+            >>> import torch
+            >>> class Cache:
+            ...     def __init__(self):
+            ...         self.keys = torch.ones(1)
+            ...         self.is_initialized = False
+            ...         self.label = "decoder"
+            >>> cache = Cache()
+            >>> Locator.register_user_type(Cache, only_tensors=True, mutation_fields=("is_initialized",))
+            >>> try:
+            ...     print(sorted(locator.path for locator, value in Locator.find_leaves(cache)))
+            ...     print(sorted(
+            ...         locator.path
+            ...         for locator, value in Locator.find_leaves(cache, include_mutation_fields=True)
+            ...     ))
+            ... finally:
+            ...     Locator.unregister_user_type(Cache)
+            ['keys']
+            ['is_initialized', 'keys']
         """
         if type(obj) in Locator._ignored_types:
             return
@@ -344,11 +392,12 @@ class Locator:
 
         child_only_tensors = Locator._resolve_only_tensors(type(obj), only_tensors)
 
-        stack = [(iter_handler(obj), child_only_tensors)]
+        mutation_fields = Locator._resolve_mutation_fields(type(obj)) if include_mutation_fields else frozenset()
+        stack = [(iter_handler(obj), child_only_tensors, mutation_fields)]
         path = []
 
         while stack:
-            parent_iter, current_only_tensors = stack[-1]
+            parent_iter, current_only_tensors, current_mutation_fields = stack[-1]
             try:
                 # Get next child
                 accessor, value, obj_type = next(parent_iter)
@@ -362,10 +411,17 @@ class Locator:
                 if child_iter_handler:
                     # It is a container, push to stack
                     next_only_tensors = Locator._resolve_only_tensors(type(value), current_only_tensors)
-                    stack.append((child_iter_handler(value), next_only_tensors))
+                    next_mutation_fields = (
+                        Locator._resolve_mutation_fields(type(value)) if include_mutation_fields else frozenset()
+                    )
+                    stack.append((child_iter_handler(value), next_only_tensors, next_mutation_fields))
                 else:
                     # It is a leaf
-                    if not current_only_tensors or isinstance(value, torch.Tensor):
+                    if (
+                        not current_only_tensors
+                        or isinstance(value, torch.Tensor)
+                        or accessor in current_mutation_fields
+                    ):
                         yield Locator(tuple(path), is_output), value
                     path.pop()
 
@@ -375,12 +431,20 @@ class Locator:
                     path.pop()
 
     @staticmethod
-    def find_nodes(obj: object, is_output: bool = False) -> Generator[tuple["Locator", object], None, None]:
-        """Yield the root and every value contained in ``obj``."""
+    def find_nodes(
+        obj: object, is_output: bool = False, *, include_ignored: bool = False
+    ) -> Generator[tuple["Locator", object], None, None]:
+        """Yield the root and every traversable descendant.
+
+        Ignored objects are normally excluded. include_ignored yields their paths so mutation capture
+        can record validation exclusions, but never traverses their contents.
+        """
         stack = [(Locator((), is_output), obj)]
         while stack:
             locator, value = stack.pop()
-            if type(value) in Locator._ignored_types:
+            if Locator.is_ignored(value):
+                if include_ignored:
+                    yield locator, value
                 continue
             yield locator, value
 
@@ -391,19 +455,46 @@ class Locator:
                 stack.append((Locator((*locator._access_path, (accessor, obj_type)), is_output), child))
 
     @staticmethod
-    def register_user_type(cls: type, only_tensors: bool = False):
-        """Register a user type."""
+    def register_user_type(
+        cls: type,
+        only_tensors: bool = False,
+        mutation_fields: tuple[str, ...] = (),
+    ):
+        """Register traversal rules for a concrete user type.
+
+        Use mutation fields when ``nn.Module.forward`` changes Python state that an exported backend
+        must restore during inference. For example, lazy cache initialization changes ``is_initialized``
+        from False to True as well as allocating tensors. Mutation capture records the flag's new value,
+        and inference restores it alongside the tensor state so the next call can use the cache.
+
+        Args:
+            cls: Type whose public data fields should be traversed. Subclasses require their own registration.
+            only_tensors: Override filtering for this type's contents, subject to nested registrations.
+            mutation_fields: Field names included as leaves when find_leaves requests mutation fields,
+                even under tensor-only filtering. Their recorded values are restored during inference;
+                input-dependent Python updates, such as incrementing a counter, are not recomputed.
+
+        Re-registering replaces both settings and clears cached lookups. Registration also removes
+        the type from the ignored set. Unrelated non-tensor fields remain excluded under tensor-only filtering.
+        """
         Locator._user_types[cls] = only_tensors
+        Locator._mutation_fields[cls] = frozenset(mutation_fields)
         Locator.unignore_type(cls)
         Locator._get_iter_handler.cache_clear()
         Locator._resolve_only_tensors.cache_clear()
+        Locator._resolve_mutation_fields.cache_clear()
 
     @staticmethod
     def unregister_user_type(cls: type):
-        """Unregister a user type."""
+        """Remove a type's traversal and mutation-field settings and invalidate cached lookups.
+
+        A later registration starts with its newly supplied settings, not the previous mutation fields.
+        """
         Locator._user_types.pop(cls, None)
+        Locator._mutation_fields.pop(cls, None)
         Locator._get_iter_handler.cache_clear()
         Locator._resolve_only_tensors.cache_clear()
+        Locator._resolve_mutation_fields.cache_clear()
 
     @staticmethod
     def ignore_type(cls: type):

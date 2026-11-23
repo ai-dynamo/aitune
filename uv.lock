@@ -3,12 +3,12 @@ revision = 5
 requires-python = ">=3.11, <3.15"
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 supported-markers = [
@@ -338,7 +338,7 @@ functional-test = [
     { name = "sageattention" },
     { name = "sentencepiece", specifier = ">=0.2.0,<0.2.3" },
     { name = "timm" },
-    { name = "transformers", specifier = ">=4.57.6,<5" },
+    { name = "transformers", specifier = ">=5,<6" },
     { name = "urllib3", specifier = ">=2.6.3" },
 ]
 test = [
@@ -349,7 +349,7 @@ test = [
     { name = "pytest-mock" },
     { name = "pytest-xdist" },
     { name = "setuptools" },
-    { name = "transformers", specifier = ">=4.57.6,<5" },
+    { name = "transformers", specifier = ">=5,<6" },
 ]
 
 [[package]]
@@ -364,6 +364,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/93/1c/00909e0fbebad2121d916fdcab044cae988146680e9ee4387ba25fef8747/alembic-1.20.1.tar.gz", hash = "sha256:83490def1f723413db5096591f7609ac52544805be93849170088ed04f5a2e0b", size = 2103576, upload-time = "2026-10-22T03:24:35.93Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/11/3c/8740f5b4e1bd57333e4f84265b9b6363da4f7cf70f5622dd1e2fde7a0bd5/alembic-1.20.1-py3-none-any.whl", hash = "sha256:9970712cfb81ea26c8658d378aaa5b8f6ff9146e5bb111d70497c164016cf598", size = 270355, upload-time = "2026-10-22T03:24:37.667Z" },
+]
+
+[[package]]
+name = "annotated-doc"
+version = "0.0.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0b/7d/bdbf3062e5dae31da8b3de1e3269110beb93d268df4a7f6d22b167c6cee0/annotated_doc-0.0.7.tar.gz", hash = "sha256:0a30ef8f5322a4173720ae6712dc9a5e58f5a19868f3f167b4b5778db066c2b5", size = 10764, upload-time = "2026-11-18T11:06:55.181Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/b1/9530d6bee606979d54501adcc767d958a38929827f11a524b0d93429d2ad/annotated_doc-0.0.7-py3-none-any.whl", hash = "sha256:6bc31bbbec6dfaaedc1676dbc11dbda96fe22a2b5c400e9ebad113fec44a9dc6", size = 5286, upload-time = "2026-11-18T11:06:54.096Z" },
 ]
 
 [[package]]
@@ -580,6 +589,15 @@ wheels = [
 ]
 
 [[package]]
+name = "click"
+version = "8.5.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/45/37/edbf1b0707709013c0cf2e8317e03d97ed29bf4cac709fe328904ae92a38/click-8.5.1.tar.gz", hash = "sha256:9bbfada76703fd1d784b83eea012e3e8c6a001a876543ef104fa56aaaeb072b4", size = 399151, upload-time = "2026-11-06T17:37:01.021Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/31/7d/164b7ffc8624fe9efb4221bf9af485d5c1e41b9ae118045d2b6dc5457d8b/click-8.5.1-py3-none-any.whl", hash = "sha256:8bb5376d2006950386f8c6427613334a2acadc5f559cb80e638d00b4df957e37", size = 126163, upload-time = "2026-11-06T17:36:59.287Z" },
+]
+
+[[package]]
 name = "cloudpickle"
 version = "3.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -662,10 +680,10 @@ version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -841,12 +859,12 @@ version = "13.5.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -917,12 +935,12 @@ version = "13.5.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -940,10 +958,10 @@ version = "13.0.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -991,12 +1009,12 @@ version = "13.0.3.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -1050,12 +1068,12 @@ version = "13.2.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -1586,21 +1604,22 @@ wheels = [
 
 [[package]]
 name = "huggingface-hub"
-version = "0.36.2"
+version = "1.33.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "click" },
     { name = "filelock" },
     { name = "fsspec" },
     { name = "hf-xet" },
+    { name = "httpx" },
     { name = "packaging" },
     { name = "pyyaml" },
-    { name = "requests" },
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/b7/8cb61d2eece5fb05a83271da168186721c450eb74e3c31f7ef3169fa475b/huggingface_hub-0.36.2.tar.gz", hash = "sha256:1934304d2fb224f8afa3b87007d58501acfda9215b334eed53072dd5e815ff7a", size = 649782, upload-time = "2026-02-06T09:24:13.098Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/2a/484d112c0d8fc5f665d7b65137ac9cdb2953c982391598c3597968a12ee7/huggingface_hub-1.33.0.tar.gz", hash = "sha256:367be21a201db9523eddf8aeac7048f2602c1b308691c97640d5e72ed188007e", size = 1043548, upload-time = "2026-09-24T09:49:29.971Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/af/48ac8483240de756d2438c380746e7130d1c6f75802ef22f3c6d49982787/huggingface_hub-0.36.2-py3-none-any.whl", hash = "sha256:48f0c8eac16145dfce371e9d2d7772854a4f591bcb56c9cf548accf531d54270", size = 566395, upload-time = "2026-02-06T09:24:11.133Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/16/963096d224b80909432dc16561a615fd33d2d13beef3ce4c63fa25e40867/huggingface_hub-1.33.0-py3-none-any.whl", hash = "sha256:04e434b06e100eddbce9a6e817d72693a7884b10a79bd67ab48080d5c07eb899", size = 846435, upload-time = "2026-09-24T09:49:28.059Z" },
 ]
 
 [[package]]
@@ -2157,10 +2176,10 @@ version = "3.7"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/dc/76/3af777226b63a5e64a6b36b1ec5855c14e2b94a37096d4760e595fc43511/networkx-3.7.tar.gz", hash = "sha256:fd77a511bd90f39f3d016351345b52cf5319b813bdca01de3f755d3cca62e96a", size = 1866482, upload-time = "2026-09-21T16:45:16.974Z" }
@@ -2256,10 +2275,10 @@ version = "2.5.5"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4e/3a/8770c288c47f0b5c2a786d3c20e79f66fd245f2d42cd232d7cd5e00e83e5/numpy-2.5.5.tar.gz", hash = "sha256:5cddc243c75114ba845f01b1f87aca1572dbf7b6c2d88636ed3e1d2bccd7f1bf", size = 20873892, upload-time = "2026-11-15T21:32:28.607Z" }
@@ -2288,10 +2307,10 @@ version = "13.1.0.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2305,12 +2324,12 @@ version = "13.1.1.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2327,12 +2346,12 @@ version = "13.4.1.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2367,12 +2386,12 @@ version = "13.0.85"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2386,12 +2405,12 @@ version = "13.2.86"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2414,12 +2433,12 @@ version = "13.0.88"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2433,12 +2452,12 @@ version = "13.2.86"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2461,12 +2480,12 @@ version = "13.0.96"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2480,12 +2499,12 @@ version = "13.2.86"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2529,10 +2548,10 @@ version = "9.19.0.56"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2549,10 +2568,10 @@ version = "9.20.0.48"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2569,12 +2588,12 @@ version = "9.24.0.43"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2591,12 +2610,12 @@ version = "9.26.0.51"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2613,12 +2632,12 @@ version = "12.0.0.61"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2636,12 +2655,12 @@ version = "12.2.0.57"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2670,12 +2689,12 @@ version = "1.15.1.6"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2689,12 +2708,12 @@ version = "1.17.1.22"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2735,12 +2754,12 @@ version = "12.0.4.66"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2761,12 +2780,12 @@ version = "12.2.0.11"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2799,12 +2818,12 @@ version = "12.6.3.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2822,12 +2841,12 @@ version = "12.7.10.12"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -2865,10 +2884,10 @@ version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2882,12 +2901,12 @@ version = "0.8.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -2992,10 +3011,10 @@ version = "2.28.9"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3009,10 +3028,10 @@ version = "2.29.7"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3026,12 +3045,12 @@ version = "2.30.7"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3045,10 +3064,10 @@ version = "13.0.88"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3062,12 +3081,12 @@ version = "13.5.37"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3118,12 +3137,12 @@ version = "3.4.5"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3137,12 +3156,12 @@ version = "3.7.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -3159,12 +3178,12 @@ version = "13.0.85"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3178,12 +3197,12 @@ version = "13.2.86"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -3224,10 +3243,10 @@ version = "2.3.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -3245,12 +3264,12 @@ version = "2.4.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -3383,12 +3402,12 @@ version = "1.30.0"
 source = { registry = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4328,10 +4347,10 @@ version = "1.18.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4383,10 +4402,10 @@ version = "81.0.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0d/1c/73e719955c59b8e424d015ab450f51c0af856ae46ea2da83eba51cc88de1/setuptools-81.0.0.tar.gz", hash = "sha256:487b53915f52501f0a79ccfd0c02c165ffe06631443a886740b91af4b7a5845a", size = 1198299, upload-time = "2026-02-06T21:10:39.601Z" }
@@ -4400,17 +4419,26 @@ version = "84.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/70/b3/c19426f783614d625699a4b247faf628ea9ab1db228674491767b417f9e1/setuptools-84.2.1.tar.gz", hash = "sha256:3ff8b3b5492a0aa66960f4419365a86b84e013070d4313e4d4a6894f5d64d6bc", size = 1230289, upload-time = "2026-10-20T19:01:37.742Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ef/55/6dc6d6bb953bdfc52519a0059592c52b6e3b8ad51cf8256dffceb55b0610/setuptools-84.2.1-py3-none-any.whl", hash = "sha256:ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2", size = 876263, upload-time = "2026-10-20T19:01:35.678Z" },
+]
+
+[[package]]
+name = "shellingham"
+version = "1.5.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/58/15/8b3609fd3830ef7b27b655beb4b4e9c62313a4e8da8c676e142cc210d58e/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de", size = 10310, upload-time = "2023-10-24T04:13:40.426Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686", size = 9755, upload-time = "2023-10-24T04:13:38.866Z" },
 ]
 
 [[package]]
@@ -4495,10 +4523,10 @@ version = "10.12.0.36"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4512,10 +4540,10 @@ version = "10.13.3.9.post1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4529,10 +4557,10 @@ version = "10.14.1.48.post1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4546,10 +4574,10 @@ version = "10.15.1.29"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4563,10 +4591,10 @@ version = "10.16.1.11"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4580,10 +4608,10 @@ version = "11.0.0.114"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4597,12 +4625,12 @@ version = "11.1.0.106"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4664,10 +4692,10 @@ version = "10.13.3.9.post1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4682,10 +4710,10 @@ version = "10.14.1.48.post1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4700,10 +4728,10 @@ version = "10.15.1.29"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4718,10 +4746,10 @@ version = "10.16.1.11"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4736,10 +4764,10 @@ version = "11.0.0.114"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4754,12 +4782,12 @@ version = "11.1.0.106"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4774,12 +4802,12 @@ version = "11.4.0.106"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4794,10 +4822,10 @@ version = "10.13.3.9.post1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -4815,10 +4843,10 @@ version = "10.14.1.48.post1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -4836,10 +4864,10 @@ version = "10.15.1.29"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -4857,10 +4885,10 @@ version = "10.16.1.11"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -4878,10 +4906,10 @@ version = "11.0.0.114"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -4899,12 +4927,12 @@ version = "11.1.0.106"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -4924,12 +4952,12 @@ version = "11.4.0.106"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -4949,10 +4977,10 @@ version = "10.13.3.9.post1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4966,10 +4994,10 @@ version = "10.14.1.48.post1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -4983,10 +5011,10 @@ version = "10.15.1.29"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1a/dd/745dacecd032db5720e8bacfbbb436319eb49b621142414b3abf19cafd9a/tensorrt_cu13_libs-10.15.1.29.tar.gz", hash = "sha256:d07fe8b65ce7edb94e805d0b6e9653afe742610b7d5e1b270c918bc9e58a36b1", size = 681, upload-time = "2026-01-29T20:58:43.318Z" }
@@ -4997,10 +5025,10 @@ version = "10.16.1.11"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/67/25/085bcc297237bfea56fac62cca0439f2298f875b6a26de5ae0413671687d/tensorrt_cu13_libs-10.16.1.11.tar.gz", hash = "sha256:0e86cd02321b7258c2521495a7d8f0591852e6966ed7e43cfe33640c737495a3", size = 15737, upload-time = "2026-04-07T19:38:09.175Z" }
@@ -5011,10 +5039,10 @@ version = "11.0.0.114"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/dd/34/869c03b3d4baad93b291a4642d04ec5b1830a985244faef5287df716c71a/tensorrt_cu13_libs-11.0.0.114.tar.gz", hash = "sha256:0476172146eb733ac8a8d9dfb9685022d19dab9b8b7be2e3e1a2571a832283f3", size = 15759, upload-time = "2026-05-27T18:19:03.008Z" }
@@ -5025,12 +5053,12 @@ version = "11.1.0.106"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/db/f5/babf00011cdb6bbed9743cc885a39399aebc37197dbb6f8bbe7e03dab7fc/tensorrt_cu13_libs-11.1.0.106.tar.gz", hash = "sha256:6d2fe9e98847775122566c58b32691631dff8d8152b724d92447e93a23dfbefb", size = 15747, upload-time = "2026-06-16T19:40:06.288Z" }
@@ -5041,12 +5069,12 @@ version = "11.4.0.106"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3e/a0/328dd4e184ec6e3296a1676a2f7c2d014faf53c32339f3dd4f358ddeb1b1/tensorrt_cu13_libs-11.4.0.106.tar.gz", hash = "sha256:fc29af15a9bb5489567a58a98a56d457de64c16ab3c8ea010ef21447ff29bbea", size = 15508, upload-time = "2026-10-08T18:48:37.773Z" }
@@ -5132,17 +5160,21 @@ wheels = [
 
 [[package]]
 name = "tokenizers"
-version = "0.22.2"
+version = "0.23.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "huggingface-hub" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/73/6f/f80cfef4a312e1fb34baf7d85c72d4411afde10978d4657f8cdd811d3ccc/tokenizers-0.22.2.tar.gz", hash = "sha256:473b83b915e547aa366d1eee11806deaf419e17be16310ac0a14077f1e28f917", size = 372115, upload-time = "2026-01-05T10:45:15.988Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/7c/2cabb2174e772636683008f2c5621949b645da7d303c596589e84516a184/tokenizers-0.23.3.tar.gz", hash = "sha256:cded33237c77caeef62944d32aa9a7ef42bdce2b3497e18d137e072a8c4be438", size = 385286, upload-time = "2026-10-09T10:16:55.759Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d6/84/7990e799f1309a8b87af6b948f31edaa12a3ed22d11b352eaf4f4b2e5753/tokenizers-0.22.2-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2249487018adec45d6e3554c71d46eb39fa8ea67156c640f7513eb26f318cec7", size = 3290736, upload-time = "2026-01-05T10:40:32.165Z" },
-    { url = "https://files.pythonhosted.org/packages/2e/76/932be4b50ef6ccedf9d3c6639b056a967a86258c6d9200643f01269211ca/tokenizers-0.22.2-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:369cc9fc8cc10cb24143873a0d95438bb8ee257bb80c71989e3ee290e8d72c67", size = 3274982, upload-time = "2026-01-05T10:40:58.331Z" },
-    { url = "https://files.pythonhosted.org/packages/1d/28/5f9f5a4cc211b69e89420980e483831bcc29dade307955cc9dc858a40f01/tokenizers-0.22.2-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:29c30b83d8dcd061078b05ae0cb94d3c710555fbb44861139f9f83dcca3dc3e4", size = 9478245, upload-time = "2026-01-05T10:41:04.053Z" },
-    { url = "https://files.pythonhosted.org/packages/05/a1/d62dfe7376beaaf1394917e0f8e93ee5f67fea8fcf4107501db35996586b/tokenizers-0.22.2-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:38337540fbbddff8e999d59970f3c6f35a82de10053206a7562f1ea02d046fa5", size = 10033429, upload-time = "2026-01-05T10:45:14.333Z" },
+    { url = "https://files.pythonhosted.org/packages/15/fc/ae987741829b1cd547668c4c94be732ae3eefd1d74344e64c3d2ca714acd/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ec82e80e65a862275b97c3d90b7a523df8d9519ee48aeb4e9625b2cc909274e0", size = 3519944, upload-time = "2026-10-09T10:00:55.885Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/40/6706b82693715581457c6d5423eaa7faae576bb0526c5738a57085eb4449/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:376851d22bcf9d650a5c3090bb83e6cf9e895fbf0595369fa4cd43c1f69b5f87", size = 3396193, upload-time = "2026-10-09T10:01:05.48Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/6b/8d615d92cad1d511ca5ab188d1c7c167f0b3d295cc0d96207f9f82d486d8/tokenizers-0.23.3-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:114e2b55ed177179d59f4ab98200a4471e11e78f9e4b5a922d146740f96fcf52", size = 9972248, upload-time = "2026-10-09T10:01:09.437Z" },
+    { url = "https://files.pythonhosted.org/packages/26/e5/065625317690ea3548d834dad81f48ea1fd32e4964610e658e195d7fe28e/tokenizers-0.23.3-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:e05ab7baf7f47b406a95fea6f3b0a484b2ddcd9e1d14b68844c457eb755085a3", size = 10266026, upload-time = "2026-10-09T10:16:33.054Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/08/b1cbae8dc8fc7c91f992ac2d87a086e9b3f25a28814047ca16a82fe8c87b/tokenizers-0.23.3-cp314-cp314t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:de536665495cb4b409d25bade41963f801aff4225c19a6b804b048f7d14e34c7", size = 3491678, upload-time = "2026-10-09T10:16:45.093Z" },
+    { url = "https://files.pythonhosted.org/packages/3e/0d/aac0cb2f3a1fdbef514145b4c5f2df4d05deeb1ee8f73ae641a1b4a62a85/tokenizers-0.23.3-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5cc24bb457dd4a8af89c8fcb40074d570129ec473df2a866c276ee55db4749d7", size = 3367420, upload-time = "2026-10-09T10:16:47.112Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/1d/41a697d0c193a320b243fbd68b2057b6eb2f01ecf80899e1a16e646ff699/tokenizers-0.23.3-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:acd5c57b4bd3e56e246e2731a3a3a6825a7a7d89b7e3b761ba80bc521710f04b", size = 9945973, upload-time = "2026-10-09T10:16:49.326Z" },
+    { url = "https://files.pythonhosted.org/packages/37/e9/b56e619fcd583000a2b1254bb46af8dc6a174d3ba3329f454ad5a95a2be2/tokenizers-0.23.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:82eb480f6f1c21cea3349dec32cf1a6384c6c1e775f00f83b0d51197bc013687", size = 10237491, upload-time = "2026-10-09T10:16:51.943Z" },
 ]
 
 [[package]]
@@ -5160,10 +5192,10 @@ version = "2.8.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5208,10 +5240,10 @@ version = "2.9.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5261,10 +5293,10 @@ version = "2.10.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5321,10 +5353,10 @@ version = "2.11.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5365,10 +5397,10 @@ version = "2.12.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5408,10 +5440,10 @@ version = "2.13.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5450,12 +5482,12 @@ version = "2.14.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5494,12 +5526,12 @@ version = "2.15.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5538,10 +5570,10 @@ version = "2.8.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5570,10 +5602,10 @@ version = "2.9.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5600,10 +5632,10 @@ version = "2.10.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5632,10 +5664,10 @@ version = "2.11.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5663,10 +5695,10 @@ version = "2.12.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5696,10 +5728,10 @@ version = "2.13.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5728,12 +5760,12 @@ version = "2.14.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5764,12 +5796,12 @@ version = "2.15.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5803,12 +5835,12 @@ version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -5822,12 +5854,12 @@ version = "0.14.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -5841,12 +5873,12 @@ version = "0.15.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -5860,12 +5892,12 @@ version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -5879,12 +5911,12 @@ version = "0.17.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -5898,12 +5930,12 @@ version = "0.18.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -5917,10 +5949,10 @@ version = "0.23.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5946,10 +5978,10 @@ version = "0.24.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -5979,10 +6011,10 @@ version = "0.25.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -6012,10 +6044,10 @@ version = "0.26.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -6045,10 +6077,10 @@ version = "0.27.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -6076,10 +6108,10 @@ version = "0.28.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -6107,12 +6139,12 @@ version = "0.29.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 dependencies = [
@@ -6185,24 +6217,23 @@ wheels = [
 
 [[package]]
 name = "transformers"
-version = "4.57.6"
+version = "5.24.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "filelock" },
     { name = "huggingface-hub" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "packaging" },
     { name = "pyyaml" },
     { name = "regex" },
-    { name = "requests" },
     { name = "safetensors" },
     { name = "tokenizers" },
     { name = "tqdm" },
+    { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c4/35/67252acc1b929dc88b6602e8c4a982e64f31e733b804c14bc24b47da35e6/transformers-4.57.6.tar.gz", hash = "sha256:55e44126ece9dc0a291521b7e5492b572e6ef2766338a610b9ab5afbb70689d3", size = 10134912, upload-time = "2026-01-16T10:38:39.284Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/3b/1680200d94d5e567443223dce26f9c6c26c6366ce5232981923c6c01e9d6/transformers-5.24.0.tar.gz", hash = "sha256:906cb8c3cb2123575e263962586a4d21a979ce97feeb95fe6aaf66fe6ae88bf3", size = 10751687, upload-time = "2026-11-21T12:24:32.616Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/03/b8/e484ef633af3887baeeb4b6ad12743363af7cce68ae51e938e00aaa0529d/transformers-4.57.6-py3-none-any.whl", hash = "sha256:4c9e9de11333ddfe5114bc872c9f370509198acf0b87a832a0ab9458e2bd0550", size = 11993498, upload-time = "2026-01-16T10:38:31.289Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/6c/0a5b01b84e605e811f25d091262f199894c0839dcd7f2a289254cf7a16a7/transformers-5.24.0-py3-none-any.whl", hash = "sha256:ff5ebedf9359f94bb63772b6380eba6e7104d010cbbb2cb82c788817ea7486f6", size = 13549890, upload-time = "2026-11-21T12:24:29.434Z" },
 ]
 
 [[package]]
@@ -6254,10 +6285,10 @@ version = "3.6.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6281,10 +6312,10 @@ version = "3.7.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6306,12 +6337,12 @@ version = "3.8.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6333,12 +6364,12 @@ version = "3.9.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
-    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version >= '3.14' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and 'tegra' not in platform_release and sys_platform == 'linux'",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and 'tegra' not in platform_release and sys_platform == 'linux'",
 ]
 wheels = [
@@ -6420,6 +6451,21 @@ grpc = [
     { name = "packaging" },
     { name = "protobuf" },
     { name = "python-rapidjson" },
+]
+
+[[package]]
+name = "typer"
+version = "0.29.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "annotated-doc" },
+    { name = "pydantic" },
+    { name = "rich" },
+    { name = "shellingham" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bf/21/37383ece7d0a4995fb8ea97729207c4292b3ff94085002f37b2387063cfb/typer-0.29.2.tar.gz", hash = "sha256:b1998dc5f2c3dedafa1517a9521fa944cc4dc1fadcea085d81a3b10ebcaeb075", size = 205728, upload-time = "2026-11-18T11:09:46.189Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/f3/864dcb0e165b52e9f75aa3c7e0aeeb9876f139c66eb14d87856bb173b0fa/typer-0.29.2-py3-none-any.whl", hash = "sha256:f30731f8ca758368b836b3714872e58e395cef8fcaff918c853b1969ed5274e7", size = 121041, upload-time = "2026-11-18T11:09:45.03Z" },
 ]
 
 [[package]]

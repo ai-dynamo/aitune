@@ -3,10 +3,11 @@
 """Tune ESM2 model."""
 
 import logging
+from typing import cast
 
 import torch
 from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp, relocated_checkpoint_path
-from transformers import AutoTokenizer, EsmForMaskedLM
+from transformers import AutoTokenizer, EsmForMaskedLM, PreTrainedTokenizerBase
 
 import aitune.torch as ait
 
@@ -23,13 +24,13 @@ logger = logging.getLogger(__name__)
 def get_model(model_name: str = MODEL_NAME, device: torch.device = DEVICE):
     logger.info("Loading model '%s' on %s...", model_name, device)
     model = EsmForMaskedLM.from_pretrained(model_name)
-    model.to(device)
+    cast(torch.nn.Module, model).to(device)
     model.eval()
     return model
 
 
 def prepare_sample(device=DEVICE):
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+    tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True))
 
     input_data = tokenizer([SAMPLE_SEQUENCE], return_tensors="pt")
     return {

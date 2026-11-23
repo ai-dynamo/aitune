@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from typing import cast
 
 import datasets
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 from transformers.data.data_collator import DataCollatorWithPadding
 
 from aitune.torch.dataloader import DataLoaderFactory
@@ -14,7 +15,7 @@ MAX_SEQUENCE_LENGTH = 64
 
 
 def get_dataloader():
-    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained("distilbert-base-uncased"))
 
     def tokenize_function(examples):
         return tokenizer(examples["prompt"], truncation=True, max_length=MAX_SEQUENCE_LENGTH)
