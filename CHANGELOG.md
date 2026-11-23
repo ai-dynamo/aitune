@@ -20,7 +20,6 @@ title: "Changelog"
 - fix: `inspect()` works on models with parts compiled by `torch.compile` or `nn.Module.compile()`; it counts a compiled part as one call and no longer wraps the calls inside it, where Dynamo cannot trace its timing
 - fix: preserve positional and keyword call layout during recording, export, and backend dispatch for decorated modules that enforce keyword arguments
 - fix: preserve module buffers during reference validation of stateful backends and check post-call input state against eager execution
-- fix: reject TensorRT optimization profiles outside the exported program's shape bounds instead of silently narrowing the requested workload
 - breaking change: `inspect()` no longer counts the modules inside a compiled part; it logs a warning for each compiled part, and running `inspect()` under `torch.compiler.set_stance("force_eager")` counts them
 
 ## 0.7.0 (unreleased)

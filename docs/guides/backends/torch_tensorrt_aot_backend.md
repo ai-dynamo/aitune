@@ -87,11 +87,7 @@ config = TorchTensorRTAotBackendConfig(
 )
 ```
 
-### Export profiles and serialization
-
-Before compilation, AITune checks that the requested TensorRT optimization profiles fit
-within the Torch Export shape constraints. Incompatible profiles fail the candidate;
-AITune does not silently narrow the requested ranges.
+### Serialization
 
 Serialization first exports the compiled graph directly. It preserves scalar and `None`
 input metadata so those constants remain serializable. Export specification errors and
