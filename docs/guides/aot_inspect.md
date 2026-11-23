@@ -279,6 +279,8 @@ Some nodes get no time (`time_ms` is `null`):
 - calls inside a compiled part, since they run inside the compiled code. The compiled part itself is timed as one
   call, and such nodes are marked `inside_compiled_part` in the export;
 - nodes deeper than `max_timing_depth`. They are recorded but not timed, and `inspect` logs no warning for them.
+  `max_timing_depth=0` skips the timing pass entirely — a structure pass only (calls, bytes, signatures, sources,
+  weights), saving its `number_of_iterations` × depths inferences.
 
 `max_timing_depth` bounds the timing cost: fewer depths per sample means fewer iterations. It counts call-path depths,
 with the root call at depth 1, not the attribute depths that `max_depth` counts. The deep leaf levels (linear

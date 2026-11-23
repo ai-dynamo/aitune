@@ -965,9 +965,31 @@ def test_max_timing_depth_leaves_deep_nodes_untimed_without_a_warning(mocker, da
     warning.assert_not_called()
 
 
-@pytest.mark.parametrize("bad", [0, -1, True, 1.5])
-def test_max_timing_depth_rejects_non_positive_or_non_int_values(bad, dataset):
+@pytest.mark.parametrize("bad", [-1, -5])
+def test_max_timing_depth_rejects_negative_values(bad, dataset):
     model, fn = _vla()
 
-    with pytest.raises(ValueError, match="max_timing_depth must be a positive int or None"):
+    with pytest.raises(ValueError, match="max_timing_depth must be a non-negative int or None"):
         inspect(model, dataset, inference_function=fn, call_tree=True, max_timing_depth=bad)
+
+
+def test_max_timing_depth_zero_skips_the_timing_pass(mocker, dataset):
+    """``max_timing_depth=0`` runs only the structure pass: the tree is complete, every ``time_ms`` stays None."""
+    model, fn = _vla()
+    timing = mocker.patch("aitune.torch.inspecting.inspecting._time_call_tree")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=1,
+        call_tree=True,
+        max_timing_depth=0,
+    )
+
+    timing.assert_not_called()
+    tree = _tree(info)
+    assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
+    assert all(node.calls > 0 for node in tree.nodes.values())
+    assert all(node.time_ms is None for node in tree.nodes.values())

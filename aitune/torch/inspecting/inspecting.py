@@ -57,8 +57,9 @@ def inspect(
             ``torch.compile`` get no time. For deep models the walk must reach the linear layers, for example
             ``max_depth=8``. Details are in ``docs/guides/aot_inspect.md``.
         max_timing_depth: Deepest call-path depth the timing pass times, with the root call at depth 1; None times
-            every depth. Deeper nodes are still recorded but keep ``time_ms`` None. Limits the timing pass to at
-            most ``max_timing_depth`` iterations per sample.
+            every depth, and 0 skips the timing pass, so every node keeps ``time_ms`` None. Deeper nodes are
+            still recorded but keep ``time_ms`` None. Limits the timing pass to at most ``max_timing_depth``
+            iterations per sample.
 
     Returns:
         InspectedModulesInfo object.
@@ -67,10 +68,8 @@ def inspect(
         In distributed execution, rank zero's module order and timings are applied to every rank so subsequent
         execution-based filtering selects modules consistently.
     """
-    if max_timing_depth is not None and (
-        not isinstance(max_timing_depth, int) or isinstance(max_timing_depth, bool) or max_timing_depth < 1
-    ):
-        raise ValueError(f"max_timing_depth must be a positive int or None, got {max_timing_depth!r}")
+    if max_timing_depth is not None and max_timing_depth < 0:
+        raise ValueError(f"max_timing_depth must be a non-negative int or None, got {max_timing_depth!r}")
 
     setup_logging(format_string=LOG_FORMAT)
 
@@ -142,7 +141,12 @@ def _record_call_tree(
 ) -> CallTree:
     """Record the call tree without times, then time it in a second pass, each sample once per depth it reaches."""
     tree = _record_structure(recorder, inference_function, dataset, number_of_iterations)
-    _time_call_tree(TimingRecorder(tree, max_depth=max_timing_depth), inference_function, dataset, number_of_iterations)
+    if max_timing_depth == 0:
+        logger.info("Skipping the call tree's timing pass (max_timing_depth=0); node times stay None.")
+    else:
+        _time_call_tree(
+            TimingRecorder(tree, max_depth=max_timing_depth), inference_function, dataset, number_of_iterations
+        )
     return synchronize_call_tree(tree)
 
 
