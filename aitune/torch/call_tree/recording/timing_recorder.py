@@ -185,8 +185,8 @@ class TimingRecorder(CallRecorder):
         """Stop timing a call started with ``begin_call``; pops it if it is the innermost open call."""
         if frame is None:
             return
-        if frame.start is not None:
-            self._stop_timer(frame)
+        if frame.start is not None and frame.node is not None:
+            self._stop_timer(frame.node, frame)
         if self._stack and self._stack[-1] is frame:
             self._stack.pop()
 
@@ -302,12 +302,9 @@ class TimingRecorder(CallRecorder):
             return self._record_event(device, stream), device, stream
         return time.perf_counter(), None, None
 
-    def _stop_timer(self, call: _TimedCall) -> None:
-        """Stop timing a call: queue the CUDA event pair for ``end_iteration``, or record the CPU time."""
-        node = call.node
-        assert node is not None  # a call with a start time always has a node
-        if self._use_cuda:
-            assert call.device is not None
+    def _stop_timer(self, node: CallNode, call: _TimedCall) -> None:
+        """Stop timing ``node``'s call: queue the CUDA event pair for ``end_iteration``, or record the CPU time."""
+        if call.device is not None:  # set exactly when the start is a CUDA event
             end = self._record_event(call.device, call.stream)
             self._events.append((node, call.start, end, call.device))
         else:
