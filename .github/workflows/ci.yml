@@ -382,8 +382,6 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: Report Transformers version
-        run: python -c 'import transformers; print(transformers.__version__)'
       - name: Functional CI tests
         run: |
           python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
