@@ -313,11 +313,10 @@ class OnnxRuntimeBackend(Backend):
 
 ### Do not use `assert` in production code
 
-Use `assert` only in tests. In production code, raise an exception. ruff checks this rule in
-`aitune/`.
-
-**Why:** `python -O` removes all `assert` statements (`-OO` also removes docstrings). With these
-flags, the check does not run and the code continues with incorrect data.
+ruff checks this rule in `aitune/`, because `python -O` removes `assert` statements. There is one
+exception: in a hot path, you can use `assert` to narrow a type for pyrefly when a lifecycle
+invariant guarantees the value, for example `assert self._session is not None`. Add
+`# noqa: S101` and a comment that names the invariant.
 
 ### Raise the correct exception type
 
