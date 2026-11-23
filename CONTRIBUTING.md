@@ -168,7 +168,7 @@ Use `$aitune-docs-update` for full documentation refreshes so docs changes follo
 
 ## Code Style
 
-Follow [CODING_GUIDELINES.md](CODING_GUIDELINES.md). `make lint` checks the rules that tools can enforce.
+Follow [CODING_GUIDELINES.md](https://github.com/ai-dynamo/aitune/blob/main/CODING_GUIDELINES.md). `make lint` checks the rules that tools can enforce.
 
 ## Pull Requests
 
