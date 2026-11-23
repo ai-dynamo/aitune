@@ -444,22 +444,19 @@ becomes incorrect when the code changes.
 **Bad:**
 
 ```python
-# if user provided profiles, return them
-if isinstance(self._config.profiles, list):
-    return self._get_user_profiles(graph_spec, self._config.profiles)
+# Copy the module.
+model_copy = deepcopy(module)
 ```
 
 **Good:**
 
 ```python
-if isinstance(self._config.profiles, list):
-    return self._get_user_profiles(graph_spec, self._config.profiles)
+model_copy = deepcopy(module)
 ```
 
 **Better** (a comment that explains why):
 
 ```python
-# _find_optimization_profile selects the first match, so keep the user's profile order.
-if isinstance(self._config.profiles, list):
-    return self._get_user_profiles(graph_spec, self._config.profiles)
+# ModelOpt quantization changes the model in place, so quantize a copy and keep the caller's module.
+model_copy = deepcopy(module)
 ```
