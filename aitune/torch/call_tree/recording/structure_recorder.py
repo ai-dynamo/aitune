@@ -34,7 +34,7 @@ from aitune.torch.call_tree.call_tree import CallNode, CallTree
 from aitune.torch.call_tree.callers import unrecorded_caller
 from aitune.torch.call_tree.methods import is_compiled_call
 from aitune.torch.call_tree.nodes import CallPath, CallSignature, Leaf, TensorLeaf, _Source
-from aitune.torch.call_tree.recording.base import NO_RESULT, CallRecorder
+from aitune.torch.call_tree.recording.call_recorder import NO_RESULT, CallRecorder
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, WeightAccessMode, storage_key
 from aitune.torch.module.forward_signature import ForwardSignature
 
@@ -169,7 +169,7 @@ class StructureRecorder(CallRecorder):
         signature.call_indices.append(frame.call_index)
 
     def begin_iteration(self) -> None:
-        """Mark the start of one iteration (for example one call of the inference function)."""
+        """Mark the start of the iteration that records the next sample (one call of the inference function)."""
         self._current_sequence = []
         self._top_visible = _SourceIndex()  # a new top level: nothing links across iterations
 
@@ -187,7 +187,6 @@ class StructureRecorder(CallRecorder):
         """
         return CallTree(
             nodes=self._nodes,
-            iterations=len(self._sequences),
             sequences=self._sequences,
             weight_accesses=self._weight_access_log.snapshot(),
             modules=list(self._modules.values()),

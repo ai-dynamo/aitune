@@ -5,7 +5,7 @@
 from typing import NamedTuple
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.nodes import CallPath, CallSignature, TimedIteration
+from aitune.torch.call_tree.nodes import CallPath, CallSignature
 from aitune.torch.distributed import coordinator
 
 
@@ -15,25 +15,25 @@ class _NodeRecord(NamedTuple):
     path: CallPath
     owner_class: str
     calls: int
-    iteration_starts: list[int]
-    timings: list[TimedIteration]
+    calls_per_iteration: list[int]
+    time_ms: float | None
     bytes_in: int
     bytes_out: int
     signatures: list[CallSignature]
 
     def structure(self) -> tuple[str, int, list[int]]:
         """The part every rank must have recorded identically."""
-        return self.owner_class, self.calls, self.iteration_starts
+        return self.owner_class, self.calls, self.calls_per_iteration
 
 
 def synchronize_call_tree(tree: CallTree) -> CallTree:
-    """Apply rank zero's call counts, timings, byte totals and recorded signatures to the local call tree.
+    """Apply rank zero's call counts, call times, byte totals and recorded signatures to the local call tree.
 
     Updates ``tree`` in place and returns it.
 
     Every rank must have recorded the same tree: the same call paths (adapter names), with the same owner class,
-    call count and ``CallTree.iteration_starts`` per node, so each node's calls fall into the same iterations on
-    every rank. The measured timings, tensor bytes and the per-node signatures are taken from rank zero,
+    call count and ``CallTree.calls_per_iteration`` per node, so each node's calls fall into the same iterations on
+    every rank. The measured times, tensor bytes and the per-node signatures are taken from rank zero,
     so every rank reports the same values; the bytes and signatures are not compared, because tensor-parallel
     ranks can hold differently sized shards. Sequences, ``.to()`` callers and recorded weight accesses stay
     local; they follow from the verified structure, so rank zero's signature call indices map to the same
@@ -43,12 +43,12 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
         tree: The local call tree.
 
     Returns:
-        The same tree with rank zero's timings, byte totals and signatures.
+        The same tree with rank zero's call times, byte totals and signatures.
 
     Raises:
         RuntimeError: If the local tree differs from rank zero's.
     """
-    iteration_starts = tree.iteration_starts()
+    calls_per_iteration = tree.calls_per_iteration()
     local = (
         tree.iterations,
         tuple(
@@ -56,8 +56,8 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
                 path,
                 node.owner_class,
                 node.calls,
-                iteration_starts[path],
-                node.timings,
+                calls_per_iteration[path],
+                node.time_ms,
                 node.bytes_in,
                 node.bytes_out,
                 node.signatures,
@@ -78,15 +78,16 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
             )
         for record in rank_zero_records:
             node = tree.nodes[record.path]
-            local_structure = (node.owner_class, node.calls, iteration_starts[record.path])
+            local_structure = (node.owner_class, node.calls, calls_per_iteration[record.path])
             if local_structure != record.structure():
                 raise RuntimeError(
-                    f"Local call {record.path[-1]!r} differs from rank zero: (owner class, calls, iteration starts) "
-                    f"local={local_structure!r}, rank zero={record.structure()!r}"
+                    f"Local call {record.path[-1]!r} differs from rank zero: "
+                    f"(owner class, calls, calls per iteration) local={local_structure!r}, "
+                    f"rank zero={record.structure()!r}"
                 )
     for record in rank_zero_records:
         node = tree.nodes[record.path]
-        node.timings = list(record.timings)
+        node.time_ms = record.time_ms
         node.bytes_in = record.bytes_in
         node.bytes_out = record.bytes_out
         node.signatures = list(record.signatures)

@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from aitune.torch.call_tree.sync import _NodeRecord, synchronize_call_tree
-from tests.unit.torch.call_tree.helpers import make_tree, record, timed
+from tests.unit.torch.call_tree.helpers import make_tree, record
 
 BROADCAST = "aitune.torch.call_tree.sync.coordinator.broadcast_from_rank0"
 
@@ -15,9 +15,9 @@ def _tree(time_ms: float = 1.0, calls: int = 1):
 
 
 def _records(tree):
-    starts = tree.iteration_starts()
+    counts = tree.calls_per_iteration()
     return tuple(
-        _NodeRecord(k, n.owner_class, n.calls, starts[k], n.timings, n.bytes_in, n.bytes_out, n.signatures)
+        _NodeRecord(k, n.owner_class, n.calls, counts[k], n.time_ms, n.bytes_in, n.bytes_out, n.signatures)
         for k, n in tree.nodes.items()
     )
 
@@ -37,8 +37,8 @@ def test_rank_zero_times_are_applied(mocker):
 def test_different_keys_raise(mocker):
     tree = _tree()
     records = (
-        _NodeRecord(("root.forward",), "root", 1, [], [], 0, 0, []),
-        _NodeRecord(("root.forward", "root.other.forward"), "other", 1, [], [], 0, 0, []),
+        _NodeRecord(("root.forward",), "root", 1, [], None, 0, 0, []),
+        _NodeRecord(("root.forward", "root.other.forward"), "other", 1, [], None, 0, 0, []),
     )
     mocker.patch(BROADCAST, return_value=(2, records))
 
@@ -70,7 +70,7 @@ def test_different_calls_per_iteration_raise(mocker):
 
 def test_a_mismatch_leaves_the_local_tree_unchanged(mocker):
     tree, rank_zero = _tree(time_ms=1.0, calls=1), _tree(time_ms=1.0, calls=3)
-    rank_zero.nodes[("root.forward",)].timings = timed(99.0, calls=1)  # the outer node matches and comes first
+    rank_zero.nodes[("root.forward",)].time_ms = 99.0  # the outer node matches and comes first
     mocker.patch(BROADCAST, return_value=(2, _records(rank_zero)))
 
     with pytest.raises(RuntimeError, match="head.forward"):

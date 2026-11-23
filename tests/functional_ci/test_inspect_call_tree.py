@@ -10,7 +10,7 @@ from aitune.torch.call_tree.nodes import TensorLeaf
 from tests.functional_ci.models import seeded
 from tests.toy_models.call_tree_models import HIDDEN, VlaToy, vla_inputs
 
-ITERATIONS = 4  # the timing pass times one call-path depth per iteration; the VlaToy tree is 4 deep
+ITERATIONS = 4  # any count times every depth: the timing pass replays each sample once per call-path depth
 
 
 def _vla(device: torch.device):
@@ -82,11 +82,11 @@ def test_call_tree_records_the_signatures_at_the_llm_to_dit_cut(device: torch.de
         "x": TensorLeaf("x", "torch.Tensor", torch.float32, (2, HIDDEN)),
         "t": TensorLeaf("t", "torch.Tensor", torch.float32, (2, 1)),
     }
-    assert tree.iteration_starts()[dit_key] == [5 * i for i in range(ITERATIONS)]
+    assert tree.calls_per_iteration()[dit_key] == [5] * ITERATIONS
 
     exported = tree.to_dict()
     [dit] = [node for node in exported["nodes"] if node["call_path"] == "forward > dit_forward"]
-    assert dit["iteration_starts"] == [5 * i for i in range(ITERATIONS)]
+    assert dit["calls_per_iteration"] == [5] * ITERATIONS
     assert dit["signatures"][0]["inputs"]["t"] == {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [2, 1]}
     tied = {"weight": {"dtype": "torch.float32", "shape": [16, HIDDEN]}}
     assert exported["modules"]["lm_head"]["parameters"] == tied

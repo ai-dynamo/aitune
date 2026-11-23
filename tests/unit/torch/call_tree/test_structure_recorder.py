@@ -12,7 +12,7 @@ from torch import nn
 from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.callers import OUTSIDE_ANY_CALL
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container, user_defined_methods
-from aitune.torch.call_tree.nodes import CallNode, CallSignature, Leaf, TensorLeaf, TimedIteration
+from aitune.torch.call_tree.nodes import CallNode, CallSignature, Leaf, TensorLeaf
 from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, storage_key
 from tests.toy_models.call_tree_models import (
@@ -50,7 +50,6 @@ def test_call_tree_copy_is_independent_of_the_original():
     )
     tree = CallTree(
         nodes={root.path: root, child.path: child},
-        iterations=2,
         sequences=[[root.path, child.path], [root.path, child.path]],
         weight_accesses={"weight": {WeightAccess("root.forward", "move")}},
         modules=[("root", module)],
@@ -58,7 +57,7 @@ def test_call_tree_copy_is_independent_of_the_original():
 
     copied = tree.copy()
     copied_root = copied.nodes[root.path]
-    copied_root.timings.append(TimedIteration(0, 1, 9.0))
+    copied_root.time_ms = 9.0
     copied_root.children.clear()
     copied_root.signatures[0].call_indices.append(2)
     copied_root.signatures[0].inputs["x"] = TensorLeaf("x", "torch.Tensor", dtype=torch.float16, shape=(1,))
@@ -102,7 +101,7 @@ def test_nodes_of_finds_a_modules_nodes_by_identity_and_method():
     assert tree.nodes_of(nn.Linear(2, 2)) == []
 
 
-def test_calls_are_counted_over_iterations_and_children_keep_first_call_order():
+def test_calls_are_counted_over_samples_and_children_keep_first_call_order():
     model = VlaToy(steps=5)
     tokens, image = vla_inputs()
 
@@ -169,7 +168,7 @@ def test_result_is_a_snapshot_that_later_recording_does_not_change():
     model = nn.Linear(2, 2)
     recorder = StructureRecorder()
 
-    def one_iteration():
+    def one_sample():
         with recorder:
             recorder.begin_iteration()
             frame = recorder.begin_call("root.forward", model, "forward", ())
@@ -177,9 +176,9 @@ def test_result_is_a_snapshot_that_later_recording_does_not_change():
             recorder.end_call(frame)
             recorder.end_iteration()
 
-    one_iteration()
+    one_sample()
     first = recorder.result()
-    one_iteration()
+    one_sample()
 
     assert first.nodes[("root.forward",)].calls == 1
     assert first.iterations == 1
@@ -1662,7 +1661,7 @@ def test_calls_passing_skips_signatures_whose_calls_raised():
     assert node.calls_passing("output", "outputs") == [0]  # the raised call passed no result
 
 
-def test_iteration_starts_count_calls_before_each_iteration():
+def test_calls_per_iteration_counts_each_samples_calls():
     class Model(nn.Module):
         def forward(self, x):
             return x
@@ -1676,14 +1675,16 @@ def test_iteration_starts_count_calls_before_each_iteration():
         model(x)
         model(x)
         recorder.end_iteration()
-        recorder.begin_iteration()  # no call in this iteration
+        recorder.begin_iteration()  # no call in this sample
         recorder.end_iteration()
         recorder.begin_iteration()
         model(x)
         recorder.end_iteration()
 
     tree = recorder.result()
-    assert tree.iteration_starts()[("root.forward",)] == [0, 2, 2]
+    assert tree.calls_per_iteration()[("root.forward",)] == [2, 0, 1]
+    node = tree.nodes[("root.forward",)]
+    assert sum(tree.calls_per_iteration()[node.path]) == node.calls
 
 
 def test_call_indices_continue_across_iterations():

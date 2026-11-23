@@ -220,7 +220,7 @@ def test_an_object_without_weakref_support_gets_no_source():
 
 
 class _Stashing(nn.Module):
-    """Stashes its child's result; the next iteration's call with it sees no scope it lives in."""
+    """Stashes its child's result; the next sample's call with it sees no scope it lives in."""
 
     def __init__(self):
         super().__init__()
@@ -250,7 +250,7 @@ def test_an_outermost_calls_result_is_the_source_of_a_later_outermost_call():
     assert signatures[1].inputs["x"].source == (ROOT, "outputs", "output")
 
 
-def test_an_outermost_calls_result_is_not_linked_into_the_next_iteration():
+def test_an_outermost_calls_result_is_not_linked_into_the_next_sample():
     model = _Head()
     previous = [torch.randn(4)]
 

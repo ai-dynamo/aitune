@@ -3,6 +3,7 @@
 """``ait.inspect(..., call_tree=True)``: the recorder pass and its effect on the legacy output."""
 
 import contextlib
+import itertools
 import unittest.mock
 
 import pytest
@@ -87,7 +88,8 @@ def test_call_tree_adds_one_broadcast(mocker, dataset):
 
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
 
-    assert barrier.call_count == 2 * (3 + 2 + 3 + 3)  # warmup, per-module, structure and timing passes
+    # warmup, per-module and structure passes run number_of_iterations; the timing pass one inference per planned depth
+    assert barrier.call_count == 2 * (2 + 3 + 3 + sum(map(len, TimingRecorder(_tree(info)).depths_per_iteration())))
     assert broadcast.call_count == 2
     iterations, records = broadcast.call_args_list[1].args[0]
     assert iterations == 3
@@ -170,40 +172,55 @@ def test_plain_object_methods_and_to_calls_are_recorded(dataset):
     assert WeightAccess("encode", "move") in tree.weight_accesses["0.layers.0.proj.weight"]
 
 
-def test_every_recorded_node_is_timed_with_enough_iterations(dataset):
+def test_every_timeable_node_is_timed(mocker, dataset):
+    """The timing pass replays each sample once per depth, so two samples already time the whole tree."""
     model, fn = _vla()
-
-    info = inspect(model, dataset, inference_function=fn, number_of_iterations=20, warmup_iterations=1, call_tree=True)
-
-    tree = _tree(info)
-    deepest = max(len(path) for path in tree.nodes)
-    assert deepest <= 20
-    assert all(node.time_ms is not None for node in tree.nodes.values() if node.calls)
-
-
-def test_fewer_iterations_than_depths_leaves_deep_nodes_untimed(mocker, dataset):
-    model, fn = _vla()
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
     tree = _tree(info)
-    deepest = max(len(path) for path in tree.nodes)
-    assert deepest > 2
-    assert all(node.time_ms is not None for node in tree.nodes.values() if node.calls and len(node.path) <= 2)
-    assert all(node.time_ms is None for node in tree.nodes.values() if len(node.path) > 2)
-    warning.assert_called_once()
-    text = warning.call_args.args[0] % warning.call_args.args[1:]
-    assert "No call at depth" in text
-    assert f"set number_of_iterations to at least {deepest}" in text
+    assert max(len(path) for path in tree.nodes) > 2
+    assert all(node.time_ms is not None for node in tree.nodes.values() if node.calls and not node.inside_compiled_part)
+    warning.assert_not_called()
+
+
+def test_the_timing_pass_runs_each_sample_once_per_its_depths(mocker, dataset):
+    """``begin_iteration`` is called once per depth of ``TimingRecorder.depths_per_iteration()``, in order."""
+    model, fn = _vla()
+    begin = mocker.spy(TimingRecorder, "begin_iteration")
+
+    info = inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    tree = _tree(info)
+    assert [c.args[1] for c in begin.call_args_list] == list(
+        itertools.chain.from_iterable(TimingRecorder(tree).depths_per_iteration())
+    )
+
+
+def test_ranks_verify_the_same_timing_depths(mocker, dataset):
+    model, fn = _vla()
+    verify = mocker.spy(coordinator, "verify_equal")
+
+    info = inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    verify.assert_called_once_with(TimingRecorder(_tree(info)).depths_per_iteration(), "call tree timing depths")
 
 
 def test_calls_that_only_some_samples_make_are_timed(mocker):
+    class Branch(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return self.lin(x)
+
     class Conditional(nn.Module):
         def __init__(self):
             super().__init__()
             self.always = nn.Linear(8, 8)
-            self.sometimes = nn.Linear(8, 8)
+            self.sometimes = Branch()
 
         def forward(self, x):
             out = self.always(x)
@@ -213,7 +230,7 @@ def test_calls_that_only_some_samples_make_are_timed(mocker):
 
     model = Conditional()
     dataset = [torch.ones(8), -torch.ones(8), torch.ones(8), -torch.ones(8)]
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -226,10 +243,13 @@ def test_calls_that_only_some_samples_make_are_timed(mocker):
 
     tree = _tree(info)
     branch = ("root.forward", "root.sometimes.forward")
-    # the branch runs only in iterations 0 and 2, so a fixed depth rotation would time it where it never runs
+    deep = (*branch, "root.sometimes.lin.forward")
     assert branch in tree.sequences[0] and branch in tree.sequences[2]
     assert branch not in tree.sequences[1] and branch not in tree.sequences[3]
+    # only the branch reaches depth 3, so only samples 0 and 2 get an iteration at that depth
+    assert TimingRecorder(tree).depths_per_iteration() == [[1, 2, 3], [1, 2], [1, 2, 3], [1, 2]]
     assert tree.nodes[branch].time_ms is not None
+    assert tree.nodes[deep].time_ms is not None
     warning.assert_not_called()
 
 
@@ -253,7 +273,7 @@ def test_a_part_compiled_with_module_compile_logs_no_timing_warning(mocker, data
     inner = Inner()
     inner.compile(backend="eager")
     model = Root(inner)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -288,7 +308,7 @@ def test_a_part_compiled_through_its_forward_logs_no_timing_warning(mocker, data
     inner = Inner()
     inner.forward = torch.compile(inner.forward, backend="eager")
     model = Root(inner)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -319,7 +339,7 @@ def test_a_compiled_sequential_gets_a_timed_node_and_its_children_stay_untimed(m
     child = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8))
     child.compile(backend="eager")
     model = Root(child)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -353,7 +373,7 @@ def test_a_sequential_with_a_compiled_forward_gets_a_timed_node_and_its_children
     child = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8))
     child.forward = torch.compile(child.forward, backend="eager")
     model = Root(child)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -374,9 +394,9 @@ def test_a_sequential_with_a_compiled_forward_gets_a_timed_node_and_its_children
     warning.assert_not_called()
 
 
-def test_a_compiled_sequential_with_fewer_iterations_warns_about_its_own_depth(mocker, dataset):
-    """The compiled part's own node is timeable: with too few iterations the warning names its depth, not the
-    depths that only exist inside it."""
+def test_a_compiled_sequential_times_its_own_node(mocker, dataset):
+    """The compiled part's own node is timeable: the plan covers its depth, while the depths that only exist
+    inside it are left out and never warned about."""
 
     class Root(nn.Module):
         def __init__(self, child):
@@ -389,7 +409,7 @@ def test_a_compiled_sequential_with_fewer_iterations_warns_about_its_own_depth(m
     child = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8))
     child.compile(backend="eager")
     model = Root(child)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -407,14 +427,13 @@ def test_a_compiled_sequential_with_fewer_iterations_warns_about_its_own_depth(m
         node = tree.nodes[("root.forward", "root.child.forward", path)]
         assert node.inside_compiled_part is True
         assert node.time_ms is None
-    text = warning.call_args.args[0] % warning.call_args.args[1:]
-    assert "No call at depth 2 (of 2)" in text
-    assert "set number_of_iterations to at least 2" in text
+    assert own.time_ms is not None
+    warning.assert_not_called()
 
 
 @pytest.mark.parametrize("how", ["module.compile", "forward"])
-def test_a_compiled_part_times_its_own_node_with_enough_iterations(mocker, dataset, how):
-    """With enough iterations for the timeable depths, the compiled part's call is timed and nothing warns."""
+def test_a_compiled_part_times_its_own_node(mocker, dataset, how):
+    """The plan covers the timeable depths, so the compiled part's call is timed and nothing warns."""
 
     class Inner(nn.Module):
         def __init__(self):
@@ -438,7 +457,7 @@ def test_a_compiled_part_times_its_own_node_with_enough_iterations(mocker, datas
     else:
         inner.forward = torch.compile(inner.forward, backend="eager")
     model = Root(inner)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -487,7 +506,7 @@ def test_a_disabled_call_inside_a_compiled_part(mocker, dataset):
     inner = Inner()
     inner.compile(backend="eager")
     model = Root(inner)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -522,7 +541,7 @@ def test_a_torch_compiled_sequential_gets_a_timed_node(mocker, dataset):
 
     torch._dynamo.reset()
     model = Root(torch.compile(nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8)), backend="eager"))
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -568,7 +587,7 @@ def test_a_compiled_modules_encode_call_exposes_its_children(mocker, dataset):
     inner = Inner()
     inner.compile(backend="eager")
     model = Root(inner)
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -606,7 +625,7 @@ def test_a_torch_compiled_child_that_recurses_records_the_nested_call(mocker, da
 
     torch._dynamo.reset()
     model = Root(torch.compile(Recursive(), backend="eager"))
-    warning = mocker.patch("aitune.torch.call_tree.recording.timing.logger.warning")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
     info = inspect(
         model,
@@ -623,14 +642,14 @@ def test_a_torch_compiled_child_that_recurses_records_the_nested_call(mocker, da
     warning.assert_not_called()
 
 
-def test_timing_pass_flushes_after_every_inference(mocker, dataset):
+def test_timing_pass_ends_every_run(mocker, dataset):
     model, fn = _vla()
-    spy = mocker.spy(TimingRecorder, "flush")
+    spy = mocker.spy(TimingRecorder, "end_iteration")
 
-    inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
+    info = inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
 
-    # once per timed iteration, plus one when the timing pass ends
-    assert spy.call_count == 3 + 1
+    # once per timing iteration, plus one when the timing pass ends
+    assert spy.call_count == sum(map(len, TimingRecorder(_tree(info)).depths_per_iteration())) + 1
 
 
 def test_default_inspect_creates_no_recorder(mocker, dataset):
@@ -664,14 +683,14 @@ def test_forward_is_not_recorded_while_compiling(mocker, dataset):
     assert _legacy(info) == _legacy(without)
 
 
-def test_flush_failure_is_raised_through_the_rank_failure_context(mocker, dataset):
+def test_end_iteration_failure_is_raised_through_the_rank_failure_context(mocker, dataset):
     model, fn = _vla()
     spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
 
     def fail_in_the_timing_pass(self):
         raise RuntimeError("bad events")
 
-    mocker.patch.object(TimingRecorder, "flush", new=fail_in_the_timing_pass)
+    mocker.patch.object(TimingRecorder, "end_iteration", new=fail_in_the_timing_pass)
     original_apply = nn.Module._apply
 
     with pytest.raises(RuntimeError, match="bad events"):
@@ -919,3 +938,36 @@ def test_call_tree_after_tune_matches_eager_call_paths():
 
     again = inspect(model, x, number_of_iterations=1, warmup_iterations=0, min_depth=2, call_tree=True)
     assert call_paths(again) == eager_paths
+
+
+def test_max_timing_depth_leaves_deep_nodes_untimed_without_a_warning(mocker, dataset):
+    """Nodes deeper than the limit are still recorded — calls, bytes, weight accesses — just not timed."""
+    model, fn = _vla()
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=1,
+        call_tree=True,
+        max_timing_depth=2,
+    )
+
+    tree = _tree(info)
+    assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
+    deep = [node for node in tree.nodes.values() if len(node.path) > 2]
+    assert all(node.calls > 0 for node in deep)
+    assert all(node.time_ms is None for node in deep)
+    shallow = [node for node in tree.nodes.values() if node.calls and len(node.path) <= 2]
+    assert shallow and all(node.time_ms is not None for node in shallow)
+    warning.assert_not_called()
+
+
+@pytest.mark.parametrize("bad", [0, -1, True, 1.5])
+def test_max_timing_depth_rejects_non_positive_or_non_int_values(bad, dataset):
+    model, fn = _vla()
+
+    with pytest.raises(ValueError, match="max_timing_depth must be a positive int or None"):
+        inspect(model, dataset, inference_function=fn, call_tree=True, max_timing_depth=bad)

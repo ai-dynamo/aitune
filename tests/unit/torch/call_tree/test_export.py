@@ -47,9 +47,6 @@ def test_to_dict_exports_the_whole_tree():
         assert exported["calls"] == node.calls
         assert exported["inside_compiled_part"] == node.inside_compiled_part
         assert exported["time_ms"] == node.time_ms
-        assert exported["timings"] == [
-            {"iteration": t.iteration, "calls": t.calls, "time_ms": t.time_ms} for t in node.timings
-        ]
         assert exported["bytes_in"] == node.bytes_in
         assert exported["bytes_out"] == node.bytes_out
         assert set(exported) == {
@@ -58,11 +55,10 @@ def test_to_dict_exports_the_whole_tree():
             "calls",
             "inside_compiled_part",
             "time_ms",
-            "timings",
             "bytes_in",
             "bytes_out",
             "signatures",
-            "iteration_starts",
+            "calls_per_iteration",
         }
         parent = exported["call_path"].rpartition(" > ")[0]
         assert not parent or parent in paths
@@ -140,7 +136,7 @@ def test_to_dict_modules_parameters_skip_a_missing_bias():
 
 def test_to_dict_modules_parameters_list_meta_tensors():
     model = torch.nn.Linear(4, 4).to("meta")
-    tree = CallTree(iterations=1, modules=[("root", model)])
+    tree = CallTree(sequences=[[]], modules=[("root", model)])
 
     assert tree.to_dict()["modules"][""]["parameters"] == {
         "weight": {"dtype": "torch.float32", "shape": [4, 4]},
@@ -225,7 +221,7 @@ def test_to_dict_exports_object_entries_as_type_only_and_stays_strict_json():
     json.dumps(tree.to_dict(), allow_nan=False)
 
 
-def test_to_dict_exports_signatures_and_iteration_starts():
+def test_to_dict_exports_signatures_and_calls_per_iteration():
     class Model(torch.nn.Module):
         def forward(self, x):
             if x.ndim > 2:
@@ -244,7 +240,7 @@ def test_to_dict_exports_signatures_and_iteration_starts():
         recorder.end_iteration()
 
     node = next(n for n in recorder.result().to_dict()["nodes"] if n["call_path"] == "forward")
-    assert node["iteration_starts"] == [0]
+    assert node["calls_per_iteration"] == [3]
     signatures = node["signatures"]
     assert [sig["call_indices"] for sig in signatures] == [[0], [1], [2]]
     assert signatures[0]["inputs"]["x"] == {

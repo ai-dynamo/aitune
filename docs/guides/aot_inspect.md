@@ -263,23 +263,26 @@ What is recorded:
 
 ### How the call tree is recorded
 
-`call_tree=True` adds two passes of `number_of_iterations` after the per-module pass that `get_modules()` comes
-from, so inspection takes longer:
+`call_tree=True` adds a structure pass of `number_of_iterations` and a timing pass after the per-module pass that
+`get_modules()` comes from, so inspection takes longer:
 
 1. **The structure pass** records the tree: every call with its arguments, tensor bytes and weight accesses. It runs
    eagerly, parts compiled with `torch.compile` included, so the calls inside them are recorded too. This tracking
    runs in Python and would distort times, so the structure pass records none.
 2. **The timing pass** replays the same samples in the same order, with all tracking off and compiled parts
-   compiled. Each iteration times the calls at one call-path depth only, so no timed call runs inside another. The
-   depth for each iteration is planned from the calls the structure pass saw for that sample, so calls that only
-   some samples make are timed too.
+   compiled. Each sample is replayed once per call-path depth its calls reach, so every call is timed exactly once
+   on the sample the structure pass recorded it on, and no timed call runs inside another. The number of iterations —
+   at most `number_of_iterations` times the number of call-path depths — is logged before the pass starts.
 
 Some nodes get no time (`time_ms` is `null`):
 
-- deeper nodes, when there are fewer iterations than the tree has depths. `inspect` then logs a warning with the
-  `number_of_iterations` that would time every depth;
 - calls inside a compiled part, since they run inside the compiled code. The compiled part itself is timed as one
-  call, and such nodes are marked `inside_compiled_part` in the export.
+  call, and such nodes are marked `inside_compiled_part` in the export;
+- nodes deeper than `max_timing_depth`. They are recorded but not timed, and `inspect` logs no warning for them.
+
+`max_timing_depth` bounds the timing cost: fewer depths per sample means fewer iterations. It counts call-path depths,
+with the root call at depth 1, not the attribute depths that `max_depth` counts. The deep leaf levels (linear
+layers, norms) are rarely worth timing, and their calls and weight accesses are still recorded.
 
 The times are close to a normal eager run, but not exact: every call inside a timed call still runs through its
 recording wrapper, about 0.7 µs each. Where the GPU waits for the CPU, that adds up for calls with many calls inside:
@@ -318,8 +321,6 @@ The exported data has this structure:
     {"call_path": "forward", "owner_class": "Vla", "calls": 2, "time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
      "calls": 10, "inside_compiled_part": false, "time_ms": 25.0,
-     "timings": [{"iteration": 0, "calls": 5, "time_ms": 12.5},
-                  {"iteration": 1, "calls": 5, "time_ms": 12.5}],
      "bytes_in": 3670056, "bytes_out": 3670016,
      "signatures": [
          {"call_indices": [0, 5],
@@ -336,7 +337,7 @@ The exported data has this structure:
                      "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
           "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
                                  "shape": [1, 1, 4096]}}}],
-     "iteration_starts": [0, 5]}
+     "calls_per_iteration": [5, 5]}
   ],
   "modules": {"dit": {"class": "my_pkg.Dit",
                       "parameters": {"weight": {"dtype": "torch.float32", "shape": [4, 4]}},
@@ -346,10 +347,8 @@ The exported data has this structure:
 ```
 
 `iterations` is the number of recorded iterations; `calls`, `bytes_in` and `bytes_out` are totals over them.
-Divide by `iterations` for per-iteration values, by `calls` for per-call values. `time_ms` estimates the same total:
-the node's measured time per call, which is the total time of the iterations that timed it divided by their calls,
-times `calls`. It is `null` when the timing pass never timed the node. `timings` holds the measurements behind it,
-one entry per iteration that timed the node, with that iteration's `calls` and their summed `time_ms`.
+Divide by `iterations` for per-iteration values, by `calls` for per-call values. `time_ms` is the node's measured
+total over the same iterations. It is `null` when the timing pass never timed the node.
 `inside_compiled_part` is true for calls inside a compiled part: they run inside the compiled code in the timing
 pass, so their `time_ms` is `null`; the compiled part's own call is timed.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
@@ -359,7 +358,7 @@ Every leaf has `type`, tensors also `dtype` and exact `shape`; `outputs` is null
 A leaf with a `source` names where its object was last seen: `call_path`, `side` and the leaf `name` there, which can
 be in any of that node's signatures. In the example, `dit.forward` received `hidden_states` as `dit_forward`'s own
 argument of that name.
-`iteration_starts` gives how many of the node's calls were made before each iteration began.
+`calls_per_iteration` gives how many of the node's calls each iteration made; they add up to `calls`.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:
 

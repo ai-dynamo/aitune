@@ -10,7 +10,7 @@ from torch import nn
 
 from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.methods import user_defined_methods
-from aitune.torch.call_tree.nodes import CallNode, TimedIteration
+from aitune.torch.call_tree.nodes import CallNode
 from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder
 from tests.toy_models.call_tree_models import Block, NoWeights
 
@@ -82,19 +82,14 @@ def record(root, call, iterations: int = 2, root_label: str = "root") -> CallTre
     return recorder.result()
 
 
-def timed(ms: float, calls: int) -> list[TimedIteration]:
-    """``timings`` that make a node with ``calls`` calls derive ``time_ms == ms``: one iteration timing them all."""
-    return [TimedIteration(0, calls, ms)]
-
-
 def make_tree(spec: dict, iterations: int = 1, modules: dict | None = None) -> CallTree:
     """Build a call tree from ``{label: (calls, time_ms, children_spec)}``, nested; labels end in ``.method``.
 
-    ``time_ms`` becomes ``timed(time_ms, calls)``, so the node's derived ``time_ms`` is the spec's value.
+    ``time_ms`` is set to the spec's value.
     ``modules`` maps labels to the ``nn.Module`` the node belongs to.
     """
     modules = modules or {}
-    tree = CallTree(iterations=iterations)
+    tree = CallTree()
     order = [0]
 
     def add(parent_path, label, calls, time_ms, children):
@@ -108,7 +103,7 @@ def make_tree(spec: dict, iterations: int = 1, modules: dict | None = None) -> C
             method=method,
             module=module,
             calls=calls,
-            timings=timed(time_ms, calls),
+            time_ms=time_ms,
             first_seen=order[0],
         )
         order[0] += 1
