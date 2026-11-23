@@ -17,6 +17,29 @@ Rules that are not obvious have examples:
 - **Good**: this is acceptable.
 - **Better**: use this form when you can.
 
+## General principles
+
+### Keep it simple
+
+Write the simplest code that solves the current problem.
+
+- Do not add options, parameters, or abstractions for needs that do not exist yet.
+- Do not add a class when a function is enough, or a base class with only one subclass.
+- Prefer plain Python over clever constructs that need a comment to explain them.
+
+**Why:** Every abstraction is code that a reader must understand and that someone must maintain.
+Adding an abstraction later, when a second use exists, is cheap. Removing an unused one is not.
+
+### Use clear names
+
+- Name a thing after what it is or does, not after how it is implemented: `profiles`, not `profile_list`.
+- Use full words. Use abbreviations only when they are common in the domain (`trt`, `onnx`, `cfg`).
+- Name functions with a verb (`build_engine`) and booleans as a question (`is_dynamic`, `has_cache`).
+- Use the same name for the same concept everywhere.
+
+**Why:** A good name removes the need for a comment, and the reader does not have to open the
+definition to understand the call.
+
 ## Enforced by tools
 
 Run `make lint` before you push. It runs these checks:
