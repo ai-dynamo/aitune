@@ -10,7 +10,7 @@ from yolo.model import ONNX_VARIANTS
 
 def add_variant_arg(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Select one of the supplied ONNX exports for tuning or source validation."""
-    parser.add_argument("--variant", choices=tuple(ONNX_VARIANTS), default="fp16", help="ONNX export (default: fp16)")
+    parser.add_argument("--variant", choices=tuple(ONNX_VARIANTS.keys()), default="fp16", help="ONNX export (default: fp16)")
     return parser
 
 
