@@ -386,8 +386,9 @@ The functional workflows validate the examples.
 - Write Google-style docstrings for public modules, classes, and functions.
 - Add an `Examples:` section to the docstring of each name in `aitune.torch.__all__`. For other
   public functions, add an example when the usage is not obvious from the signature.
-- Make examples runnable doctests (`>>>`). Pytest runs them on CPU in CI. If an example needs a GPU
-  or an optional backend, mark the line with `# doctest: +SKIP`.
+- Make examples runnable doctests (`>>>`). Pytest runs them on CPU in CI. If a statement needs a GPU
+  or an optional backend, mark it with `# doctest: +SKIP`. Also mark every later statement that uses
+  its result, because `+SKIP` skips only the statement it is on.
 - Keep examples short: show the common call and its result, not every option.
 - Code in `tests/`, `docs/`, `tools/`, and `examples/` does not need docstrings and can use `print`.
 - Write a comment only to explain why the code does something. Do not describe what the code does.
