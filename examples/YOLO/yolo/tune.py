@@ -10,16 +10,17 @@ from pathlib import Path
 from aitune.torch import MaxThroughputStrategy, Module, PerformanceValidationMode, save, tune
 from aitune.torch.backend import ONNXRuntimeBackend, TensorRTBackend
 from aitune.torch.dataloader import DynamicShapeDataset
-from yolo.cmd_args import add_tuned_model_path_arg
-from yolo.model import onnx_model, sample_input
+from yolo.cmd_args import add_tuned_model_path_arg, add_variant_arg
+from yolo.model import onnx_model, source_input
 
 
-def tune_model(checkpoint: Path) -> None:
+def tune_model(checkpoint: Path, variant: str = "fp16") -> None:
     """Tune the ONNX model and save its deployment-capable artifact."""
 
-    onnx_module = onnx_model()
+    onnx_module = onnx_model(variant)
     input_name = "images"
-    images = sample_input()
+    images = source_input(onnx_module)
+    print(f"YOLO variant: {variant}, source: {onnx_module.path.name}, image dtype: {images.dtype}", flush=True)
 
     strategy = MaxThroughputStrategy([
         ONNXRuntimeBackend(),
@@ -52,8 +53,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", choices=("triton",), default="triton")
     add_tuned_model_path_arg(parser)
+    add_variant_arg(parser)
     args = parser.parse_args()
-    tune_model(args.tuned_model_path)
+    tune_model(args.tuned_model_path, args.variant)
 
 
 if __name__ == "__main__":

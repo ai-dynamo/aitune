@@ -6,7 +6,6 @@ import logging
 
 import torch
 from aitune.torch import load
-from aitune.torch.config import config as global_config
 from aitune.utils.monitoring import annotate
 from aitune_examples_common.checkpoint import relocated_checkpoint_path
 
@@ -29,19 +28,8 @@ def main():
 
     model.encode(sentences=["query: test"], batch_size=1, convert_to_tensor=True)
 
-    # NOTE: workaround for SentenceTransformer to work with tuned model see below first dirty hack
-    #       By default, we move modules to meta device after tuning to save memory. Our wrapper returns correct device for the module.
-    #       However, SentenceTransformer overrides .device property, has one more reference to the same module we tuned, returns meta device by this additional reference.
-    #       In encode() method, it calls .to(self.device) and tries to move modules that are already on right devices, breaking the inference.
-    #       We need to move modules to cpu device after tuning to work with SentenceTransformer.
-    global_config.device_after_tuning = "cpu"
-
     logger.info("Loading tuned model...")
     model = load(model, relocated_checkpoint_path(args.tuned_model_path))
-
-    # XXX: Override .to method to do nothing.
-    #      If we leave it as is and without specifying device in encode method, tensors will be moved to meta device, breaking the inference.
-    # model.to = lambda *_args: None
 
     @annotate(name="inference", color="green")
     def infer(*args, **kwargs):
