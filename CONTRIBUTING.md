@@ -166,6 +166,10 @@ Agents should read `AGENTS.md` before making changes and follow the repository c
 
 Use `$aitune-docs-update` for full documentation refreshes so docs changes follow the repository audit workflow. Use `$aitune-commit` before creating commits so commit messages follow the repository's Conventional Commits convention.
 
+## Code Style
+
+Follow [CODING_GUIDELINES.md](CODING_GUIDELINES.md). `make lint` checks the rules that tools can enforce.
+
 ## Documentation
 
 Add/update docstrings as defined in the [Google Style Guide](https://github.com/google/styleguide/blob/gh-pages/pyguide.md#38-comments-and-docstrings).
