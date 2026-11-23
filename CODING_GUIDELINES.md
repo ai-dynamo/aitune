@@ -458,6 +458,8 @@ The functional workflows validate the examples.
 - Keep examples short: show the common call and its result, not every option.
 - Code in `tests/`, `docs/`, `tools/`, and `examples/` does not need docstrings and can use `print`.
 - Write a comment only to explain why the code does something. Do not describe what the code does.
+- Explain each workaround or special-case fix in a comment. Say which problem it avoids, link the
+  issue, bug, or upstream pull request if one exists, and say when the code can be removed.
 
 **Why (examples):** An example shows how to call the API faster than a description does. A doctest
 fails when the API changes, so the example stays correct.
@@ -501,4 +503,13 @@ model_copy = deepcopy(module)
 ```python
 # ModelOpt quantization changes the model in place, so quantize a copy and keep the caller's module.
 model_copy = deepcopy(module)
+```
+
+**Workaround:**
+
+```python
+# ModelOpt autocast accepts calibration data with several samples only from version 0.43.0.
+# Remove this check when AITune requires ModelOpt 0.43.0 or later.
+# https://github.com/NVIDIA/Model-Optimizer/pull/815
+use_calibration = Version(modelopt.__version__) > Version("0.42.0") and samples is not None
 ```
