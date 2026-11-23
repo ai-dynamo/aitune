@@ -9,12 +9,12 @@ if [[ $# -eq 2 && "$1" == --variant ]]; then
 elif [[ $# -eq 1 && "$1" == --variant=* ]]; then
   VARIANT="${1#--variant=}"
 elif [[ $# -ne 0 ]]; then
-  echo "Usage: ./prepare_triton.sh [--variant fp16|int8]" >&2
+  echo "Usage: ./prepare_triton.sh [--variant fp32|fp16]" >&2
   exit 2
 fi
 case "$VARIANT" in
-  fp16|int8) ;;
-  *) echo "Unknown YOLO variant: $VARIANT; choose fp16 or int8" >&2; exit 2 ;;
+  fp32|fp16) ;;
+  *) echo "Unknown YOLO variant: $VARIANT; choose fp32 or fp16" >&2; exit 2 ;;
 esac
 NVIDIA_RELEASE="${NVIDIA_RELEASE:-26.05}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

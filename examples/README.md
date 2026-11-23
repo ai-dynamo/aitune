@@ -60,7 +60,7 @@ to find configurations and commands you can adapt with your own compatible check
       <td><a href="./YOLO/README.md">YOLOv10n</a></td>
       <td><a href="https://onnx.ai/">ONNX file</a></td>
       <td><a href="https://huggingface.co/onnx-community/yolov10n">Hugging Face</a></td>
-      <td>FP16, INT8</td>
+      <td>FP32, FP16</td>
       <td>AOT</td><td>-</td><td>Triton</td>
     </tr>
     <tr>

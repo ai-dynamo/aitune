@@ -10,10 +10,10 @@ from huggingface_hub import hf_hub_download
 from aitune.torch.module import OnnxModule
 
 ONNX_REVISION = "57657320425ee34056408a57ad9d29c4d4815bd8"
-# Use supplied exports directly. The FP32 model.onnx is intentionally excluded.
+# Use supplied floating-point exports directly. The INT8 export is unsupported by TensorRT.
 ONNX_VARIANTS = {
+    "fp32": "model.onnx",
     "fp16": "model_fp16.onnx",
-    "int8": "model_int8.onnx",
 }
 
 

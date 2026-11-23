@@ -19,17 +19,17 @@ FP16 is the default. The recipe downloads a supplied ONNX export at a pinned rev
 or apply additional quantization. Select another export with `--variant`:
 
 ```bash
-./prepare_triton.sh --variant int8
+./prepare_triton.sh --variant fp32
 ```
 
 | Variant | Supplied ONNX file |
 | --- | --- |
+| `fp32` | `model.onnx` |
 | `fp16` (default) | `model_fp16.onnx` |
-| `int8` | `model_int8.onnx` |
 
-These are upstream export names. Quantized exports can retain floating-point operations and image inputs;
-the recipe reads the image dtype from the graph rather than inferring it from the variant name.
-The original FP32 `model.onnx` is excluded from selection and CI.
+The recipe reads the image dtype from the graph rather than inferring it from the variant name.
+Only FP32 and FP16 exports are supported. The INT8 export is excluded because TensorRT rejects its
+`DynamicQuantizeLinear` and `ConvInteger` operators, and its ONNX Runtime deployment failed Triton output parity.
 
 Each variant has a separate CI job covering tuning, checkpoint restoration, Model Analyzer, and Triton inference.
 Python validation checks the restored checkpoint's input dtype against the selected source graph and verifies
