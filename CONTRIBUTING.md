@@ -170,6 +170,55 @@ Use `$aitune-docs-update` for full documentation refreshes so docs changes follo
 
 Follow [CODING_GUIDELINES.md](CODING_GUIDELINES.md). `make lint` checks the rules that tools can enforce.
 
+## Pull Requests
+
+Keep each pull request small and focused:
+
+- Make one logical change per pull request. Do not add unrelated cleanup.
+- Aim for at most about 400 changed lines (added plus deleted). Do not count generated files,
+  such as `uv.lock` and `pyrefly-baseline.json`.
+- If a change is larger, split it into a stack of pull requests (see below).
+- Mechanical changes, such as renames, moves, and tool auto-fixes, can be larger. Say this in the
+  pull request description, and do not mix them with other changes.
+
+**Why:** Reviewers find fewer defects when a review has more than about 400 lines. Small pull
+requests are reviewed faster, and they are easier to revert.
+
+### Stacked pull requests
+
+A stack is a chain of pull requests. The bottom pull request targets `main`. Each pull request
+above it targets the branch below it, so each review shows only one layer. The stack merges from
+the bottom to the top. Put the base work at the bottom, for example a new API before the code that
+uses it.
+
+Use the [`gh stack`](https://github.com/github/gh-stack) GitHub CLI extension to create and manage
+stacks. Install it once:
+
+```bash
+gh extension install github/gh-stack
+git config rerere.enabled true   # remember conflict resolutions between rebases
+```
+
+Create a stack and open draft pull requests:
+
+```bash
+gh stack init my-feature-api     # create the bottom branch
+git commit -s -S -m "feat: add new API"
+gh stack add my-feature-usage    # create the next branch on top
+git commit -s -S -m "feat: use new API in tuning"
+gh stack submit --auto           # push all branches and open draft pull requests
+```
+
+Manage the stack:
+
+```bash
+gh stack view --short            # show the branches and their pull requests
+gh stack down                    # go to the branch below; `gh stack up` goes to the one above
+gh stack rebase --upstack        # after you change a lower branch, rebase the branches above it
+gh stack sync                    # fetch, rebase on main, push, and update the pull requests
+gh stack merge <pr-number>       # merge this pull request and all unmerged ones below it
+```
+
 ## Documentation
 
 Add/update docstrings as defined in the [Google Style Guide](https://github.com/google/styleguide/blob/gh-pages/pyguide.md#38-comments-and-docstrings).

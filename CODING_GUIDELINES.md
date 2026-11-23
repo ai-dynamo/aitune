@@ -384,11 +384,38 @@ The functional workflows validate the examples.
 ## Comments and docstrings
 
 - Write Google-style docstrings for public modules, classes, and functions.
-- Keep docstring examples runnable. Pytest runs them as doctests.
+- Add an `Examples:` section to the docstring of each name in `aitune.torch.__all__`. For other
+  public functions, add an example when the usage is not obvious from the signature.
+- Make examples runnable doctests (`>>>`). Pytest runs them on CPU in CI. If an example needs a GPU
+  or an optional backend, mark the line with `# doctest: +SKIP`.
+- Keep examples short: show the common call and its result, not every option.
 - Code in `tests/`, `docs/`, `tools/`, and `examples/` does not need docstrings and can use `print`.
 - Write a comment only to explain why the code does something. Do not describe what the code does.
 
-**Why:** Good names already tell the reader what the code does. A comment that repeats the code
+**Why (examples):** An example shows how to call the API faster than a description does. A doctest
+fails when the API changes, so the example stays correct.
+
+**Good:**
+
+```python
+def dynamic_shapes_to_json(dynamic_shapes: DynamicShapes | None) -> list[dict[str, Any]] | None:
+    """Convert dynamic shape definitions to JSON-compatible data.
+
+    Args:
+        dynamic_shapes: Shape definitions keyed by forward input path.
+
+    Returns:
+        A list with one dictionary per input, or `None` if `dynamic_shapes` is `None`.
+
+    Examples:
+        >>> shapes = {("options", "mask"): (BatchDim("batch", min=1, opt=2, max=4), 128)}
+        >>> dynamic_shapes_to_json(shapes)  # doctest: +NORMALIZE_WHITESPACE
+        [{'path': ['options', 'mask'],
+          'shape': [{'type': 'BatchDim', 'name': 'batch', 'min': 1, 'max': 4, 'opt': 2}, 128]}]
+    """
+```
+
+**Why (comments):** Good names already tell the reader what the code does. A comment that repeats the code
 becomes incorrect when the code changes.
 
 **Bad:**
