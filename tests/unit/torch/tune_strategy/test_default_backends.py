@@ -11,24 +11,84 @@ from aitune.torch.backend import (
     ModuleFormat,
     ONNXRuntimeBackend,
     TensorRTBackend,
+    TorchEagerBackend,
     TorchInductorAotBackend,
     TorchInductorJitBackend,
 )
+from aitune.torch.jit.config import Config
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.tune_strategy import (
     Constraint,
+    FirstWinsStrategy,
     LatencyBudgetStrategy,
     MaxThroughputStrategy,
     MinLatencyStrategy,
     resolve_strategy,
 )
 from aitune.torch.tune_strategy.resolver import materialize_strategy
+from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store
 
 
 class DistributedModule(torch.nn.Identity):
     __module__ = "torch.distributed.test"
+
+
+@pytest.fixture
+def dry_run(tmp_path):
+    def run(strategy, module):
+        sample = ((torch.ones(1, 2),), {})
+        graph_spec = make_recorded_graph_spec(module, sample, name="identity")
+        samples = make_sample_store([sample], tmp_path)
+        strategy.tune_dry_run(module, "identity", graph_spec, samples, torch.device("cpu"), tmp_path)
+        return strategy.to_json_dict()["backends"]
+
+    return run
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+def test_dynamic_strategy_dry_run_uses_recorded_contract(distributed, dry_run):
+    module = DistributedModule() if distributed else torch.nn.Identity()
+    strategy = materialize_strategy(resolve_strategy(), module)
+    assert isinstance(strategy, MaxThroughputStrategy)
+
+    descriptions = dry_run(strategy, module)
+
+    expected = [TorchInductorAotBackend, TorchInductorJitBackend]
+    if not distributed:
+        expected = [TensorRTBackend, TensorRTBackend, *expected]
+    assert [type(backend) for backend in strategy._backends] == expected
+    assert descriptions == [backend.describe() for backend in strategy._backends]
+
+
+@pytest.mark.parametrize("empty", [False, True])
+@pytest.mark.parametrize(
+    "strategy_type", [FirstWinsStrategy, MaxThroughputStrategy, MinLatencyStrategy, LatencyBudgetStrategy]
+)
+def test_explicit_candidates_are_preserved(strategy_type, empty, dry_run):
+    backends = [] if empty else [TorchEagerBackend()]
+    strategy = (
+        strategy_type(backends=backends, latency_budget_ms=10)
+        if strategy_type is LatencyBudgetStrategy
+        else strategy_type(backends=backends)
+    )
+
+    assert dry_run(strategy, DistributedModule()) == [backend.describe() for backend in backends]
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+def test_jit_defaults_resolve_for_module_topology(distributed, dry_run):
+    module = DistributedModule() if distributed else torch.nn.Identity()
+    strategy = Config().resolve_strategy(module)
+
+    assert isinstance(strategy, MaxThroughputStrategy)
+    descriptions = dry_run(strategy, module)
+    expected = [TorchInductorAotBackend, TorchInductorJitBackend]
+    if not distributed:
+        expected = [TensorRTBackend, TensorRTBackend, *expected]
+    assert [type(backend) for backend in strategy._backends] == expected
+    assert descriptions == [backend.describe() for backend in strategy._backends]
 
 
 def test_resolve_strategy_captures_dynamic_request():
