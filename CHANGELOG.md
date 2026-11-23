@@ -7,6 +7,8 @@ title: "Changelog"
 
 ## 0.8.0 (unreleased)
 
+- fix: reuse Voxtral Realtime decode graphs across `generate()` calls by tracking the tensors in the convolution padding cache
+- fix: support Torch-TensorRT 2.15, whose `CompilationSettings` rejects `enabled_precisions` and `use_explicit_typing`; remove both settings from the Torch-TensorRT backend configs
 - fix: preserve tensor batches returned by custom data collators as one positional input during tuning
 - feat: record a model's call tree with `ait.inspect(..., call_tree=True)`: module `forward` calls and model-defined methods, keyed by their chain of callers, with call counts, times, tensor bytes in and out (`bytes_in`, `bytes_out`) and the code that moves modules with `.to()`, exported as a JSON-serializable dict with `CallTree.to_dict()`
 - feat: keep weights that code outside a tuned module still uses on the device when tuning offloads the module, for modules wrapped from `ait.inspect(..., call_tree=True)`; `aitune.torch.call_tree.shared_weights_of(call_tree, module)` lists them with each read, device lookup or move, and the kept set persists across `ait.save`/`ait.load`

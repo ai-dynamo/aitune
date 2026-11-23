@@ -108,7 +108,8 @@ def find_max_throughput_for_backend(
 
     outcome, gathered_throughputs = coordinator.collect_results(throughput_per_batch_size, local_error)
     outcome.raise_if_failed(f"Processing profiling results for {backend.describe()}", local_error)
-    assert throughput_per_batch_size is not None
+    if throughput_per_batch_size is None:
+        raise RuntimeError("Profiling succeeded on all ranks but produced no throughput results")
     throughput_per_batch_size = _aggregate_throughput_per_batch_size([
         dict(candidate) for candidate in gathered_throughputs
     ])

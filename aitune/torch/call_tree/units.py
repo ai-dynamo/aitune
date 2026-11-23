@@ -32,7 +32,7 @@ def resolve_unit(tree: CallTree, unit: UnitSpec) -> list[CallNode]:
     items = unit_items(unit)
     if not items:
         raise ValueError("The unit names no calls")
-    by_path = {n.path: n for n in tree.nodes.values()}
+    by_path = {n.path_str: n for n in tree.nodes.values()}
     nodes: list[CallNode] = []
     for item in items:
         if isinstance(item, nn.Module):
@@ -48,7 +48,7 @@ def resolve_unit(tree: CallTree, unit: UnitSpec) -> list[CallNode]:
         elif isinstance(item, str):
             if item not in by_path:
                 last = item.rsplit(" > ", 1)[-1]
-                similar = [n.path for n in tree.nodes.values() if n.path.endswith(last)][:5]
+                similar = [n.path_str for n in tree.nodes.values() if n.path_str.endswith(last)][:5]
                 raise ValueError(f"No recorded call at {item!r}; calls ending the same: {similar}")
             matches = [by_path[item]]
         else:
@@ -65,9 +65,9 @@ def unit_items(unit: UnitSpec) -> list:
 def _outermost_inside(tree: CallTree, module: nn.Module) -> list[CallNode]:
     """Recorded calls of ``module`` or its submodules whose callers are outside it, in first-call order."""
     inside = {id(m) for m in module.modules()}
-    keys = {k for k, n in tree.nodes.items() if n.module is not None and id(n.module) in inside}
+    paths = {p for p, n in tree.nodes.items() if n.module is not None and id(n.module) in inside}
     return sorted(
-        (tree.nodes[k] for k in keys if not any(k[:i] in keys for i in range(1, len(k)))), key=lambda n: n.first_seen
+        (tree.nodes[p] for p in paths if not any(p[:i] in paths for i in range(1, len(p)))), key=lambda n: n.first_seen
     )
 
 
@@ -81,7 +81,7 @@ def owned_tensors(tree: CallTree, unit: UnitSpec, nodes: list[CallNode]) -> set[
     owned = {id(p) for item in items if isinstance(item, nn.Module) for p in (*item.parameters(), *item.buffers())}
     for item in items:
         if isinstance(item, str):
-            owned |= set().union(*(_node_tensors(tree, n) for n in nodes if n.path == item))
+            owned |= set().union(*(_node_tensors(tree, n) for n in nodes if n.path_str == item))
     return owned
 
 
@@ -100,6 +100,6 @@ def _node_tensors(tree: CallTree, node: CallNode) -> set[int]:
     if node.method == "forward" and node.module is not None:
         return {id(t) for t in (*node.module.parameters(), *node.module.buffers())}
     out = set(direct)
-    for key in node.children:
-        out |= _node_tensors(tree, tree.nodes[key])
+    for path in node.children:
+        out |= _node_tensors(tree, tree.nodes[path])
     return out

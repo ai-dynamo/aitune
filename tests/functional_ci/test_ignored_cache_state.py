@@ -87,7 +87,7 @@ def test_ignored_cache_state_lifecycle(
 
     # Recording metadata is available on the tuned module, but is not retained by checkpoint reload.
     assert len(tuned.graph_specs) == 1
-    assert [mutation.locator.path for mutation in tuned.graph_specs[0].forward_contract.input_mutations] == [
+    assert [mutation.locator.path for mutation in tuned.graph_specs[0].forward_effects_spec.input_mutations] == [
         ("cache", "values")
     ]
 

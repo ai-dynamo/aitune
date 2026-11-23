@@ -110,6 +110,11 @@ torch214 = [
     "torch-tensorrt>=2.14.0a0,<2.15",
     "torchao>=0.17",
 ]
+torch215 = [ # nvcr.io/nvidia/pytorch:26.10-py3 is based on 2.15.0a0+875d815502.
+    "torch>=2.15.0a0,<2.16",
+    "torch-tensorrt>=2.15.0a0,<2.16",
+    "torchao>=0.17",
+]
 
 onnxruntime-gpu-cuda13 = ["onnxruntime-gpu"]
 onnxruntime-gpu-cuda12 = ["onnxruntime-gpu; python_version < '3.14' and platform_machine != 'aarch64'"]
@@ -191,6 +196,7 @@ conflicts = [
         { extra = "torch212" },
         { extra = "torch213" },
         { extra = "torch214" },
+        { extra = "torch215" },
     ],
     [
         { extra = "onnxruntime-gpu-cuda13" },
@@ -229,35 +235,60 @@ markers = [
 preview = true
 line-length = 120
 indent-width = 4
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
+# Linter prefixes have no name form in ruff, so they stay as codes with the linter named alongside.
 select = [
-    "A",
-    "B",
-    "C",
-    "C4",
-    "C90",
-    "D",
-    "E",
-    "F",
-    "I",
-    "N",
-    "W",
-    "T",
-    "T10",
-    "T20",
-    "UP",
-    "CPY",
-    "G004"
+    "A",    # flake8-builtins: shadowing builtins, e.g. `list = []`
+    "B",    # flake8-bugbear: likely bugs, e.g. mutable default `def f(x=[])`
+    "C",    # flake8-comprehensions + mccabe (covers C4 and C90)
+    "C4",   # flake8-comprehensions: e.g. `list(x for x in y)` -> `[x for x in y]`
+    "C90",  # mccabe: function complexity above `max-complexity`
+    "D",    # pydocstyle: docstring presence and format (Google convention)
+    "E",    # pycodestyle errors: whitespace, indentation, statements
+    "F",    # Pyflakes: unused imports/variables, undefined names
+    "I",    # isort: import ordering
+    "N",    # pep8-naming: e.g. `class my_class` -> `class MyClass`
+    "W",    # pycodestyle warnings: trailing whitespace, blank lines
+    "T",    # flake8-debugger + flake8-print (covers T10 and T20)
+    "T10",  # flake8-debugger: leftover `breakpoint()` / `pdb.set_trace()`
+    "T20",  # flake8-print: `print()` / `pprint()` calls
+    "UP",   # pyupgrade: modern syntax for `target-version`, e.g. `Optional[X]` -> `X | None`
+    "CPY",  # flake8-copyright: SPDX header required (see `notice-rgx`)
+    "PIE",  # flake8-pie: e.g. unnecessary `pass` or `...` in a body that has a docstring
+    "RSE",  # flake8-raise: e.g. `raise ValueError()` -> `raise ValueError`
+    "SLOT", # flake8-slots: `__slots__` required on `str`/`tuple` subclasses
+    "FURB", # refurb: modern idioms, e.g. `for x in xs: s.add(x)` -> `s.update(xs)`
+    "RET",  # flake8-return: e.g. no `else` after `return`
+    "logging-f-string",          # `logger.info(f"x={x}")` -> `logger.info("x=%s", x)`
+    "custom-type-var-for-self",  # `def f(self: T) -> T` -> `def f(self) -> Self`
+    "assert",                    # no `assert` in `aitune/`; Python drops it under `python -O`
 ]
-ignore = ["D420", "D421", "E266", "E501", "N818"]
+ignore = [
+    "property-docstring-starts-with-verb",  # allow `"""Return the name."""` on properties
+    "line-too-long",                        # `ruff format` handles code; long strings/comments are allowed
+    "error-suffix-on-exception-name",       # allow exception classes without `Error` suffix
+    "replace-str-enum",                     # keep `class X(str, Enum)`; `StrEnum` changes `str()`/`format()` output
+    "unnecessary-assign",                   # allow `x = f(); return x`, which helps debugging
+    "unnecessary-return-none",              # allow explicit `return None` in functions that only return `None`
+    "implicit-return",                      # don't require `return None` at the end of non-`None` functions
+    "reimplemented-operator",               # allow `lambda x: x[0]` instead of `operator.itemgetter(0)`
+    "reimplemented-starmap",                # keep `f(a, b) for a, b in xs`; `starmap` is slower since Python 3.12
+]
 exclude = ["**/*.ipynb"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/__init__.py" = ["D104"]
-"**/__version__.py" = ["D100"]
-"**/{tests,docs,tools,examples}/*" = ["C416", "D", "T201"]
+"**/__init__.py" = ["undocumented-public-package"]  # no module docstring required in `__init__.py`
+"**/__version__.py" = ["undocumented-public-module"]
+"!aitune/**" = ["assert"]  # asserts are fine in tests, scripts, and `conftest.py`
+"**/{tests,docs,tools,examples}/*" = [
+    "unnecessary-comprehension",  # allow `[x for x in y]` instead of `list(y)`
+    "D",                          # pydocstyle: docstrings optional
+    "print",                      # `print()` allowed
+    "subclass-builtin",           # allow `class FakeDict(dict)` test doubles
+    "math-constant",              # allow literal values such as `3.14` in test data
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

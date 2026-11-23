@@ -221,11 +221,16 @@ class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with the compiled AOT Inductor runner.
 
-        Flatten current arguments in the recorded input order. The forward contract consumes extra
+        Flatten current arguments in the recorded input order. The forward effects specification consumes extra
         state results, applies mutations, and restores structured outputs. Keep the default PRESERVE_INPUT
         policy so a recorded in-place update reaches the original tensor, including references held
         outside its container. Copy-back is skipped if the runner already returned that same object.
         Recorded REPLACE_TENSOR changes still install a new tensor, matching assignment in forward.
+
+        For ``module(x, state={"bias": bias, "scale": 2})``, ``flat_inputs`` contains ``(x, bias)``
+        in recorded tensor-path order. The export adapter rebuilds the structured call and retains
+        the non-tensor value ``scale=2`` from the recorded sample. Inference extracts current tensor
+        references in that same order, so equivalent positional and keyword calls reach the same runner inputs.
 
         Args:
             *args: Inference arguments.
@@ -236,8 +241,8 @@ class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
         """
         graph_spec = cast(GraphSpec, self._graph_spec)
         with torch.no_grad():
-            if self._runner is None:
-                raise RuntimeError("AOT Inductor runner is not loaded. Call build() or deploy() first.")
+            # Internal lifecycle invariant: activation loads the runner before inference.
+            assert self._runner is not None, "Active AOT Inductor backend must have a loaded runner."  # noqa: S101
             forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
             flat_inputs = graph_spec.input_spec.flatten_tensors(forward_inputs.arguments)
             flat_outputs = self._runner(*flat_inputs)

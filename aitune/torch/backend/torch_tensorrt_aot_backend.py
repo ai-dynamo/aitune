@@ -44,8 +44,6 @@ except (ImportError, RuntimeError, OSError):
         """Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 
         Attributes:
-            enabled_precisions: Enabled TensorRT precisions. Defaults to None.
-            use_explicit_typing: Whether to use explicit typing. Defaults to True.
             workspace_size: TensorRT workspace size. Defaults to 0.
             use_distributed_mode_trace: Enable distributed tracing. Defaults to False.
             min_block_size: Minimum number of operators in a TensorRT block. Defaults to 5.
@@ -54,14 +52,14 @@ except (ImportError, RuntimeError, OSError):
                 Defaults to False.
         """
 
-        enabled_precisions: set[torch.dtype] | None = None
-        use_explicit_typing: bool = True
         workspace_size: int = 0
         use_distributed_mode_trace: bool = False
         min_block_size: int = 5
         disable_tf32: bool = False
         require_full_compilation: bool = False
 
+
+_TORCH_TENSORRT_MISSING = "torch-tensorrt is not installed. Please install `torch-tensorrt`."
 
 logger = getLogger(__name__)
 
@@ -77,7 +75,7 @@ class TorchTensorRTAotBuildStep(BackendBuildStep):
 def assert_torch_tensorrt():
     """Check if torch_tensorrt is installed."""
     if torch_tensorrt is None:
-        raise ImportError("torch-tensorrt is not installed. Please install `torch-tensorrt`.")
+        raise ImportError(_TORCH_TENSORRT_MISSING)
 
 
 @dataclass
@@ -101,7 +99,6 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
             self.compile_config,
             other.compile_config,
             exclude=["device"],
-            include=["enabled_precisions"],
         )
         parts = [f"compile_config=TorchTensorRTConfig({','.join(compile_config_parts)})"]
 
@@ -284,7 +281,8 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
     def _activate(self):
         """Load compiled module."""
-        assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
+        if torch_tensorrt is None:
+            raise ImportError(_TORCH_TENSORRT_MISSING)
         exported_model_artifact = cast(ArtifactPath, self._exported_model_artifact)
         with torch_tensorrt_errors(torch_tensorrt):
             loaded = torch_tensorrt.load(exported_model_artifact.path.as_posix())
@@ -293,7 +291,7 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run the flat Torch-TensorRT module, then restore outputs and input changes.
 
-        The forward contract consumes user and extra state tensors in recorded order. PRESERVE_INPUT
+        The forward effects specification consumes user and extra state tensors in recorded order. PRESERVE_INPUT
         ensures recorded in-place changes update the original tensor and any retained references.
         It copies values back only when the result is a different object. Recorded tensor replacements
         still assign the result.
@@ -376,7 +374,8 @@ def _export_compiled_model(module: torch.fx.GraphModule) -> ExportedProgram:
 
     From Torch-TensorRT 2.11, that save uses the legacy exporter, but ``dynamo.export`` defaults to the new one.
     """
-    assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
+    if torch_tensorrt is None:
+        raise ImportError(_TORCH_TENSORRT_MISSING)
     export = torch_tensorrt.dynamo.export
     legacy: dict[str, Any] = (
         {"use_legacy_exporter": True} if "use_legacy_exporter" in inspect.signature(export).parameters else {}
@@ -394,7 +393,8 @@ def _save_compiled_model(
     pickle_protocol: int,
 ) -> None:
     """Save a compiled graph and retry a known export error with retracing."""
-    assert torch_tensorrt is not None  # Narrows the lazy import for type checkers.
+    if torch_tensorrt is None:
+        raise ImportError(_TORCH_TENSORRT_MISSING)
     try:
         with torch_tensorrt_errors(torch_tensorrt):
             program = _export_compiled_model(module)

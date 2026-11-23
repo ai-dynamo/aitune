@@ -6,8 +6,9 @@ import pytest
 import torch
 
 import aitune.torch as ait
+from aitune.torch.call_tree.nodes import TensorLeaf
 from tests.functional_ci.models import seeded
-from tests.toy_models.call_tree_models import VlaToy, vla_inputs
+from tests.toy_models.call_tree_models import HIDDEN, VlaToy, vla_inputs
 
 ITERATIONS = 3
 
@@ -48,7 +49,7 @@ def test_call_tree_records_the_calls_and_their_cuda_times(device: torch.device):
     assert dit.bytes_in > 0 and dit.bytes_out > 0
 
 
-@pytest.mark.matrix("inspecting.call-tree-modules-unchanged/aot")
+@pytest.mark.matrix("inspecting.call-tree/aot")
 def test_call_tree_leaves_the_selected_modules_unchanged(device: torch.device):
     """``get_modules()`` selects the same modules with the same counts with and without ``call_tree=True``."""
     model, fn, dataset = _vla(device)
@@ -60,3 +61,33 @@ def test_call_tree_leaves_the_selected_modules_unchanged(device: torch.device):
         return [(m.object_path, m.execution_count, m.forward_called) for m in info.get_modules()]
 
     assert legacy(with_tree) == legacy(without)
+
+
+@pytest.mark.matrix("inspecting.call-tree-signatures/aot")
+def test_call_tree_records_the_signatures_at_the_llm_to_dit_cut(device: torch.device):
+    """The LLM's output and the DiT's inputs have one exact signature over all calls, and ``to_dict`` exports them."""
+    model, fn, dataset = _vla(device)
+
+    tree = _inspect(model, fn, dataset, call_tree=True).call_tree
+
+    assert tree is not None
+    llm = tree.nodes[("root.forward", "root.llm.forward")]
+    [llm_signature] = llm.signatures
+    assert llm_signature.call_indices == list(range(ITERATIONS))
+    assert llm_signature.outputs == {"output": TensorLeaf("output", "torch.Tensor", torch.float32, (2, HIDDEN))}
+    dit_key = ("root.forward", "root.dit_forward")
+    [dit_signature] = tree.nodes[dit_key].signatures
+    assert dit_signature.call_indices == list(range(5 * ITERATIONS))
+    assert dit_signature.inputs == {
+        "x": TensorLeaf("x", "torch.Tensor", torch.float32, (2, HIDDEN)),
+        "t": TensorLeaf("t", "torch.Tensor", torch.float32, (2, 1)),
+    }
+    assert tree.iteration_starts()[dit_key] == [0, 5, 10]
+
+    exported = tree.to_dict()
+    [dit] = [node for node in exported["nodes"] if node["call_path"] == "forward > dit_forward"]
+    assert dit["iteration_starts"] == [0, 5, 10]
+    assert dit["signatures"][0]["inputs"]["t"] == {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [2, 1]}
+    tied = {"weight": {"dtype": "torch.float32", "shape": [16, HIDDEN]}}
+    assert exported["modules"]["lm_head"]["parameters"] == tied
+    assert exported["modules"]["llm.embed"]["parameters"] == tied

@@ -124,8 +124,7 @@ def test_build(mock_polygraphy, tmp_path):
     """Test build method."""
     # Create mock ONNX path
     onnx_path = tmp_path / "test_model.onnx"
-    with open(onnx_path, "w") as f:
-        f.write("mock onnx content")
+    onnx_path.write_text("mock onnx content")
 
     # Create builder
     engine_path = tmp_path / "tensorrt" / "test_model.plan"
@@ -153,8 +152,7 @@ def test_build_with_dynamic_shapes(mock_polygraphy, tmp_path):
     """Test build method with dynamic shapes using the Polygraphy Profile."""
     # Create mock ONNX path
     onnx_path = tmp_path / "test_model.onnx"
-    with open(onnx_path, "w") as f:
-        f.write("mock onnx content")
+    onnx_path.write_text("mock onnx content")
 
     # Create profile for testing
     profile = Profile().add(name="input", min=(1, 3, 224, 224), opt=(4, 3, 224, 224), max=(8, 3, 224, 224))
@@ -391,8 +389,7 @@ def test_build_with_profile_objects(mock_polygraphy, tmp_path):
     """Test build method with The Polygraphy Profile objects."""
     # Create mock ONNX path
     onnx_path = tmp_path / "test_model.onnx"
-    with open(onnx_path, "w") as f:
-        f.write("mock onnx content")
+    onnx_path.write_text("mock onnx content")
 
     # Create builder with profiles
     engine_path = tmp_path / "tensorrt" / "test_model.plan"
@@ -419,8 +416,7 @@ def test_build_with_multiple_profiles(mock_polygraphy, tmp_path, mocker):
     """Test building with multiple profile objects."""
     # Create mock ONNX path
     onnx_path = tmp_path / "test_model.onnx"
-    with open(onnx_path, "w") as f:
-        f.write("mock onnx content")
+    onnx_path.write_text("mock onnx content")
 
     # Create builder with profiles
     engine_path = tmp_path / "tensorrt" / "test_model.plan"

@@ -7,6 +7,11 @@ import torch
 from torch import nn
 
 import aitune.torch as ait
+from aitune.torch.jit.config import JITMode
+from aitune.torch.jit.config import config as jit_config
+from aitune.torch.jit.patched_module import ModuleState, PatchedModule
+from aitune.torch.jit.patcher import prepare_for_jit_tuning
+from aitune.torch.module.tuned_module import TunedModule
 from tests.functional_ci.backends import BackendCase, with_backends
 from tests.functional_ci.lifecycle import pinned_strategy, selected_backend
 
@@ -37,7 +42,7 @@ class ReplacingCacheModel(nn.Module):
         return {"value": x + state["cache"], "state": state}
 
 
-@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs", "aot_tuning.models.mutable-inputs-inplace")
 @with_backends(
     "base",
     marks={
@@ -53,11 +58,70 @@ def test_inplace_mutable_input_lifecycle(case: BackendCase, device: torch.device
     _check_mutable_input_lifecycle(case, device, tmp_path, InplaceCacheModel, returns_state=False)
 
 
-@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs", "aot_tuning.models.mutable-inputs-with-return-state")
 @with_backends("base")
 def test_replacing_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path):
     """Cache replacement and the returned container alias survive consecutive calls and save/load."""
     _check_mutable_input_lifecycle(case, device, tmp_path, ReplacingCacheModel, returns_state=True)
+
+
+@pytest.mark.matrix("jit_tuning.models.mutable-inputs", "jit_tuning.models.mutable-inputs-inplace")
+@with_backends(
+    "base",
+    marks={
+        "torch-tensorrt-jit": pytest.mark.xfail(
+            reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
+            raises=AssertionError,
+            strict=True,
+        ),
+    },
+)
+def test_inplace_mutable_inputs_jit(case: BackendCase, device: torch.device):
+    """JIT tuning preserves unreturned cache updates across consecutive calls."""
+    _check_jit_mutable_inputs(case, device, InplaceCacheModel, returns_state=False)
+
+
+@pytest.mark.matrix("jit_tuning.models.mutable-inputs", "jit_tuning.models.mutable-inputs-with-return-state")
+@with_backends("base")
+def test_replacing_mutable_inputs_jit(case: BackendCase, device: torch.device):
+    """JIT tuning preserves cache replacement and returned caller-owned identity."""
+    _check_jit_mutable_inputs(case, device, ReplacingCacheModel, returns_state=True)
+
+
+def _check_jit_mutable_inputs(case: BackendCase, device: torch.device, model_factory, returns_state):
+    """Tune from a fixed-shape live call, then compare accumulated state with eager."""
+    backend = case.factory()
+    jit_config.mode = JITMode.TUNE_EAGER
+    jit_config.device = device
+    jit_config.min_samples = 1
+    jit_config.batch_axis_required = False
+    jit_config.strategy = pinned_strategy(backend)
+    reference = model_factory(device)
+    with prepare_for_jit_tuning():
+        model = model_factory(device)
+
+    with torch.no_grad():
+        value = torch.ones(2, FEATURES, device=device)
+        # Recording starts from fresh state; inference below uses a separate accumulating cache.
+        model(value, {"cache": torch.zeros_like(value)})
+
+        (head,) = PatchedModule.heads
+        assert head._state == ModuleState.TUNED
+        tuned = head._wrapper
+        assert isinstance(tuned, TunedModule)
+        (selected,) = tuned.backends.values()
+        assert type(selected) is type(backend)
+
+        state = {"cache": torch.full_like(value, 0.25)}
+        reference_state = {"cache": torch.full_like(value, 0.25)}
+        for step in (1, 2, 3):
+            value = torch.full((2, FEATURES), float(step), device=device)
+            actual = model(value, state)
+            expected = reference(value, reference_state)
+            case.tolerance.assert_close(state["cache"], reference_state["cache"])
+            case.tolerance.assert_close(actual["value"], expected["value"])
+            if returns_state:
+                assert actual["state"] is state
 
 
 def _check_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path, model_factory, returns_state):

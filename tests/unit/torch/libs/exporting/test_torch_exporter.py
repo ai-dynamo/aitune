@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for Torch Export through the flat tensor boundary."""
 
+import inspect
 from functools import partial
 
 import pytest
@@ -11,6 +12,13 @@ from torch.fx.experimental.symbolic_shapes import ConstraintViolationError
 from aitune.torch.libs.exporting import TorchExporter
 from tests.toy_models import ToyNestedInputModel
 from tests.utilities.helpers import make_graph_spec, update_input_spec
+
+# PyTorch 2.8 lacks check_guards; inspect the API because CI also uses prerelease builds.
+_MODULE_GUARD_KWARGS = (
+    {"check_guards": False}
+    if "check_guards" in inspect.signature(torch.export.ExportedProgram.module).parameters
+    else {}
+)
 
 
 class BatchMultiplierModel(torch.nn.Module):
@@ -93,7 +101,7 @@ def test_export_retries_rejected_constraints_with_bounded_dynamic_hints(mocker):
     assert (height.min, height.max) == (128, 192)
     assert height is width
     # The bounded hints are asserted above; Torch 2.9's generated guards can reference an undefined `L`.
-    output = result.exported_program.module(check_guards=False)(torch.randn(1, 3, 192, 192))
+    output = result.exported_program.module(**_MODULE_GUARD_KWARGS)(torch.randn(1, 3, 192, 192))
     assert output[0].shape == (1, 4, 48, 48)
 
 
@@ -104,7 +112,7 @@ def test_export_supports_nested_dynamic_inputs(use_auto):
     graph_spec = model.graph_spec(batch_sizes=[2, 4])
 
     export_result = TorchExporter(use_auto=use_auto).export(model, samples[0], graph_spec)
-    exported_module = export_result.exported_program.module(check_guards=False)
+    exported_module = export_result.exported_program.module(**_MODULE_GUARD_KWARGS)
 
     assert export_result.dynamic_shapes is not None
     for args, kwargs in samples:
