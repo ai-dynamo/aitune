@@ -109,61 +109,6 @@ Run `make lint` before you push. It runs these checks:
 If a tool and this file do not agree, follow the tool and update this file.
 Do not disable a tool rule for a line (`# noqa`, `# pyrefly: ignore`) unless you also write the reason.
 
-## Layout
-
-### Module layout
-
-Use this order in a module:
-
-1. Imports.
-2. Constants and `logger = logging.getLogger(__name__)`.
-3. Public classes and functions.
-4. Private helpers (names that start with `_`).
-
-**Why:** A reader opens a module to find its public API. If the public API is first, the reader
-does not have to scroll past implementation details.
-
-### Class layout
-
-Use this order in a class:
-
-1. Class attributes.
-2. `__new__`, `__init__`, and `__post_init__`.
-3. Public methods, properties, and other special methods (for example `__call__` and `__repr__`).
-4. Private methods (names that start with `_`).
-
-**Why:** The constructor tells the reader what state the class has. The public methods tell the
-reader what the class does. Private methods are details. With the same order in all classes, a
-reviewer knows where to look.
-
-**Bad:**
-
-```python
-class Backend:
-    def _assert_supported(self, module: nn.Module) -> None: ...
-
-    def build(self, module: nn.Module) -> None:
-        self._assert_supported(module)
-        ...
-
-    def __init__(self, config: BackendConfig) -> None:
-        self._config = config
-```
-
-**Good:**
-
-```python
-class Backend:
-    def __init__(self, config: BackendConfig) -> None:
-        self._config = config
-
-    def build(self, module: nn.Module) -> None:
-        self._assert_supported(module)
-        ...
-
-    def _assert_supported(self, module: nn.Module) -> None: ...
-```
-
 ## Control flow
 
 ### Use guard clauses

@@ -69,7 +69,7 @@ Use these references when the task touches the corresponding area:
 ## Code Style
 
 Read and follow `CODING_GUIDELINES.md` before you write or review code. It contains the SPDX header,
-the ruff and pyrefly rules, and the rules for layout, control flow, typing, errors, and tests.
+the ruff and pyrefly rules, and the rules for control flow, typing, errors, and tests.
 
 ## Pull Requests
 
