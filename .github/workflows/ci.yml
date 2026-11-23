@@ -224,8 +224,6 @@ jobs:
           fi
         env:
           PYTHON_VERSION: ${{ matrix.python-version }}
-      - name: Report Transformers version
-        run: .venv/bin/python -c 'import transformers; print(transformers.__version__)'
       - run: uv pip install --reinstall --no-deps dist/*.whl
       - run: .venv/bin/python -m pytest -q -rf -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
       - if: always()
