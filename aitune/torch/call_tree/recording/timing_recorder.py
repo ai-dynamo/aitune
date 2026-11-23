@@ -48,15 +48,15 @@ class TimingRecorder(CallRecorder):
       even if the call switches streams or devices. Work the call queues on another device, or on a stream that
       this stream does not wait for, is not measured, so such a call is timed too short.
 
-    Results: when the ``with`` block ends normally, the pass writes each node's measured ``time_ms`` into the
-    tree in place. Entering the pass resets it, so a pass replaces earlier times. ``time_ms`` None means the
+    Results: when the ``with`` block ends normally, the pass writes each node's measured ``total_time_ms`` into the
+    tree in place. Entering the pass resets it, so a pass replaces earlier times. ``total_time_ms`` None means the
     node was not timed in this pass, for example a call inside a compiled part, never that it took no time.
     To keep several timed trees, time a ``tree.copy()`` each.
 
     Diagnostics: when the timing pass replays different calls than the structure pass saw, for example a
     non-deterministic inference such as sampling in ``generate``, some nodes end up timed for a different number
     of calls than they made. When the ``with`` block ends, one warning names the count and up to three example
-    paths; their ``time_ms`` only counts the calls that were timed. Calls inside a compiled part and nodes deeper
+    paths; their ``total_time_ms`` only counts the calls that were timed. Calls inside a compiled part and nodes deeper
     than ``max_depth`` are never timed and never counted.
 
     Example:
@@ -95,7 +95,7 @@ class TimingRecorder(CallRecorder):
         ...             timer.begin_iteration(depth)
         ...             _ = infer(x)
         ...             timer.end_iteration()
-        >>> [(node.path_str, node.time_ms is not None) for node in timer.tree.nodes.values()]
+        >>> [(node.path_str, node.total_time_ms is not None) for node in timer.tree.nodes.values()]
         [('model.forward', True), ('model.forward > model.lin.forward', True)]
     """
 
@@ -105,7 +105,7 @@ class TimingRecorder(CallRecorder):
         Args:
             tree: The structure pass's call tree.
             max_depth: The deepest call-path depth to time, or None to time every depth; deeper nodes keep
-                ``time_ms`` None, without a warning.
+                ``total_time_ms`` None, without a warning.
         """
         self._tree = tree
         self._max_depth = max_depth
@@ -228,7 +228,7 @@ class TimingRecorder(CallRecorder):
             or (torch.cuda.is_initialized() and torch.cuda.memory_reserved() > 0)
         )
         for node in self._tree.nodes.values():
-            node.time_ms = None
+            node.total_time_ms = None
         self._depth = None
         self._stack.clear()
         self._times.clear()
@@ -237,7 +237,7 @@ class TimingRecorder(CallRecorder):
     def _stop(self, completed: bool) -> None:
         """End the timing pass, writing the measured times into the nodes and warning on a normal exit.
 
-        Each node the pass timed gets ``time_ms``, the sum of its measured calls (``CallNode``). When the
+        Each node the pass timed gets ``total_time_ms``, the sum of its measured calls (``CallNode``). When the
         block raised (``completed`` False), nothing is written: the nodes keep the None ``_start`` set.
         """
         if not completed:
@@ -245,7 +245,7 @@ class TimingRecorder(CallRecorder):
         self.end_iteration()
         self._warn_about_diverged_replay()
         for path, times in self._times.items():
-            self._tree.nodes[path].time_ms = sum(times)
+            self._tree.nodes[path].total_time_ms = sum(times)
 
     def _skips_calls(self) -> bool:
         """Whether the next call needs no recording at all.
@@ -278,7 +278,7 @@ class TimingRecorder(CallRecorder):
                 "The timing pass timed a different number of calls than the structure pass recorded for %d call-tree "
                 "%s (for "
                 "example %s%s): it replayed different calls than the structure pass saw, for example a "
-                "non-deterministic inference such as sampling in generate. Their time_ms only counts the calls "
+                "non-deterministic inference such as sampling in generate. Their total_time_ms only counts the calls "
                 "that were timed.",
                 len(diverged),
                 "node" if len(diverged) == 1 else "nodes",

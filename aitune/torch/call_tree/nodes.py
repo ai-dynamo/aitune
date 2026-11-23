@@ -144,13 +144,12 @@ class CallSignature:
 class CallNode:
     """One node of the call tree.
 
-    ``bytes_in`` and ``bytes_out`` measure the tensor data passed into and returned from the node's calls. Only
-    tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
-    inside lists, tuples, dicts and ``ModelOutput`` count too; ``UserDict``s, such as transformers'
-    ``BatchFeature`` and ``BatchEncoding``, are walked into their values, and dataclass instances into their fields.
-    Everything else counts as 0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache`` or
-    ``StaticCache``, including the tensors they hold. The ``signatures`` are recorded by the same walk and also list
-    the non-tensor objects by type.
+    ``total_bytes_in`` and ``total_bytes_out`` measure the tensor data passed into and returned from the node's calls.
+    Only tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
+    inside lists, tuples, dicts and ``ModelOutput`` count too; ``UserDict``s, such as transformers' ``BatchFeature`` and
+    ``BatchEncoding``, are walked into their values, and dataclass instances into their fields. Everything else counts
+    as 0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache`` or ``StaticCache``, including the
+    tensors they hold. The ``signatures`` are recorded by the same walk and also list the non-tensor objects by type.
 
     Attributes:
         path: Labels of the calling chain, outermost first. Identifies the node and must not change after creation:
@@ -160,11 +159,12 @@ class CallNode:
         method: Name of the called method (``forward`` for module calls).
         module: Module the method belongs to, or None for methods of plain objects.
         calls: Number of calls over all recorded iterations.
-        time_ms: Measured time of the node's calls in milliseconds, summed over all recorded iterations; None
-            when the node was never timed (inside a compiled part or deeper than ``max_timing_depth``).
-        bytes_in: Tensor bytes in the arguments, summed over all recorded iterations. Bytes per call:
-            ``bytes_in / calls``.
-        bytes_out: Tensor bytes in the results, summed over all recorded iterations.
+        total_time_ms: Total time of the node's calls in milliseconds over all calls and recorded iterations;
+            None when the node was never timed (inside a compiled part or deeper than ``max_timing_depth``).
+            Time per call: ``total_time_ms / calls``.
+        total_bytes_in: Total tensor bytes in the arguments over all calls and recorded iterations. Bytes per call:
+            ``total_bytes_in / calls``.
+        total_bytes_out: Total tensor bytes in the results over all calls and recorded iterations.
         signatures: The distinct ``CallSignature``s of the node's calls, in first-seen order; each records the
             start-order indices of the calls that had it, so ``sum(len(s.call_indices)) == calls`` and every index
             appears exactly once. A signature whose calls raised has ``outputs`` None.
@@ -192,9 +192,9 @@ class CallNode:
     method: str
     module: nn.Module | None = None
     calls: int = 0
-    time_ms: float | None = None
-    bytes_in: int = 0
-    bytes_out: int = 0
+    total_time_ms: float | None = None
+    total_bytes_in: int = 0
+    total_bytes_out: int = 0
     signatures: list[CallSignature] = field(default_factory=list)
     children: list[CallPath] = field(default_factory=list)
     first_seen: int = 0

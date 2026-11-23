@@ -181,7 +181,9 @@ def test_every_timeable_node_is_timed(mocker, dataset):
 
     tree = _tree(info)
     assert max(len(path) for path in tree.nodes) > 2
-    assert all(node.time_ms is not None for node in tree.nodes.values() if node.calls and not node.inside_compiled_part)
+    assert all(
+        node.total_time_ms is not None for node in tree.nodes.values() if node.calls and not node.inside_compiled_part
+    )
     warning.assert_not_called()
 
 
@@ -248,8 +250,8 @@ def test_calls_that_only_some_samples_make_are_timed(mocker):
     assert branch not in tree.sequences[1] and branch not in tree.sequences[3]
     # only the branch reaches depth 3, so only samples 0 and 2 get an iteration at that depth
     assert TimingRecorder(tree).depths_per_sample() == [[1, 2, 3], [1, 2], [1, 2, 3], [1, 2]]
-    assert tree.nodes[branch].time_ms is not None
-    assert tree.nodes[deep].time_ms is not None
+    assert tree.nodes[branch].total_time_ms is not None
+    assert tree.nodes[deep].total_time_ms is not None
     warning.assert_not_called()
 
 
@@ -320,7 +322,7 @@ def test_a_part_compiled_through_its_forward_logs_no_timing_warning(mocker, data
     )
 
     assert ("root.forward", "root.child.forward", "root.child.lin.forward") in _tree(info).nodes
-    assert _tree(info).nodes[("root.forward", "root.child.forward")].time_ms is not None
+    assert _tree(info).nodes[("root.forward", "root.child.forward")].total_time_ms is not None
     warning.assert_not_called()
 
 
@@ -352,9 +354,9 @@ def test_a_compiled_sequential_gets_a_timed_node_and_its_children_stay_untimed(m
 
     tree = _tree(info)
     node = tree.nodes[("root.forward", "root.child.forward")]
-    assert node.time_ms is not None
+    assert node.total_time_ms is not None
     inner = tree.nodes[("root.forward", "root.child.forward", "root.child.0.forward")]
-    assert inner.time_ms is None
+    assert inner.total_time_ms is None
     warning.assert_not_called()
 
 
@@ -386,10 +388,10 @@ def test_a_sequential_with_a_compiled_forward_gets_a_timed_node_and_its_children
 
     tree = _tree(info)
     node = tree.nodes[("root.forward", "root.child.forward")]
-    assert node.time_ms is not None
+    assert node.total_time_ms is not None
     assert not node.inside_compiled_part
     inner = tree.nodes[("root.forward", "root.child.forward", "root.child.0.forward")]
-    assert inner.time_ms is None
+    assert inner.total_time_ms is None
     assert inner.inside_compiled_part
     warning.assert_not_called()
 
@@ -426,8 +428,8 @@ def test_a_compiled_sequential_times_its_own_node(mocker, dataset):
     for path in ("root.child.0.forward", "root.child.1.forward", "root.child.2.forward"):
         node = tree.nodes[("root.forward", "root.child.forward", path)]
         assert node.inside_compiled_part is True
-        assert node.time_ms is None
-    assert own.time_ms is not None
+        assert node.total_time_ms is None
+    assert own.total_time_ms is not None
     warning.assert_not_called()
 
 
@@ -469,7 +471,7 @@ def test_a_compiled_part_times_its_own_node(mocker, dataset, how):
     )
 
     tree = _tree(info)
-    assert tree.nodes[("root.forward", "root.child.forward")].time_ms is not None
+    assert tree.nodes[("root.forward", "root.child.forward")].total_time_ms is not None
     warning.assert_not_called()
 
 
@@ -520,10 +522,10 @@ def test_a_disabled_call_inside_a_compiled_part(mocker, dataset):
     tree = _tree(info)
     disabled = tree.nodes[("root.forward", "root.child.forward", "root.child.off.forward")]
     assert disabled.inside_compiled_part is True
-    assert disabled.time_ms is None
+    assert disabled.total_time_ms is None
     lin = tree.nodes[("root.forward", "root.child.forward", "root.child.off.forward", "root.child.off.lin.forward")]
     assert lin.inside_compiled_part is True
-    assert lin.time_ms is None
+    assert lin.total_time_ms is None
     warning.assert_not_called()
 
 
@@ -555,9 +557,9 @@ def test_a_torch_compiled_sequential_gets_a_timed_node(mocker, dataset):
 
     tree = _tree(info)
     node = tree.nodes[("root.forward", "root.child.forward")]
-    assert node.time_ms is not None
+    assert node.total_time_ms is not None
     inner = tree.nodes[("root.forward", "root.child.forward", "root.child._orig_mod.0.forward")]
-    assert inner.time_ms is None
+    assert inner.total_time_ms is None
     warning.assert_not_called()
 
 
@@ -601,7 +603,7 @@ def test_a_compiled_modules_encode_call_exposes_its_children(mocker, dataset):
     tree = _tree(info)
     path = ("root.forward", "root.child.encode", "root.child.lin.forward")
     assert path in tree.nodes
-    assert tree.nodes[path].time_ms is not None
+    assert tree.nodes[path].total_time_ms is not None
     warning.assert_not_called()
 
 
@@ -959,9 +961,9 @@ def test_max_timing_depth_leaves_deep_nodes_untimed_without_a_warning(mocker, da
     assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
     deep = [node for node in tree.nodes.values() if len(node.path) > 2]
     assert all(node.calls > 0 for node in deep)
-    assert all(node.time_ms is None for node in deep)
+    assert all(node.total_time_ms is None for node in deep)
     shallow = [node for node in tree.nodes.values() if node.calls and len(node.path) <= 2]
-    assert shallow and all(node.time_ms is not None for node in shallow)
+    assert shallow and all(node.total_time_ms is not None for node in shallow)
     warning.assert_not_called()
 
 
@@ -974,7 +976,7 @@ def test_max_timing_depth_rejects_negative_values(bad, dataset):
 
 
 def test_max_timing_depth_zero_skips_the_timing_pass(mocker, dataset):
-    """``max_timing_depth=0`` runs only the structure pass: the tree is complete, every ``time_ms`` stays None."""
+    """``max_timing_depth=0`` runs only the structure pass: the tree is complete, every ``total_time_ms`` stays None."""
     model, fn = _vla()
     timing = mocker.patch("aitune.torch.inspecting.inspecting._time_call_tree")
 
@@ -992,4 +994,4 @@ def test_max_timing_depth_zero_skips_the_timing_pass(mocker, dataset):
     tree = _tree(info)
     assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
     assert all(node.calls > 0 for node in tree.nodes.values())
-    assert all(node.time_ms is None for node in tree.nodes.values())
+    assert all(node.total_time_ms is None for node in tree.nodes.values())

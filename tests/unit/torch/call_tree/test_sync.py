@@ -10,28 +10,30 @@ from tests.unit.torch.call_tree.helpers import make_tree, record
 BROADCAST = "aitune.torch.call_tree.sync.coordinator.broadcast_from_rank0"
 
 
-def _tree(time_ms: float = 1.0, calls: int = 1):
-    return make_tree({"root.forward": (1, 10.0, {"root.head.forward": (calls, time_ms, {})})}, iterations=2)
+def _tree(total_time_ms: float = 1.0, calls: int = 1):
+    return make_tree({"root.forward": (1, 10.0, {"root.head.forward": (calls, total_time_ms, {})})}, iterations=2)
 
 
 def _records(tree):
     counts = tree.calls_per_iteration()
     return tuple(
-        _NodeRecord(k, n.owner_class, n.calls, counts[k], n.time_ms, n.bytes_in, n.bytes_out, n.signatures)
+        _NodeRecord(
+            k, n.owner_class, n.calls, counts[k], n.total_time_ms, n.total_bytes_in, n.total_bytes_out, n.signatures
+        )
         for k, n in tree.nodes.items()
     )
 
 
 def test_rank_zero_times_are_applied(mocker):
-    tree = _tree(time_ms=1.0)
-    rank_zero = _tree(time_ms=4.0)
+    tree = _tree(total_time_ms=1.0)
+    rank_zero = _tree(total_time_ms=4.0)
     records = _records(rank_zero)
     broadcast = mocker.patch(BROADCAST, return_value=(2, records))
 
     synchronize_call_tree(tree)
 
     broadcast.assert_called_once()
-    assert tree.nodes[("root.forward", "root.head.forward")].time_ms == 4.0
+    assert tree.nodes[("root.forward", "root.head.forward")].total_time_ms == 4.0
 
 
 def test_different_keys_raise(mocker):
@@ -69,28 +71,28 @@ def test_different_calls_per_iteration_raise(mocker):
 
 
 def test_a_mismatch_leaves_the_local_tree_unchanged(mocker):
-    tree, rank_zero = _tree(time_ms=1.0, calls=1), _tree(time_ms=1.0, calls=3)
-    rank_zero.nodes[("root.forward",)].time_ms = 99.0  # the outer node matches and comes first
+    tree, rank_zero = _tree(total_time_ms=1.0, calls=1), _tree(total_time_ms=1.0, calls=3)
+    rank_zero.nodes[("root.forward",)].total_time_ms = 99.0  # the outer node matches and comes first
     mocker.patch(BROADCAST, return_value=(2, _records(rank_zero)))
 
     with pytest.raises(RuntimeError, match="head.forward"):
         synchronize_call_tree(tree)
 
-    assert tree.nodes[("root.forward",)].time_ms == 10.0
+    assert tree.nodes[("root.forward",)].total_time_ms == 10.0
 
 
 def test_rank_zero_bytes_are_applied(mocker):
-    tree = _tree(time_ms=1.0)
-    rank_zero = _tree(time_ms=1.0)
+    tree = _tree(total_time_ms=1.0)
+    rank_zero = _tree(total_time_ms=1.0)
     for node in rank_zero.nodes.values():
-        node.bytes_in, node.bytes_out = 100, 200
+        node.total_bytes_in, node.total_bytes_out = 100, 200
     records = _records(rank_zero)
     mocker.patch(BROADCAST, return_value=(2, records))
 
     synchronize_call_tree(tree)
 
     head = tree.nodes[("root.forward", "root.head.forward")]
-    assert (head.bytes_in, head.bytes_out) == (100, 200)
+    assert (head.total_bytes_in, head.total_bytes_out) == (100, 200)
 
 
 def test_rank_zero_shapes_are_applied(mocker):

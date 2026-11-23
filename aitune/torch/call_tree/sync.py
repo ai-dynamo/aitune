@@ -16,9 +16,9 @@ class _NodeRecord(NamedTuple):
     owner_class: str
     calls: int
     calls_per_iteration: list[int]
-    time_ms: float | None
-    bytes_in: int
-    bytes_out: int
+    total_time_ms: float | None
+    total_bytes_in: int
+    total_bytes_out: int
     signatures: list[CallSignature]
 
     def structure(self) -> tuple[str, int, list[int]]:
@@ -57,9 +57,9 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
                 node.owner_class,
                 node.calls,
                 calls_per_iteration[path],
-                node.time_ms,
-                node.bytes_in,
-                node.bytes_out,
+                node.total_time_ms,
+                node.total_bytes_in,
+                node.total_bytes_out,
                 node.signatures,
             )
             for path, node in tree.nodes.items()
@@ -87,8 +87,8 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
                 )
     for record in rank_zero_records:
         node = tree.nodes[record.path]
-        node.time_ms = record.time_ms
-        node.bytes_in = record.bytes_in
-        node.bytes_out = record.bytes_out
+        node.total_time_ms = record.total_time_ms
+        node.total_bytes_in = record.total_bytes_in
+        node.total_bytes_out = record.total_bytes_out
         node.signatures = list(record.signatures)
     return tree

@@ -57,8 +57,8 @@ def inspect(
             ``torch.compile`` get no time. For deep models the walk must reach the linear layers, for example
             ``max_depth=8``. Details are in ``docs/guides/aot_inspect.md``.
         max_timing_depth: Deepest call-path depth the timing pass times, with the root call at depth 1; None times
-            every depth, and 0 skips the timing pass, so every node keeps ``time_ms`` None. Deeper nodes are
-            still recorded but keep ``time_ms`` None. Limits the timing pass to at most ``max_timing_depth``
+            every depth, and 0 skips the timing pass, so every node keeps ``total_time_ms`` None. Deeper nodes are
+            still recorded but keep ``total_time_ms`` None. Limits the timing pass to at most ``max_timing_depth``
             iterations per sample.
 
     Returns:

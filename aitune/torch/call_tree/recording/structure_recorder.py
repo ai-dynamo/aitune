@@ -128,7 +128,7 @@ class StructureRecorder(CallRecorder):
         node.calls += 1
         with torch._C.DisableTorchFunction():
             values, input_bytes = _leaves_and_bytes(self._input_leaves(obj, method, args, kwargs))
-        node.bytes_in += input_bytes
+        node.total_bytes_in += input_bytes
         if self._current_sequence is not None:
             self._current_sequence.append(path)
         input_key, visible = self._link_inputs(path, values)
@@ -158,7 +158,7 @@ class StructureRecorder(CallRecorder):
         else:
             with torch._C.DisableTorchFunction():
                 values, output_bytes = _leaves_and_bytes(list(_named_leaves(result, "output")))
-            frame.node.bytes_out += output_bytes
+            frame.node.total_bytes_out += output_bytes
             output_key = self._link_outputs(frame.node.path, values, frame.visible)
         signatures = self._signatures.setdefault(frame.node.path, {})
         key = (frame.input_key, output_key)

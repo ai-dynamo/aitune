@@ -225,7 +225,7 @@ modules_info = ait.inspect(model, input_data, inference_function=run_chunk, min_
 tree = modules_info.call_tree
 
 for node in tree.find("dit"):    # recorded calls whose label contains "dit"
-    print(node.path_str, node.calls, node.time_ms, node.bytes_in, node.bytes_out)
+    print(node.path_str, node.calls, node.total_time_ms, node.total_bytes_in, node.total_bytes_out)
 # forward > dit_forward 10 ...
 # forward > dit_forward > dit.forward 10 ...
 ```
@@ -245,7 +245,7 @@ What is recorded:
 - calls of `.to()`, `.cuda()` and similar that reach a module from code outside it, with the code that made them;
 - every torch op that reads a module's parameter or buffer, or looks up its device, with the recorded call it ran in;
 - times from CUDA events without synchronizing after every call, or from `time.perf_counter` without CUDA;
-- tensor bytes in and out (`bytes_in`, `bytes_out`), summed over a node's calls: the tensors in each call's
+- tensor bytes in and out (`total_bytes_in`, `total_bytes_out`), summed over a node's calls: the tensors in each call's
   args/kwargs and in its result, nested containers and ModelOutputs included, each tensor counted once per call.
   `UserDict`s, such as transformers' `BatchFeature` and `BatchEncoding`, are walked into their values, and dataclass
   instances into their fields. Other objects that `torch.utils._pytree` does not flatten, such as caches or your own
@@ -274,7 +274,7 @@ What is recorded:
    on the sample the structure pass recorded it on, and no timed call runs inside another. The number of iterations —
    at most `number_of_iterations` times the number of call-path depths — is logged before the pass starts.
 
-Some nodes get no time (`time_ms` is `null`):
+Some nodes get no time (`total_time_ms` is `null`):
 
 - calls inside a compiled part, since they run inside the compiled code. The compiled part itself is timed as one
   call, and such nodes are marked `inside_compiled_part` in the export;
@@ -318,12 +318,12 @@ The exported data has this structure:
 {
   "schema_version": 1,
   "iterations": 2,
-  "total_ms": 30.0,
+  "total_time_ms": 30.0,
   "nodes": [
-    {"call_path": "forward", "owner_class": "Vla", "calls": 2, "time_ms": 30.0, ...},
+    {"call_path": "forward", "owner_class": "Vla", "calls": 2, "total_time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
-     "calls": 10, "inside_compiled_part": false, "time_ms": 25.0,
-     "bytes_in": 3670056, "bytes_out": 3670016,
+     "calls": 10, "inside_compiled_part": false, "total_time_ms": 25.0,
+     "total_bytes_in": 3670056, "total_bytes_out": 3670016,
      "signatures": [
          {"call_indices": [0, 5],
           "inputs": {"hidden_states": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
@@ -348,11 +348,11 @@ The exported data has this structure:
 }
 ```
 
-`iterations` is the number of recorded iterations; `calls`, `bytes_in` and `bytes_out` are totals over them.
-Divide by `iterations` for per-iteration values, by `calls` for per-call values. `time_ms` is the node's measured
-total over the same iterations. It is `null` when the timing pass never timed the node.
+`iterations` is the number of recorded iterations; `total_time_ms`, `total_bytes_in` and `total_bytes_out` are
+totals over all calls and iterations; divide by `calls` for per-call values and by `iterations` for per-iteration
+values. `total_time_ms` is `null` when the timing pass never timed the node.
 `inside_compiled_part` is true for calls inside a compiled part: they run inside the compiled code in the timing
-pass, so their `time_ms` is `null`; the compiled part's own call is timed.
+pass, so their `total_time_ms` is `null`; the compiled part's own call is timed.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
 the calls with exactly that signature, plus `inputs`/`outputs` dicts keyed by argument name (such as `x` or
 `inputs['input_ids']`), and `output` for the result, or `output[0]` and `output['logits']` for values nested in it.

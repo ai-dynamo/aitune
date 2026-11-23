@@ -29,9 +29,9 @@ def test_to_dict_exports_the_whole_tree():
     d = tree.to_dict()
 
     assert d["schema_version"] == 1
-    assert set(d) == {"schema_version", "iterations", "total_ms", "nodes", "modules", "weights"}
+    assert set(d) == {"schema_version", "iterations", "total_time_ms", "nodes", "modules", "weights"}
     assert d["iterations"] == tree.iterations
-    assert d["total_ms"] == tree.total_ms
+    assert d["total_time_ms"] == tree.total_time_ms
     nodes = d["nodes"]
     assert len(nodes) == len(tree.nodes)
     paths = {n["call_path"] for n in nodes}
@@ -46,17 +46,17 @@ def test_to_dict_exports_the_whole_tree():
             assert _object_path(exported["call_path"]) in d["modules"]
         assert exported["calls"] == node.calls
         assert exported["inside_compiled_part"] == node.inside_compiled_part
-        assert exported["time_ms"] == node.time_ms
-        assert exported["bytes_in"] == node.bytes_in
-        assert exported["bytes_out"] == node.bytes_out
+        assert exported["total_time_ms"] == node.total_time_ms
+        assert exported["total_bytes_in"] == node.total_bytes_in
+        assert exported["total_bytes_out"] == node.total_bytes_out
         assert set(exported) == {
             "call_path",
             "owner_class",
             "calls",
             "inside_compiled_part",
-            "time_ms",
-            "bytes_in",
-            "bytes_out",
+            "total_time_ms",
+            "total_bytes_in",
+            "total_bytes_out",
             "signatures",
             "calls_per_iteration",
         }

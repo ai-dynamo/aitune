@@ -103,8 +103,8 @@ def test_calls_inside_a_timed_call_are_skipped(mocker):
     child_path = ("root.forward", "root.child.forward")
     assert ran and stack_during_root == [1]
     assert timer._stack == []
-    assert tree.nodes[("root.forward",)].time_ms is not None
-    assert tree.nodes[child_path].time_ms is None
+    assert tree.nodes[("root.forward",)].total_time_ms is not None
+    assert tree.nodes[child_path].total_time_ms is None
 
 
 def test_the_structure_recorder_does_not_skip_calls():
@@ -135,7 +135,7 @@ def test_the_total_counts_a_systematically_slow_call_of_each_sample(mocker):
 
     node = tree.nodes[a]
     # 18 ms over 9 calls; a per-call median would give 1 ms
-    assert node.time_ms == pytest.approx(18.0)
+    assert node.total_time_ms == pytest.approx(18.0)
 
 
 def test_a_slow_sample_counts_in_the_total(mocker):
@@ -155,13 +155,13 @@ def test_a_slow_sample_counts_in_the_total(mocker):
                 timer.end_call(timer.begin_call("a", model, "forward", ()))
 
     node = tree.nodes[a]
-    assert node.time_ms == pytest.approx(48.0)  # the measured sum: the slow sample counts
+    assert node.total_time_ms == pytest.approx(48.0)  # the measured sum: the slow sample counts
 
 
 def test_time_ms_is_none_without_a_timing_pass():
     node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls=2)
 
-    assert node.time_ms is None
+    assert node.total_time_ms is None
 
 
 def test_the_pass_writes_each_nodes_measured_time(mocker):
@@ -184,8 +184,8 @@ def test_the_pass_writes_each_nodes_measured_time(mocker):
                     timer.end_call(timer.begin_call("root.child.forward", model, "forward", ()))
             timer.end_call(root)
 
-    assert tree.nodes[root_path].time_ms == pytest.approx(8.0)
-    assert tree.nodes[child_path].time_ms == pytest.approx(4.0)
+    assert tree.nodes[root_path].total_time_ms == pytest.approx(8.0)
+    assert tree.nodes[child_path].total_time_ms == pytest.approx(4.0)
 
 
 def _recorded_tree(model, x):
@@ -216,7 +216,7 @@ def test_end_iteration_resolves_pending_events():
         assert timer._free_events  # resolved events are reused
 
     node = tree.nodes[("root.forward",)]
-    assert node.time_ms is not None and node.time_ms > 0
+    assert node.total_time_ms is not None and node.total_time_ms > 0
 
 
 def test_a_model_on_the_cpu_is_timed_with_perf_counter(mocker):
@@ -234,7 +234,7 @@ def test_a_model_on_the_cpu_is_timed_with_perf_counter(mocker):
         timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
 
     event.assert_not_called()
-    assert tree.nodes[("root.forward",)].time_ms is not None
+    assert tree.nodes[("root.forward",)].total_time_ms is not None
 
 
 def test_a_model_in_a_process_with_cuda_memory_is_timed_with_cuda_events(mocker):
@@ -311,7 +311,7 @@ def test_end_event_is_recorded_on_the_start_stream_when_the_call_switches_stream
     start, end = events
     assert start.stream == "stream0"
     assert end.stream == "stream0"
-    assert tree.nodes[("root.forward",)].time_ms == 2.0
+    assert tree.nodes[("root.forward",)].total_time_ms == 2.0
 
 
 def test_end_iteration_synchronizes_every_end_event(mocker):
@@ -347,7 +347,7 @@ def test_end_iteration_synchronizes_every_end_event(mocker):
         timer.end_iteration()
 
     node = tree.nodes[("root.forward",)]
-    assert node.time_ms == 2.0  # the measured sum of the two 1.0 ms calls
+    assert node.total_time_ms == 2.0  # the measured sum of the two 1.0 ms calls
     cuda_synchronize.assert_not_called()
 
 
@@ -380,7 +380,7 @@ def test_unresolved_cuda_times_all_reach_the_total(mocker):
         # no end_iteration between the iterations: all event pairs still land in the total
 
     node = tree.nodes[a]
-    assert node.time_ms == pytest.approx(102.0)  # the measured sum
+    assert node.total_time_ms == pytest.approx(102.0)  # the measured sum
 
 
 def test_resolved_events_are_reused_only_on_their_device(mocker):
@@ -476,8 +476,8 @@ def test_cpu_timing_is_recorded_in_the_timing_pass(mocker):
     tree = _record_and_time(structure, model, lambda: model(x))
 
     root = tree.nodes[("root.forward",)]
-    assert root.time_ms is not None and root.time_ms > 0
-    assert tree.total_ms == root.time_ms
+    assert root.total_time_ms is not None and root.total_time_ms > 0
+    assert tree.total_time_ms == root.total_time_ms
 
 
 def test_accumulated_calls_double_the_measured_time(mocker):
@@ -491,10 +491,10 @@ def test_accumulated_calls_double_the_measured_time(mocker):
     structure = StructureRecorder()
     x = torch.randn(2, 8)
 
-    first = _record_and_time(structure, model, lambda: model(x)).nodes[("root.forward",)].time_ms
+    first = _record_and_time(structure, model, lambda: model(x)).nodes[("root.forward",)].total_time_ms
     assert first is not None and first > 0
 
-    second = _record_and_time(structure, model, lambda: model(x)).nodes[("root.forward",)].time_ms
+    second = _record_and_time(structure, model, lambda: model(x)).nodes[("root.forward",)].total_time_ms
     assert second == 2 * first
 
 
@@ -505,10 +505,10 @@ def test_the_timing_pass_writes_cuda_times_into_the_tree():
 
     x = torch.randn(2, 8, device="cuda")
     tree = _record_and_time(structure, model, lambda: model(x))
-    first = tree.nodes[("root.forward",)].time_ms
+    first = tree.nodes[("root.forward",)].total_time_ms
 
     assert first is not None and first > 0
-    assert tree.nodes[("root.forward",)].time_ms == first
+    assert tree.nodes[("root.forward",)].total_time_ms == first
 
 
 def _tree_with_a_child() -> CallTree:
@@ -540,7 +540,7 @@ def test_the_timing_pass_writes_times_into_the_tree(mocker):
         timer.end_call(child)
         timer.end_call(root)
 
-    assert all(node.time_ms is not None for node in tree.nodes.values())
+    assert all(node.total_time_ms is not None for node in tree.nodes.values())
 
 
 def test_a_second_timing_pass_resets_nodes_it_did_not_time(mocker):
@@ -558,24 +558,24 @@ def test_a_second_timing_pass_resets_nodes_it_did_not_time(mocker):
         timer.end_call(child)
         timer.end_call(root)
     child_path = ("root.forward", "root.child.forward")
-    assert tree.nodes[child_path].time_ms is not None
+    assert tree.nodes[child_path].total_time_ms is not None
 
     with TimingRecorder(tree) as timer:  # this pass calls only the root
         timer.begin_iteration(1)
         timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
 
-    assert tree.nodes[("root.forward",)].time_ms is not None
-    assert tree.nodes[child_path].time_ms is None
+    assert tree.nodes[("root.forward",)].total_time_ms is not None
+    assert tree.nodes[child_path].total_time_ms is None
 
 
 def test_a_timing_pass_that_raises_leaves_all_times_none():
     tree = _tree_with_a_child()
-    tree.nodes[("root.forward",)].time_ms = 5.0  # an earlier pass's time
+    tree.nodes[("root.forward",)].total_time_ms = 5.0  # an earlier pass's time
 
     with pytest.raises(RuntimeError, match="boom"), TimingRecorder(tree):
         _boom()
 
-    assert all(node.time_ms is None for node in tree.nodes.values())
+    assert all(node.total_time_ms is None for node in tree.nodes.values())
 
 
 def test_timing_a_copy_leaves_the_originals_times(mocker):
@@ -586,7 +586,7 @@ def test_timing_a_copy_leaves_the_originals_times(mocker):
     with TimingRecorder(tree) as timer:
         timer.begin_iteration(1)
         timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
-    original = tree.nodes[("root.forward",)].time_ms
+    original = tree.nodes[("root.forward",)].total_time_ms
     assert original is not None
 
     copied = tree.copy()
@@ -594,8 +594,8 @@ def test_timing_a_copy_leaves_the_originals_times(mocker):
         timer.begin_iteration(2)  # an iteration that times depth 2, which the call below is not at
         timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
 
-    assert copied.nodes[("root.forward",)].time_ms is None
-    assert tree.nodes[("root.forward",)].time_ms == original
+    assert copied.nodes[("root.forward",)].total_time_ms is None
+    assert tree.nodes[("root.forward",)].total_time_ms == original
 
 
 def test_only_calls_at_the_timed_depth_are_timed(mocker):
@@ -611,8 +611,8 @@ def test_only_calls_at_the_timed_depth_are_timed(mocker):
         timer.end_call(child)
         timer.end_call(root)
 
-    assert tree.nodes[("root.forward",)].time_ms is None
-    assert tree.nodes[("root.forward", "root.child.forward")].time_ms is not None
+    assert tree.nodes[("root.forward",)].total_time_ms is None
+    assert tree.nodes[("root.forward", "root.child.forward")].total_time_ms is not None
 
 
 def test_the_timed_depth_resets_on_entry(mocker):
@@ -625,7 +625,7 @@ def test_the_timed_depth_resets_on_entry(mocker):
     with TimingRecorder(tree) as timer:  # no begin_iteration: nothing is timed
         timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
 
-    assert tree.nodes[("root.forward",)].time_ms is None
+    assert tree.nodes[("root.forward",)].total_time_ms is None
 
 
 def _warning_text(warning) -> str:
@@ -667,7 +667,7 @@ def test_a_node_inside_a_compiled_part_is_never_counted(mocker):
 
 
 def test_a_call_inside_a_compiled_part_is_never_timed(mocker):
-    """A call reported with a compiled-part node's path gets no timer: its ``time_ms`` stays None."""
+    """A call reported with a compiled-part node's path gets no timer: its ``total_time_ms`` stays None."""
     mocker.patch("aitune.torch.call_tree.recording.timing_recorder.torch.cuda.is_available", return_value=False)
     warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
     a, ab, ac = ("a",), ("a", "b"), ("a", "c")
@@ -684,8 +684,8 @@ def test_a_call_inside_a_compiled_part_is_never_timed(mocker):
         timer.end_call(timer.begin_call("c", model, "forward", ()))
         timer.end_call(a_call)
 
-    assert tree.nodes[ab].time_ms is not None
-    assert tree.nodes[ac].time_ms is None
+    assert tree.nodes[ab].total_time_ms is not None
+    assert tree.nodes[ac].total_time_ms is None
     warning.assert_not_called()
 
 
@@ -731,12 +731,12 @@ def test_calls_below_the_timed_depth_are_skipped(mocker):
         timer.end_call(child)
         timer.end_call(root)
 
-    assert all(node.time_ms is not None for node in tree.nodes.values())
+    assert all(node.total_time_ms is not None for node in tree.nodes.values())
     warning.assert_not_called()
 
 
 def test_a_node_timed_in_two_runs_gets_the_total(mocker):
-    """``time_ms`` is the plain sum over the timed calls, not scaled to ``calls``."""
+    """``total_time_ms`` is the plain sum over the timed calls, not scaled to ``calls``."""
     mocker.patch("aitune.torch.call_tree.recording.timing_recorder.torch.cuda.is_available", return_value=False)
     mocker.patch(
         "aitune.torch.call_tree.recording.timing_recorder.time.perf_counter",
@@ -752,7 +752,7 @@ def test_a_node_timed_in_two_runs_gets_the_total(mocker):
             timer.begin_iteration(1)
             timer.end_call(timer.begin_call("a", model, "forward", ()))
 
-    assert tree.nodes[a].time_ms == 8.0
+    assert tree.nodes[a].total_time_ms == 8.0
 
 
 def test_a_stray_exit_does_not_release_the_active_recorder():
@@ -786,7 +786,7 @@ def test_a_transparent_container_gives_its_children_the_same_path_in_both_passes
 
     warning.assert_not_called()
     assert ("root.forward",) not in tree.nodes
-    assert tree.nodes[("root.0.forward",)].time_ms is not None
+    assert tree.nodes[("root.0.forward",)].total_time_ms is not None
 
 
 def test_max_depth_leaves_deeper_nodes_untimed_without_a_warning(mocker):
@@ -802,8 +802,8 @@ def test_max_depth_leaves_deeper_nodes_untimed_without_a_warning(mocker):
             timer.begin_iteration(1)  # every iteration times depth 1 of its sample
             timer.end_call(timer.begin_call("a", model, "forward", ()))
 
-    assert tree.nodes[a].time_ms is not None
-    assert tree.nodes[abc].time_ms is None
+    assert tree.nodes[a].total_time_ms is not None
+    assert tree.nodes[abc].total_time_ms is None
     warning.assert_not_called()
 
 

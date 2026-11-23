@@ -44,9 +44,9 @@ def test_call_tree_records_the_calls_and_their_cuda_times(device: torch.device):
     assert tree.nodes[("root.forward",)].calls == ITERATIONS
     assert tree.nodes[("root.forward", "root.dit_forward")].calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes
-    assert all(node.time_ms is not None and node.time_ms > 0 for node in tree.nodes.values())
+    assert all(node.total_time_ms is not None and node.total_time_ms > 0 for node in tree.nodes.values())
     [dit] = tree.nodes_of(model.dit)
-    assert dit.bytes_in > 0 and dit.bytes_out > 0
+    assert dit.total_bytes_in > 0 and dit.total_bytes_out > 0
 
 
 @pytest.mark.matrix("inspecting.call-tree/aot")

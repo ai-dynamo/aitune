@@ -57,7 +57,7 @@ def test_call_tree_copy_is_independent_of_the_original():
 
     copied = tree.copy()
     copied_root = copied.nodes[root.path]
-    copied_root.time_ms = 9.0
+    copied_root.total_time_ms = 9.0
     copied_root.children.clear()
     copied_root.signatures[0].call_indices.append(2)
     copied_root.signatures[0].inputs["x"] = TensorLeaf("x", "torch.Tensor", dtype=torch.float16, shape=(1,))
@@ -65,7 +65,7 @@ def test_call_tree_copy_is_independent_of_the_original():
     copied.weight_accesses["weight"].add(WeightAccess("other", "read"))
     copied.modules.append(("extra", nn.Linear(1, 1)))
 
-    assert root.time_ms is None
+    assert root.total_time_ms is None
     assert root.children == [child.path]
     assert root.signatures[0].call_indices == [0, 1]
     assert isinstance(root.signatures[0].inputs["x"], Leaf)
@@ -327,8 +327,8 @@ def test_structure_pass_records_no_times():
 
     tree = record(model, lambda: model(torch.randn(2, 8)))
 
-    assert all(node.time_ms is None for node in tree.nodes.values())
-    assert tree.total_ms == 0
+    assert all(node.total_time_ms is None for node in tree.nodes.values())
+    assert tree.total_time_ms == 0
 
 
 def test_user_defined_methods_skip_library_and_base_methods():
@@ -684,8 +684,8 @@ def test_bytes_in_counts_tensors_in_nested_args_and_kwargs():
     tree = record(model, lambda: model([a, b], extra={"t": c}), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == expected
-    assert node.bytes_in / node.calls == expected
+    assert node.total_bytes_in == expected
+    assert node.total_bytes_in / node.calls == expected
 
 
 def test_bytes_in_counts_a_tensor_passed_twice_once():
@@ -698,7 +698,7 @@ def test_bytes_in_counts_a_tensor_passed_twice_once():
 
     tree = record(model, lambda: model(t, extra={"again": t}), iterations=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == t.numel() * t.element_size()
 
 
 def test_bytes_ignores_non_tensor_objects():
@@ -713,8 +713,8 @@ def test_bytes_ignores_non_tensor_objects():
     tree = record(model, lambda: model(t, cache=obj), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
-    assert node.bytes_out == t.numel() * t.element_size()  # the (x, cache) tuple counts only x
+    assert node.total_bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_out == t.numel() * t.element_size()  # the (x, cache) tuple counts only x
 
 
 def test_bytes_out_counts_the_tensors_of_a_model_output():
@@ -734,7 +734,7 @@ def test_bytes_out_counts_the_tensors_of_a_model_output():
     tree = record(model, lambda: model(t), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_out == t.numel() * t.element_size()
+    assert node.total_bytes_out == t.numel() * t.element_size()
 
 
 def test_bytes_sum_over_calls_and_iterations():
@@ -756,8 +756,8 @@ def test_bytes_sum_over_calls_and_iterations():
     [node] = tree.nodes_of(model.head)
     calls = 2 * iterations  # forward calls head twice per iteration
     assert node.calls == calls
-    assert node.bytes_in == calls * per_call
-    assert node.bytes_out == calls * per_call  # Linear returns a same-shaped tensor here
+    assert node.total_bytes_in == calls * per_call
+    assert node.total_bytes_out == calls * per_call  # Linear returns a same-shaped tensor here
 
 
 def test_bytes_in_counts_a_call_that_raises_but_not_bytes_out():
@@ -777,8 +777,8 @@ def test_bytes_in_counts_a_call_that_raises_but_not_bytes_out():
     tree = recorder.result()
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == x.numel() * x.element_size()
-    assert node.bytes_out == 0
+    assert node.total_bytes_in == x.numel() * x.element_size()
+    assert node.total_bytes_out == 0
 
 
 def test_the_bytes_walk_records_no_weight_access():
@@ -817,8 +817,8 @@ def test_bytes_count_tensors_inside_a_userdict():
     node = tree.nodes[("root.forward",)]
     in_bytes = a.numel() * a.element_size() + b.numel() * b.element_size() + c.numel() * c.element_size()
     out_bytes = 2 * a.numel() * a.element_size()  # x plus a fresh same-shaped tensor
-    assert node.bytes_in == in_bytes
-    assert node.bytes_out == out_bytes
+    assert node.total_bytes_in == in_bytes
+    assert node.total_bytes_out == out_bytes
 
 
 def test_bytes_count_a_tensor_in_a_userdict_and_an_arg_once():
@@ -831,7 +831,7 @@ def test_bytes_count_a_tensor_in_a_userdict_and_an_arg_once():
 
     tree = record(model, lambda: model(t, batch=_Batch({"again": t})), iterations=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == t.numel() * t.element_size()
 
 
 def test_bytes_count_tensors_inside_a_batch_feature():
@@ -848,8 +848,8 @@ def test_bytes_count_tensors_inside_a_batch_feature():
 
     node = tree.nodes[("root.forward",)]
     in_bytes = a.numel() * a.element_size() + b.numel() * b.element_size() + c.numel() * c.element_size()
-    assert node.bytes_in == in_bytes
-    assert node.bytes_out == a.numel() * a.element_size()
+    assert node.total_bytes_in == in_bytes
+    assert node.total_bytes_out == a.numel() * a.element_size()
 
 
 def test_bytes_count_a_userdict_that_contains_itself():
@@ -865,8 +865,8 @@ def test_bytes_count_a_userdict_that_contains_itself():
     tree = record(model, lambda: model(batch), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
-    assert node.bytes_out == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_out == t.numel() * t.element_size()
 
 
 @pytest.mark.parametrize("options", [{}, {"frozen": True}, {"slots": True}], ids=["plain", "frozen", "slots"])
@@ -887,8 +887,8 @@ def test_bytes_count_tensors_inside_a_dataclass(options):
     tree = record(model, lambda: model(Packed(x=a, nested=[b])), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == a.numel() * a.element_size() + b.numel() * b.element_size()
-    assert node.bytes_out == a.numel() * a.element_size() + 8 * 4
+    assert node.total_bytes_in == a.numel() * a.element_size() + b.numel() * b.element_size()
+    assert node.total_bytes_out == a.numel() * a.element_size() + 8 * 4
 
 
 def test_bytes_count_a_dataclass_that_contains_itself():
@@ -908,7 +908,7 @@ def test_bytes_count_a_dataclass_that_contains_itself():
 
     tree = record(model, lambda: model(node), iterations=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == t.numel() * t.element_size()
 
 
 def test_bytes_skip_a_dataclass_field_without_a_value():
@@ -926,7 +926,7 @@ def test_bytes_skip_a_dataclass_field_without_a_value():
 
     tree = record(model, lambda: model(Partial(t)), iterations=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == t.numel() * t.element_size()
 
 
 def test_bytes_walk_a_model_output_as_before():
@@ -941,7 +941,7 @@ def test_bytes_walk_a_model_output_as_before():
 
     tree = record(model, lambda: model(x), iterations=1)
 
-    assert tree.nodes[("root.forward",)].bytes_out == x.numel() * x.element_size() + 2 * 8 * 4
+    assert tree.nodes[("root.forward",)].total_bytes_out == x.numel() * x.element_size() + 2 * 8 * 4
 
 
 def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
@@ -969,7 +969,7 @@ def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
 
     tree = record(model, lambda: model(x, extra=LazyMap()), iterations=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == x.numel() * x.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == x.numel() * x.element_size()
     assert reads == []
 
 
@@ -1258,7 +1258,7 @@ def test_bytes_skip_and_signatures_list_a_static_cache_by_type_name():
     node = tree.nodes[("root.forward",)]
     # a StaticCache is a leaf to the walk: passed by reference, not as data crossing the call
     assert node.signatures[0].inputs["past_key_values"].type == "transformers.cache_utils.StaticCache"
-    assert node.bytes_in == x.numel() * x.element_size()
+    assert node.total_bytes_in == x.numel() * x.element_size()
 
 
 def test_bytes_skip_and_signatures_list_a_dynamic_cache_by_type_name():
@@ -1277,7 +1277,7 @@ def test_bytes_skip_and_signatures_list_a_dynamic_cache_by_type_name():
 
     node = tree.nodes[("root.forward",)]
     assert node.signatures[0].inputs["past_key_values"].type == "transformers.cache_utils.DynamicCache"
-    assert node.bytes_in == x.numel() * x.element_size()
+    assert node.total_bytes_in == x.numel() * x.element_size()
 
 
 def test_signatures_list_a_dict_subclass_by_type_name_and_walk_a_dataclass_into_its_fields():
@@ -1302,7 +1302,7 @@ def test_signatures_list_a_dict_subclass_by_type_name_and_walk_a_dataclass_into_
 
     node = tree.nodes[("root.forward",)]
     # a dict subclass is an opaque leaf to the walk; a dataclass is walked into its fields
-    assert node.bytes_in == b.numel() * b.element_size() + c.numel() * c.element_size()
+    assert node.total_bytes_in == b.numel() * b.element_size() + c.numel() * c.element_size()
     inputs = node.signatures[0].inputs
     assert inputs["box"].type == f"{Box.__module__}.{Box.__qualname__}"
     assert [(name, _t(inputs[name]).shape) for name in ("pack.x", "pack.y")] == [("pack.x", (2,)), ("pack.y", (1,))]
@@ -1310,7 +1310,7 @@ def test_signatures_list_a_dict_subclass_by_type_name_and_walk_a_dataclass_into_
     outputs = node.signatures[0].outputs
     assert outputs is not None
     assert set(outputs) == {"output"}
-    assert node.bytes_out == a.numel() * a.element_size()
+    assert node.total_bytes_out == a.numel() * a.element_size()
 
 
 def test_bytes_and_shapes_count_a_tensor_inside_a_deque():
@@ -1327,7 +1327,7 @@ def test_bytes_and_shapes_count_a_tensor_inside_a_deque():
 
     node = tree.nodes[("root.forward",)]
     # pytree flattens a deque, so it is a container to bytes and shapes alike
-    assert node.bytes_in == (x.numel() + t.numel()) * x.element_size()
+    assert node.total_bytes_in == (x.numel() + t.numel()) * x.element_size()
     assert set(node.signatures[0].inputs) == {"x", "items[0]"}
 
 
@@ -1510,7 +1510,7 @@ def test_bytes_do_not_count_objects_or_primitives():
     tree = record(model, lambda: model(x, True, "note", object()), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == x.numel() * x.element_size()
+    assert node.total_bytes_in == x.numel() * x.element_size()
     assert set(node.signatures[0].inputs) == {"x", "obj"}
 
 
@@ -1527,7 +1527,7 @@ def test_signatures_walk_terminates_on_a_self_referential_list():
     tree = record(model, lambda: model(items), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
     assert list(node.signatures[0].inputs) == ["x[0]"]
 
 
@@ -1544,7 +1544,7 @@ def test_signatures_walk_terminates_on_a_self_referential_dict():
     tree = record(model, lambda: model(box), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
     assert list(node.signatures[0].inputs) == ["x['t']"]
 
 
@@ -1562,7 +1562,7 @@ def test_signatures_walk_terminates_on_an_indirect_cycle():
     tree = record(model, lambda: model(a), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
     assert list(node.signatures[0].inputs) == ["x['t']"]
 
 
@@ -1578,7 +1578,7 @@ def test_a_container_shared_between_arguments_is_walked_under_its_first_path():
     tree = record(model, lambda: model(shared, shared), iterations=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
     assert list(node.signatures[0].inputs) == ["x[0]", "x[1]"]
 
 
@@ -1836,7 +1836,7 @@ def test_recording_a_call_dispatches_no_torch_function_for_its_leaves(mocker):
     tree = record(model, lambda: model(t, items=[u, {"k": v}]), iterations=1)
 
     spy.assert_not_called()
-    assert tree.nodes[("root.forward",)].bytes_in > 0
+    assert tree.nodes[("root.forward",)].total_bytes_in > 0
 
 
 def test_calls_inside_a_compiled_call_are_marked_inside_compiled_part():

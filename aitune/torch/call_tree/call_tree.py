@@ -65,7 +65,7 @@ class CallTree:
         ...     owner_class="Vla",
         ...     method="forward",
         ...     calls=2,
-        ...     time_ms=30.0,
+        ...     total_time_ms=30.0,
         ... )
         >>> dit_module = nn.Linear(2, 2)
         >>> dit = CallNode(
@@ -75,13 +75,13 @@ class CallTree:
         ...     method="forward",
         ...     module=dit_module,
         ...     calls=10,
-        ...     time_ms=25.0,
+        ...     total_time_ms=25.0,
         ...     first_seen=1,
         ... )
         >>> outer.children.append(dit.path)
         >>> one_iteration = [outer.path] + [dit.path] * 5
         >>> tree = CallTree(nodes={n.path: n for n in (outer, dit)}, sequences=[one_iteration, one_iteration])
-        >>> [n.path_str for n in tree.roots], tree.total_ms
+        >>> [n.path_str for n in tree.roots], tree.total_time_ms
         (['forward'], 30.0)
         >>> [n.path_str for n in tree.descendants(outer)]
         ['forward > dit.forward']
@@ -107,9 +107,9 @@ class CallTree:
         return sorted((n for n in self.nodes.values() if len(n.path) == 1), key=lambda n: n.first_seen)
 
     @property
-    def total_ms(self) -> float:
+    def total_time_ms(self) -> float:
         """Time of all outermost calls over all recorded iterations; nodes with no timed calls do not count."""
-        return sum(n.time_ms for n in self.roots if n.time_ms is not None)
+        return sum(n.total_time_ms for n in self.roots if n.total_time_ms is not None)
 
     def descendants(self, node: CallNode) -> list[CallNode]:
         """All nodes below ``node``."""
@@ -157,8 +157,8 @@ class CallTree:
             >>> node = CallNode(path=("m.forward",), label="m.forward", owner_class="M", method="forward")
             >>> tree = CallTree(nodes={("m.forward",): node})
             >>> copied = tree.copy()
-            >>> copied.nodes[("m.forward",)].time_ms = 1.0
-            >>> tree.nodes[("m.forward",)].time_ms is None
+            >>> copied.nodes[("m.forward",)].total_time_ms = 1.0
+            >>> tree.nodes[("m.forward",)].total_time_ms is None
             True
         """
         return CallTree(
@@ -217,8 +217,8 @@ class CallTree:
     def to_dict(self) -> dict[str, Any]:
         """The call tree as plain JSON data, for tools that read it without torch or aitune.
 
-        Node values are totals over ``iterations``: divide by ``iterations`` for per iteration, by ``calls`` for
-        per call.
+        Node values are totals over all calls and ``iterations``: divide by ``calls`` for per call, by
+        ``iterations`` for per iteration.
 
         Returns:
             A dict of str, int, float, list and dict values with these keys:
@@ -226,10 +226,10 @@ class CallTree:
             - ``schema_version``: format version. Fields may be added under the same version, so readers should
               ignore keys they don't know; it changes when a field is removed, renamed or changes meaning.
             - ``iterations``: number of recorded iterations.
-            - ``total_ms``: time of the outermost calls over all iterations (``CallTree.total_ms``).
+            - ``total_time_ms``: time of the outermost calls over all iterations (``CallTree.total_time_ms``).
             - ``nodes``: one dict per node, in first-call order, with ``call_path`` (``CallNode.path_str``, which
-              identifies the node), ``owner_class``, ``calls``, ``time_ms`` (the total measured time of the
-              node's calls, null when never timed), ``bytes_in``, ``bytes_out`` and
+              identifies the node), ``owner_class``, ``calls``, ``total_time_ms`` (the total measured time of the
+              node's calls, null when never timed), ``total_bytes_in``, ``total_bytes_out`` and
               ``signatures``: the node's distinct ``CallSignature``s in first-seen order, each with its
               ``call_indices`` (the indices of the calls that had it) and ``inputs``/``outputs`` dicts of leaves
               by path — ``outputs`` is null for a signature whose calls raised. Every leaf has ``type``; tensors
@@ -244,7 +244,7 @@ class CallTree:
               ``numel() * element_size()`` summed over the parameters and buffers of the module and its submodules,
               also for ``meta`` tensors. Each tensor object counts once, so a weight tied by assigning the same
               ``Parameter`` to two submodules counts once; different tensor objects that share storage count
-              separately, as in ``CallNode.bytes_in``.
+              separately, as in ``CallNode.total_bytes_in``.
             - ``weights``: for each weight name, its recorded accesses as ``{"by": call_path, "kind": ...}``,
               ``kind`` being ``read``, ``device`` or ``move``.
 
@@ -296,16 +296,16 @@ class CallTree:
         return {
             "schema_version": SCHEMA_VERSION,
             "iterations": self.iterations,
-            "total_ms": self.total_ms,
+            "total_time_ms": self.total_time_ms,
             "nodes": [
                 {
                     "call_path": node.path_str,
                     "owner_class": node.owner_class,
                     "calls": node.calls,
                     "inside_compiled_part": node.inside_compiled_part,
-                    "time_ms": node.time_ms,
-                    "bytes_in": node.bytes_in,
-                    "bytes_out": node.bytes_out,
+                    "total_time_ms": node.total_time_ms,
+                    "total_bytes_in": node.total_bytes_in,
+                    "total_bytes_out": node.total_bytes_out,
                     "signatures": [
                         {
                             "call_indices": list(sig.call_indices),

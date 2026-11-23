@@ -83,16 +83,16 @@ def record(root, call, iterations: int = 2, root_label: str = "root") -> CallTre
 
 
 def make_tree(spec: dict, iterations: int = 1, modules: dict | None = None) -> CallTree:
-    """Build a call tree from ``{label: (calls, time_ms, children_spec)}``, nested; labels end in ``.method``.
+    """Build a call tree from ``{label: (calls, total_time_ms, children_spec)}``, nested; labels end in ``.method``.
 
-    ``time_ms`` is set to the spec's value.
+    ``total_time_ms`` is set to the spec's value.
     ``modules`` maps labels to the ``nn.Module`` the node belongs to.
     """
     modules = modules or {}
     tree = CallTree()
     order = [0]
 
-    def add(parent_path, label, calls, time_ms, children):
+    def add(parent_path, label, calls, total_time_ms, children):
         path = (*parent_path, label)
         method = label.rsplit(".", 1)[-1]
         module = modules.get(label)
@@ -103,7 +103,7 @@ def make_tree(spec: dict, iterations: int = 1, modules: dict | None = None) -> C
             method=method,
             module=module,
             calls=calls,
-            time_ms=time_ms,
+            total_time_ms=total_time_ms,
             first_seen=order[0],
         )
         order[0] += 1
