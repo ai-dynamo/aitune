@@ -55,7 +55,9 @@ Run `make lint` before you push. It runs these checks:
     types (no runtime change).
   - After you fix baselined errors, run `pyrefly check --prune-baseline`.
 - **SPDX header**: every new file must begin with this header, written as comments for its file
-  type. In Markdown, put it in the front matter, as in `AGENTS.md`. Files without comment syntax,
+  type. If the file starts with a shebang (`#!`) or a Dockerfile `# syntax=` line, put the header
+  after it, because that line must stay first. In Markdown, put the header in the front matter, as
+  in `AGENTS.md`. Files without comment syntax,
   such as JSON, do not need it. ruff (`CPY`) checks Python files. The "License headers" job in
   `.github/workflows/ci.yml` checks the other file types, for example shell, Markdown, YAML, TOML,
   HTML, CSS, and `Makefile`. `make lint` does not run that job.
