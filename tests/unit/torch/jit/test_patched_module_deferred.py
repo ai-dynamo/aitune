@@ -463,8 +463,9 @@ def test_jit_tuning_no_modules(mock_trt_backend, torch_device):
     config.dry_run = False
     config.detect_graph_breaks = False
     config.mode = JITMode.TUNE_DEFERRED
+    config.min_parameters = 1
 
-    # the following class has not parameters and should be skipped
+    # This module has no parameters and falls below the configured minimum.
     class IdentityModule(torch.nn.Module):
         def forward(self, x):
             return x

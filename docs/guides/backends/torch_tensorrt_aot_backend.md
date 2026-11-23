@@ -57,22 +57,22 @@ class TorchTensorRTAotBackendConfig(BackendConfig):
 Compilation settings:
 
 ```python
-from torch_tensorrt.dynamo import CompilationSettings
+from aitune.torch.backend import TorchTensorRTConfig
 
 config = TorchTensorRTAotBackendConfig(
-    compile_config=CompilationSettings(
+    compile_config=TorchTensorRTConfig(
         workspace_size=1 << 30,
     )
 )
 ```
 
-By default, the engine matches the model's loaded dtype. To request FP16 kernels via the legacy weak-typing path (deprecated in TensorRT 10.12), pair `enabled_precisions` with `use_explicit_typing=False`:
+By default, the engine matches the model's loaded dtype. Torch-TensorRT 2.15 rejects `enabled_precisions` and `use_explicit_typing`. To request FP16 kernels, use `enable_autocast=True` with `autocast_low_precision_type`:
 
 ```python
 config = TorchTensorRTAotBackendConfig(
-    compile_config=CompilationSettings(
-        enabled_precisions={torch.float16},
-        use_explicit_typing=False,
+    compile_config=TorchTensorRTConfig(
+        enable_autocast=True,
+        autocast_low_precision_type=torch.float16,
     )
 )
 ```

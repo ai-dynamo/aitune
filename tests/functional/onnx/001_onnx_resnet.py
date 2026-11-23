@@ -63,7 +63,7 @@ def test_onnx_resnet(tmp_path: Path, offload_device: str, nested: bool) -> None:
         target = torch.nn.ModuleDict({"child": source}) if nested else source
         offload(target, device=offload_device)
         assert source._session.get_providers() == ["CPUExecutionProvider"]
-        with pytest.raises(AssertionError, match="call offload"):
+        with pytest.raises(ValueError, match="call offload"):
             source(images=requests[:1])
 
         actual_cpu = source(images=images[:1])["logits"]
@@ -74,7 +74,7 @@ def test_onnx_resnet(tmp_path: Path, offload_device: str, nested: bool) -> None:
 
         offload(target, device="cuda")
         assert "CUDAExecutionProvider" in source._session.get_providers()
-        with pytest.raises(AssertionError, match="call offload"):
+        with pytest.raises(ValueError, match="call offload"):
             source(images=images[:1])
 
         torch.testing.assert_close(source(images=requests[:1])["logits"], expected[1], rtol=1e-2, atol=1e-2)

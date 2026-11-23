@@ -79,7 +79,10 @@ class ProjectedCacheModel(nn.Module):
             state["cache"] = state["cache"] + projected
         else:
             state["cache"].add_(projected)
-        return {"value": projected + state["cache"]}
+        value = projected + state["cache"]
+        if self.replace_cache:
+            return {"value": value, "state": state}
+        return {"value": value}
 
 
 class ImmutableContainerCacheModel(nn.Module):
@@ -161,7 +164,9 @@ def check_jit_mutations(case, device, *, replace_cache=False, model_factory=None
         (selected,) = cast(TunedModule, head._wrapper).backends.values()
         assert type(selected) is type(backend)
         for batch_size in batch_sizes:
-            check_mutable_input_state(model, case, device, model_factory, returns_state=False, batch_size=batch_size)
+            check_mutable_input_state(
+                model, case, device, model_factory, returns_state=replace_cache, batch_size=batch_size
+            )
 
 
 def mutable_input_pipeline(model, value: torch.Tensor):
@@ -239,7 +244,7 @@ def check_lazy_mutations(model, case, device, backend_type):
                 case.tolerance.assert_close(state[0], expected_state[0])
 
 
-@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs", "aot_tuning.models.mutable-inputs-inplace")
 @pytest.mark.parametrize("model_factory", [InplaceCacheModel, ProjectedCacheModel], ids=["buffer", "projected"])
 @with_backends(
     "base",
@@ -256,7 +261,7 @@ def test_static_inplace_mutable_input_lifecycle(case: BackendCase, device: torch
     check_mutable_input_lifecycle(case, device, tmp_path, model_factory, returns_state=False, batch_sizes=(2,))
 
 
-@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs", "aot_tuning.models.mutable-inputs-inplace")
 @pytest.mark.parametrize("model_factory", [InplaceCacheModel, ProjectedCacheModel], ids=["buffer", "projected"])
 @with_backends(
     "base",
@@ -276,14 +281,14 @@ def test_dynamic_inplace_mutable_input_lifecycle(case: BackendCase, device: torc
     check_mutable_input_lifecycle(case, device, tmp_path, model_factory, returns_state=False, batch_sizes=(1, 2))
 
 
-@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs", "aot_tuning.models.mutable-inputs-with-return-state")
 @with_backends("base")
 def test_replacing_mutable_input_lifecycle(case: BackendCase, device: torch.device, tmp_path):
     """Cache replacement and the returned container alias survive consecutive calls and save/load."""
     check_mutable_input_lifecycle(case, device, tmp_path, ReplacingCacheModel, returns_state=True)
 
 
-@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs", "aot_tuning.models.mutable-inputs-inplace")
 @pytest.mark.parametrize("operation", ["mul_", "index_copy_", "scatter_", "zero_"])
 @with_backends(
     "base",
@@ -302,7 +307,7 @@ def test_tensor_mutation_lifecycle(case: BackendCase, device: torch.device, tmp_
     )
 
 
-@pytest.mark.matrix("jit_tuning.models.mutable-inputs")
+@pytest.mark.matrix("jit_tuning.models.mutable-inputs", "jit_tuning.models.mutable-inputs-inplace")
 @pytest.mark.parametrize(
     "model_factory",
     [
@@ -330,7 +335,7 @@ def test_jit_dynamic_inplace_mutable_inputs(case: BackendCase, device: torch.dev
     check_jit_mutations(case, device, model_factory=model_factory, batch_sizes=(1, 2))
 
 
-@pytest.mark.matrix("jit_tuning.models.mutable-inputs")
+@pytest.mark.matrix("jit_tuning.models.mutable-inputs", "jit_tuning.models.mutable-inputs-inplace")
 @pytest.mark.parametrize(
     "model_factory",
     [
@@ -355,7 +360,7 @@ def test_jit_static_inplace_mutable_inputs(case: BackendCase, device: torch.devi
     check_jit_mutations(case, device, model_factory=model_factory, batch_sizes=(2,))
 
 
-@pytest.mark.matrix("jit_tuning.models.mutable-inputs")
+@pytest.mark.matrix("jit_tuning.models.mutable-inputs", "jit_tuning.models.mutable-inputs-with-return-state")
 @with_backends("base")
 def test_jit_replacing_mutable_inputs(case: BackendCase, device: torch.device):
     """Automatic JIT tuning preserves tensor replacement and independent callers' accumulated state."""
@@ -379,7 +384,7 @@ def test_cuda_graph_mutable_input_lifecycle(device: torch.device, tmp_path):
     assert backend._cuda_graphs.active.graph is not None
 
 
-@pytest.mark.matrix("aot_tuning.models.mutable-inputs")
+@pytest.mark.matrix("aot_tuning.models.mutable-inputs", "aot_tuning.models.mutable-inputs-inplace")
 @pytest.mark.parametrize("container", ["direct", "tuple"])
 @with_backends(
     "base",

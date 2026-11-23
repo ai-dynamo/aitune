@@ -73,7 +73,6 @@ class AttentionModule(torch.nn.Module):
         TorchTensorRTJitBackend(
             TorchTensorRTJitBackendConfig(
                 compile_config=TorchTensorRTConfig(
-                    enabled_precisions={torch.float16},
                     # SageAttention v1 runs through Triton, leaving only the projection eligible for TensorRT.
                     # Lower the default threshold so this single-operation partition is compiled instead of skipped.
                     min_block_size=1,
@@ -179,7 +178,6 @@ if __name__ == "__main__":
     tensorrt_jit = TorchTensorRTJitBackend(
         TorchTensorRTJitBackendConfig(
             compile_config=TorchTensorRTConfig(
-                enabled_precisions={torch.float16},
                 # SageAttention v1 runs through Triton, leaving only the projection eligible for TensorRT.
                 # Lower the default threshold so this single-operation partition is compiled instead of skipped.
                 min_block_size=1,

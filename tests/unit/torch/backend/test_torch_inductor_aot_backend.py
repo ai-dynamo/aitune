@@ -276,7 +276,7 @@ def test_unsupported_pt2_call_does_not_fail_backend_build(mocker, tmp_path):
         backend.artifact()
 
 
-def test_call_contract_capture_exception_does_not_fail_backend_build(mocker, tmp_path):
+def test_call_effects_capture_exception_does_not_fail_backend_build(mocker, tmp_path):
     class CallContractCaptureError(Exception):
         pass
 

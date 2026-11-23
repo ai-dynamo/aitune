@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import torch
 import torch.nn as nn
-from transformers import StaticCache
+from transformers import StaticCache, StaticLayer
 from transformers.models.llama import LlamaConfig
 
 from aitune.torch import Module, OneBackendStrategy, load, save, tune
@@ -70,6 +70,9 @@ def _validate_cache_updates(module: Module, device: torch.device) -> None:
         position = torch.tensor([cache_position], device=device)
         full_cache_copies = []
         runtime_layer = tuned_cache.layers[0]
+        reference_layer = eager_cache.layers[0]
+        assert isinstance(runtime_layer, StaticLayer)
+        assert isinstance(reference_layer, StaticLayer)
         original_copy = torch.Tensor.copy_
 
         def track_copy(
@@ -94,8 +97,11 @@ def _validate_cache_updates(module: Module, device: torch.device) -> None:
         torch.testing.assert_close(actual["values"], expected["values"])
         # Updating one cache must not modify state retained by another caller.
         for actual_cache, expected_cache in zip(tuned_caches, eager_caches, strict=True):
-            torch.testing.assert_close(actual_cache.layers[0].keys, expected_cache.layers[0].keys)
-            torch.testing.assert_close(actual_cache.layers[0].values, expected_cache.layers[0].values)
+            actual_layer, expected_layer = actual_cache.layers[0], expected_cache.layers[0]
+            assert isinstance(actual_layer, StaticLayer)
+            assert isinstance(expected_layer, StaticLayer)
+            torch.testing.assert_close(actual_layer.keys, expected_layer.keys)
+            torch.testing.assert_close(actual_layer.values, expected_layer.values)
         assert actual["past_key_values"] is tuned_cache
         assert full_cache_copies == [], (
             f"A single-position decode update copied complete caller-owned KV-cache tensors: {full_cache_copies}."

@@ -104,7 +104,7 @@ For a complete overview of the tuning process, see [Tuning Workflow](tuning_work
 ## Mutable Inputs and the Forward Contract
 
 Modules may update inputs during inference, such as writing tensors into a cache and returning that same cache.
-Each `GraphSpec` stores a `ForwardContract` that describes the recorded output structure, input leaf changes,
+Each `GraphSpec` stores a `ForwardEffectsSpec` that describes the recorded output structure, input leaf changes,
 and outputs that are the same objects as inputs. Exporters use a flat tensor interface; backends use the contract
 to restore the structured output and apply recorded input changes.
 

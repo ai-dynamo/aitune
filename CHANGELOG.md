@@ -10,9 +10,11 @@ title: "Changelog"
 - feat: export nested Python inputs and structured outputs through a shared flat tensor interface for Torch Export and ONNX
 - feat: restore recorded input mutations and output-to-input object identity across TorchInductor AOT, Torch-TensorRT AOT, ONNX Runtime, and TensorRT execution, including checkpoint save/load
 - feat: restore Transformers 4.x and 5.x static-cache tensors and initialization metadata, including nested static encoder-decoder caches and their cross-attention readiness flags; dynamic caches remain unsupported
+- fix: reuse Voxtral Realtime decode graphs across `generate()` calls by tracking the tensors in the convolution padding cache
+- fix: support Torch-TensorRT 2.15, whose `CompilationSettings` rejects `enabled_precisions` and `use_explicit_typing`; remove both settings from the Torch-TensorRT backend configs
+- fix: preserve tensor batches returned by custom data collators as one positional input during tuning
 - feat: record a model's call tree with `ait.inspect(..., call_tree=True)`: module `forward` calls and model-defined methods, keyed by their chain of callers, with call counts, times, tensor bytes in and out (`bytes_in`, `bytes_out`) and the code that moves modules with `.to()`, exported as a JSON-serializable dict with `CallTree.to_dict()`
 - feat: keep weights that code outside a tuned module still uses on the device when tuning offloads the module, for modules wrapped from `ait.inspect(..., call_tree=True)`; `aitune.torch.call_tree.shared_weights_of(call_tree, module)` lists them with each read, device lookup or move, and the kept set persists across `ait.save`/`ait.load`
-- fix: preserve tensor batches returned by custom data collators as one positional input during tuning
 - fix: `inspect(..., call_tree=True)` on a wrapped or tuned model records the wrapped module's `forward` instead of the wrapper's internal methods
 - fix: `wrap` names each wrapped module by its object path (`blocks.0.attn` instead of `attn`), so modules with the same short name no longer share a registry entry and a cache directory, where only one of them was tuned; the name matches the module's call-tree nodes, and nested wrapped modules rebuild their cache once
 - fix: `inspect()` works on models with parts compiled by `torch.compile` or `nn.Module.compile()`; it counts a compiled part as one call and no longer wraps the calls inside it, where Dynamo cannot trace its timing

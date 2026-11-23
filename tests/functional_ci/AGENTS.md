@@ -18,7 +18,9 @@ The suite fails (does not skip) when CUDA is not available.
 
 ## Rules
 
-- Use only plain `torch` toy models: no diffusers, Hugging Face, or other model libraries, and no weight downloads.
+- Use plain `torch` toy models with no weight downloads. Integration tests may use real library state objects,
+  such as Transformers `StaticCache`, with a locally constructed configuration and a tiny PyTorch module.
+  Keep full third-party models and pretrained weights in the separate functional or example workflows.
 - Keep toys realistic. If a toy finds a backend gap that also affects real models, fix AITune, not the toy.
 - Give each test a `@pytest.mark.matrix(...)` marker for the feature-matrix cells that it proves.
 
@@ -56,7 +58,8 @@ their own strategies.
 | `artifacts.py` | Runs exported artifacts (`pt2`, `tensorrt_plan`, `onnx`) in their native runtime, without AITune |
 | `conftest.py` | `device` fixture, cleanup after each test, `matrix` marker and JSON writer |
 | `test_wrap_shared_weights.py` | `wrap` on modules from `inspect(..., call_tree=True)` on toys from `tests/toy_models/call_tree_models.py` with shared weights: without the call tree they fail after offloading, with it they match eager (`export` backends, which build ahead of time and offload) |
-| `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py`, `test_multiple_graphs.py`, `test_pipelines.py` |
+| `test_transformers_static_cache.py` | Real Transformers `StaticCache` with lazy and initialized state on every backend: AOT tuning and checkpoint reload, plus JIT tuning and consecutive decode updates; no model downloads |
+| `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py`, `test_multiple_graphs.py`, `test_pipelines.py`, `test_forward_hooks.py` |
 | other `test_*.py` | One file per feature area: lifecycle, shapes, topology, JIT, strategies, precision, ONNX input, pipelines, kernel selector, inspect call tree (`test_inspect_call_tree.py`, no backend) |
 
 ## Backends
@@ -77,7 +80,6 @@ The backend id is the pytest parametrize id and the feature-matrix column.
 | `torch-tensorrt-aot` | `TorchTensorRTAotBackend` | `TENSORRT_FP32` | - |
 | `tensorrt` | `TensorRTBackend` | `TENSORRT_FP32` | `export` (`tensorrt_plan`), `onnx_input` |
 | `onnxruntime-cuda` | `ONNXRuntimeBackend` (CUDA EP) | `TENSORRT_FP32` | `export` (`onnx`), `onnx_input` |
-| `onnxruntime-tensorrt` | `ONNXRuntimeBackend` (TensorRT EP) | `TENSORRT_FP32` | - |
 | `torchao-int8wo` | `TorchAOBackend` (`int8wo`) | `rtol=atol=5e-2` | - |
 | `inductor-jit` | `TorchInductorJitBackend` | default | - |
 | `torch-tensorrt-jit` | `TorchTensorRTJitBackend` | `TENSORRT_FP32` | - |
@@ -119,12 +121,13 @@ internal bug IDs.
 
 ## Feature matrix and IDs
 
-A cell ID has the form `<table>.<row>/<column>`. `@pytest.mark.matrix(*templates)` lists the cells that a test
-proves. `conftest.py` formats each template with `str.format`:
+A cell ID has the form `<table>.<row>` or `<table>.<row>/<column>`.
+`@pytest.mark.matrix(*templates)` lists the cells that a test proves.
+`conftest.py` formats each template with `str.format`:
 
 - `{backend}` is the backend id of the `case` param.
 - Other names are pytest params, for example `{case_id}`, `{strategy_id}`, `{mode.value}`.
-- A template without `/` gets `/{backend}` added, so it needs a `case` param from `with_backends`.
+- A template without `/` gets `/{backend}` added only when `case` resolves to a backend.
 
 Use-case cells prefix the table with the tuning type: `<tuning>.<table>.<row>/<backend>`.
 
@@ -134,12 +137,12 @@ formatting is checked.
 
 | Table | Row examples | Column |
 | --- | --- | --- |
-| `aot_tuning.models`, `jit_tuning.models` | `tensor-inputs`, `static-shapes`, `single-graph`, `multiple-graphs`, `graph-breaks`, `pipelines`, `dynamic-batch-recorded`, `dynamic-batch-user`, `dynamic-non-batch`, `non-tensor-inputs`, `nested-inputs`, `structured-outputs`, `shared-weights-<toy>` | backend id or `kernel-selector` |
+| `aot_tuning.models`, `jit_tuning.models` | `tensor-inputs`, `static-shapes`, `single-graph`, `multiple-graphs`, `graph-breaks`, `pipelines`, `forward-hooks`, `dynamic-batch-recorded`, `dynamic-batch-user`, `dynamic-non-batch`, `non-tensor-inputs`, `nested-inputs`, `structured-outputs`, `shared-weights-<toy>` | backend id or `kernel-selector` |
 | `modes` | `aot-tune`, `aot-save-load`, `aot-inspect-wrap`, `aot-export`, `aot-existing-onnx`, `jit-tune_eager`, `jit-tune_deferred`, `jit-inspect` | backend id or `kernel-selector` |
 | `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run` | `aot-tune`, `jit-tune`, `selection-checked` |
 | `topology` | backend id or `kernel-selector` | `single-gpu` |
 | `other` | `autocast-fp16`, `onnx-int8`, `modelopt-int8`, `modelopt-fp8`, `modelopt-nvfp4`, `cuda-graphs-fp32` | `functional-ci` |
-| `inspecting` | `call-tree`, `call-tree-modules-unchanged` | `aot` (later `jit`) |
+| `inspecting` | `call-tree`, `call-tree-signatures` | `aot` (later `jit`) |
 
 Examples:
 

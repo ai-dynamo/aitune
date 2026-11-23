@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        nvcr: ["25.08", "25.10", "26.01", "26.03", "26.05", "26.06", "26.08"]
+        nvcr: ["25.08", "25.10", "26.01", "26.03", "26.05", "26.06", "26.08", "26.10"]
         include:
           - nvcr: "25.08"
             extra_packages: "numpy<2.0 pyarrow<26"

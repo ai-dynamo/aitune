@@ -41,7 +41,7 @@ from aitune.torch.checkpoint.artifact import ArtifactPath
 from aitune.torch.config import config as global_config
 from aitune.torch.distributed import distributed_output_path
 from aitune.torch.libs.exporting import ONNXExporter
-from aitune.torch.module.forward_contract import TensorMutationPolicy
+from aitune.torch.module.forward_effects_spec import TensorMutationPolicy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
@@ -999,7 +999,7 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
         )
         mutation_policies = {
             mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
-            for mutation in graph_spec.forward_contract.input_mutations
+            for mutation in graph_spec.forward_effects_spec.input_mutations
             if mutation.output_index is not None
         }
         result = graph_spec.restore_outputs(

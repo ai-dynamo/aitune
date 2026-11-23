@@ -6,7 +6,7 @@ from pathlib import Path
 
 import torch
 
-from aitune.torch.module.forward_contract import ForwardContract
+from aitune.torch.module.forward_effects_spec import ForwardEffectsSpec
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -81,7 +81,7 @@ class ToyTorchModel(torch.nn.Module):
                     input_spec=input_metadata,
                     output_spec=output_metadata,
                     forward_signature=forward_signature,
-                    forward_contract=ForwardContract(output_metadata.without_tensors(_output)),
+                    forward_effects_spec=ForwardEffectsSpec(output_metadata.without_tensors(_output)),
                 )
             else:
                 graph_spec.update_shapes_seen(input_metadata, output_metadata)
@@ -145,7 +145,7 @@ class ToyTorchConditionalModel(torch.nn.Module):
                     input_spec=input_metadata,
                     output_spec=output_metadata,
                     forward_signature=forward_signature,
-                    forward_contract=ForwardContract(output_metadata.without_tensors(_output)),
+                    forward_effects_spec=ForwardEffectsSpec(output_metadata.without_tensors(_output)),
                 )
             else:
                 graph_spec.update_shapes_seen(input_metadata, output_metadata)

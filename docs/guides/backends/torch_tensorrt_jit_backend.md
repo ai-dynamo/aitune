@@ -53,22 +53,22 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
 TensorRT compilation settings from torch_tensorrt:
 
 ```python
-from torch_tensorrt.dynamo import CompilationSettings
+from aitune.torch.backend import TorchTensorRTConfig
 
 config = TorchTensorRTJitBackendConfig(
-    compile_config=CompilationSettings(
+    compile_config=TorchTensorRTConfig(
         workspace_size=1 << 30,  # 1GB
     )
 )
 ```
 
-By default, the engine matches the model's loaded dtype. To request FP16 kernels via the legacy weak-typing path (deprecated in TensorRT 10.12), pair `enabled_precisions` with `use_explicit_typing=False`:
+By default, the engine matches the model's loaded dtype. Torch-TensorRT 2.15 rejects `enabled_precisions` and `use_explicit_typing`. To request FP16 kernels, use `enable_autocast=True` with `autocast_low_precision_type`:
 
 ```python
 config = TorchTensorRTJitBackendConfig(
-    compile_config=CompilationSettings(
-        enabled_precisions={torch.float16},
-        use_explicit_typing=False,
+    compile_config=TorchTensorRTConfig(
+        enable_autocast=True,
+        autocast_low_precision_type=torch.float16,
     )
 )
 ```
@@ -76,8 +76,6 @@ config = TorchTensorRTJitBackendConfig(
 **Common options**:
 
 - `workspace_size`: Maximum workspace memory in bytes
-- `enabled_precisions`: Kernel dtype precisions TRT may pick (requires `use_explicit_typing=False`; legacy weak typing)
-- `use_explicit_typing`: Respect graph dtypes (default `True`); set `False` to enable legacy weak typing
 
 ### fullgraph
 

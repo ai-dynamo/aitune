@@ -23,7 +23,6 @@ class ProfilingStopStrategy(ABC):
         Returns:
             True if the profiling should be stopped, False otherwise.
         """
-        pass
 
 
 @dataclass

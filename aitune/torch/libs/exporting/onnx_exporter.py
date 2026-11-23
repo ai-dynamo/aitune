@@ -35,7 +35,7 @@ class ONNXExporter:
     Export returns the artifact path after ONNX structural validation, which does not establish numerical
     equivalence with the original module. An incomplete artifact is removed on failure when possible.
 
-    User tensor outputs precede internal mutation outputs in the graph's forward-contract order.
+    User tensor outputs precede internal mutation outputs in the graph's forward effects specification order.
     For ``cache[0] = x + 1; return x * 2``, the two outputs carry the user result and updated cache.
     Runtime restoration consumes the second internally. Legacy tracing annotates varying state axes
     from post-call metadata, since an update can create a tensor absent from the original inputs.
@@ -117,7 +117,8 @@ class ONNXExporter:
             dynamic_shapes=dynamic_shapes,
             verbose=verbose,
         )
-        assert onnx_program is not None
+        if onnx_program is None:
+            raise RuntimeError("Dynamo ONNX export did not return an ONNX program; cannot save the artifact.")
         # onnxscript 0.5.x optimizer can emit unbind's Split after its consumers; re-sort before saving.
         TopologicalSortPass()(onnx_program.model)
         onnx_program.save(self.output_path, external_data=True)

@@ -414,7 +414,7 @@ def test_none_values_are_handled_correctly():
     key = config.key()
 
     # Should not include None values unless they're in default describe fields
-    assert "enabled_precisions=None" not in key
+    assert "cache_dir=None" not in key
 
 
 def test_dict_values_are_handled_correctly():

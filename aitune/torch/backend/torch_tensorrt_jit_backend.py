@@ -14,13 +14,13 @@ from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
 from aitune.torch.distributed import distributed_output_path
-from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
+from aitune.torch.utils.torch_compile import resolve_compile_dynamic
 
 try:
     import torch_tensorrt
@@ -33,8 +33,6 @@ except (ImportError, RuntimeError, OSError):
         """Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 
         Attributes:
-            enabled_precisions: Enabled TensorRT precisions. Defaults to None.
-            use_explicit_typing: Whether to use explicit typing. Defaults to True.
             workspace_size: TensorRT workspace size. Defaults to 0.
             min_block_size: Minimum number of operators in a TensorRT block. Defaults to 5.
             disable_tf32: Whether to disable TF32 in TensorRT layers. Defaults to False.
@@ -42,8 +40,6 @@ except (ImportError, RuntimeError, OSError):
                 Defaults to False.
         """
 
-        enabled_precisions: set[torch.dtype] | None = None
-        use_explicit_typing: bool = True
         workspace_size: int = 0
         min_block_size: int = 5
         disable_tf32: bool = False
@@ -86,7 +82,6 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
             self.compile_config,
             other.compile_config,
             exclude=["device"],
-            include=["enabled_precisions"],
         )
         parts = [f"compile_config=TorchTensorRTConfig({','.join(compile_config_parts)})"]
 

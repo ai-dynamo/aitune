@@ -36,11 +36,11 @@ except ImportError:
 
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
-from aitune.torch.libs.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device, offload
+from aitune.torch.utils.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
 
@@ -325,7 +325,8 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         offload(self._orig_module, device="cpu")
 
         quantization_config = self._config.quantization_config
-        assert quantization_config is not None, "quantization_config is set in TorchAOBackendConfig.__post_init__"
+        if quantization_config is None:
+            raise RuntimeError("quantization_config must be set by TorchAOBackendConfig.__post_init__")
         quantize_(model, config=quantization_config, device=self.device, filter_fn=self._config.filter_fn)
         self._quant_module = torch.compile(
             model=model,

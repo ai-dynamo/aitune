@@ -186,16 +186,14 @@ class SampleMetadata:
             return dict(self._tensor_data) == dict(__value._tensor_data) and dict(self._other_data) == dict(
                 __value._other_data
             )
-        else:
-            # Tensor structure may change as caches initialize. Strict Python values still select distinct graphs.
-            return dict(self._other_data) == dict(__value._other_data)
+        # Tensor structure may change as caches initialize. Strict Python values still select distinct graphs.
+        return dict(self._other_data) == dict(__value._other_data)
 
     def __hash__(self) -> int:
         """Compute hash of sample metadata."""
         if self._llm_phase is None:
             return hash(frozenset(self._tensor_data)) ^ self._hash_other_data()
-        else:
-            return hash(self._llm_phase) ^ self._hash_other_data()
+        return hash(self._llm_phase) ^ self._hash_other_data()
 
     def _hash_other_data(self) -> int:
         """Compute an order-independent hash for non-tensor data."""

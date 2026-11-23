@@ -71,7 +71,9 @@ class _ReadCache(nn.Module):
 def test_initialized_static_cache_preserves_caller_owned_output_identity():
     module = _UpdateCache().eval()
     recorded_cache = _make_initialized_cache()
-    recorded_keys = recorded_cache.layers[0].keys
+    recorded_layer = recorded_cache.layers[0]
+    assert isinstance(recorded_layer, StaticLayer)
+    recorded_keys = recorded_layer.keys
     assert recorded_keys is not None
     value = torch.ones_like(recorded_keys)
     sample = ((value, recorded_cache), {})
@@ -85,7 +87,9 @@ def test_initialized_static_cache_preserves_caller_owned_output_identity():
 
     assert output["cache"] is runtime_cache
     torch.testing.assert_close(output["value"], value[..., :1, :])
-    torch.testing.assert_close(runtime_cache.layers[0].keys, value)
+    runtime_layer = runtime_cache.layers[0]
+    assert isinstance(runtime_layer, StaticLayer)
+    torch.testing.assert_close(runtime_layer.keys, value)
 
 
 def test_lazy_static_cache_initialization_survives_the_tensor_export_boundary():
@@ -107,14 +111,16 @@ def test_lazy_static_cache_initialization_survives_the_tensor_export_boundary():
     torch.testing.assert_close(runtime_layer.keys[..., :1, :], key)
     assert runtime_layer.is_initialized
     assert runtime_layer.device == key.device
-    assert runtime_layer.dtype == key.dtype
+    assert runtime_layer.keys.dtype == key.dtype
 
     reference_cache = _make_cache()
     reference_cache.update(key, key, 0, {"cache_position": torch.tensor([0])})
     reference_layer = reference_cache.layers[0]
+    assert isinstance(reference_layer, StaticLayer)
     # Compare the fields supplied by this Transformers version, requiring each on the restored layer.
     # 4.x uses head_dim; 5.x splits key/value dimensions and newer releases rename max_batch_size.
-    for field in ("max_batch_size", "batch_size", "num_heads", "head_dim", "k_head_dim", "v_head_dim"):
+    # Recent 5.x releases keep dtype on the tensors instead of the layer.
+    for field in ("dtype", "max_batch_size", "batch_size", "num_heads", "head_dim", "k_head_dim", "v_head_dim"):
         if hasattr(reference_layer, field):
             assert getattr(runtime_layer, field) == getattr(reference_layer, field), field
     assert runtime_layer.values is not None

@@ -52,34 +52,33 @@ def _strategy(target, max_batch_size, batch_sizes):
             backends=backends,
             profiling_config=ProfilingConfig(batch_sizes=batch_sizes) if max_batch_size is not None else None,
         ).enable_find_max_batch_size(max_batch_size is None)
-    else:
-        backends = [
-            TensorRTBackend(
-                config=TensorRTBackendConfig(
-                    quantization_config=ONNXQuantizationConfig(
-                        precision="int8",
-                        calibration_method="max",
-                    ),
+    backends = [
+        TensorRTBackend(
+            config=TensorRTBackendConfig(
+                quantization_config=ONNXQuantizationConfig(
+                    precision="int8",
+                    calibration_method="max",
                 ),
             ),
-            TensorRTBackend(
-                config=TensorRTBackendConfig(
-                    quantization_config=ONNXQuantizationConfig(
-                        precision="int8",
-                        calibration_method="max",
-                    ),
-                    use_dynamo=False,
+        ),
+        TensorRTBackend(
+            config=TensorRTBackendConfig(
+                quantization_config=ONNXQuantizationConfig(
+                    precision="int8",
+                    calibration_method="max",
                 ),
+                use_dynamo=False,
             ),
-            TensorRTBackend(config=TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="fp16"))),
-            TensorRTBackend(
-                config=TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="fp16"), use_dynamo=False)
-            ),
-            TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo")),
-            TorchInductorJitBackend(
-                config=TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)
-            ),
-        ]
+        ),
+        TensorRTBackend(config=TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="fp16"))),
+        TensorRTBackend(
+            config=TensorRTBackendConfig(quantization_config=ONNXAutoCastConfig(precision="fp16"), use_dynamo=False)
+        ),
+        TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo")),
+        TorchInductorJitBackend(
+            config=TorchInductorJitBackendConfig(autocast_enabled=True, autocast_dtype=torch.float16)
+        ),
+    ]
     # TODO: Replace target-specific lists when AITune can select backends by deployment capability.
     return MaxThroughputStrategy(backends=backends).enable_find_max_batch_size(False)
 

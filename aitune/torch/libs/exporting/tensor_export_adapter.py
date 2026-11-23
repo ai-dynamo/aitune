@@ -19,7 +19,7 @@ class TensorExportAdapter(nn.Module):
     Flattening is the explicit interface shared by export and backend execution. It separates
     tensor computation from Python containers, whose structure and identity must be restored outside
     the compiled runner. User tensor outputs come first, followed by changed input tensors that the
-    forward contract needs for state restoration and that are absent from the user outputs.
+    forward effects specification needs for state restoration and that are absent from the user outputs.
 
     Non-tensor arguments come from the recorded sample. Compatible inputs use a prepared PyTree
     recipe to keep reconstruction simple for strict Torch Export. Otherwise, recorded locators

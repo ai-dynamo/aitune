@@ -69,6 +69,24 @@ except ImportError:
     pass
 
 try:
+    from transformers.models.voxtral_realtime.modeling_voxtral_realtime import (
+        VoxtralRealtimeConv1dCacheLayer,
+        VoxtralRealtimeConv1dPaddingCache,
+    )
+
+    from aitune.torch.module.locator import Locator
+
+    # Voxtral Realtime passes a convolution padding cache between generation steps and updates its tensors in place.
+    # The cache does not define equality, so as an opaque input it would be compared by object identity: each
+    # generate() call would record a separate graph, and a deep copy of a recorded sample would never match the
+    # recorded post-call inputs. Track the cache tensors instead, as for static caches.
+    Locator.register_user_type(VoxtralRealtimeConv1dPaddingCache, only_tensors=True)
+    Locator.register_user_type(VoxtralRealtimeConv1dCacheLayer, only_tensors=True)
+except ImportError:
+    # Voxtral Realtime cache support is optional and depends on the Transformers version.
+    pass
+
+try:
     from transformers.modeling_utils import ModuleUtilsMixin
 
     from aitune.torch.integrations.device import patch_device_property
