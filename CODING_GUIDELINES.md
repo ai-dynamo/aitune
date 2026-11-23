@@ -509,7 +509,7 @@ model_copy = deepcopy(module)
 
 ```python
 # ModelOpt autocast accepts calibration data with several samples only from version 0.43.0.
-# Remove this check when AITune requires ModelOpt 0.43.0 or later.
+# Remove the version check when AITune requires ModelOpt 0.43.0 or later.
 # https://github.com/NVIDIA/Model-Optimizer/pull/815
-use_calibration = Version(modelopt.__version__) > Version("0.42.0") and samples is not None
+use_calibration = Version(modelopt.__version__) >= Version("0.43.0") and samples is not None
 ```
