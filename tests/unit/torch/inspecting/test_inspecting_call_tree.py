@@ -89,7 +89,7 @@ def test_call_tree_adds_one_broadcast(mocker, dataset):
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
 
     # warmup, per-module and structure passes run number_of_iterations; the timing pass one inference per planned depth
-    assert barrier.call_count == 2 * (2 + 3 + 3 + sum(map(len, TimingRecorder(_tree(info)).depths_per_iteration())))
+    assert barrier.call_count == 2 * (2 + 3 + 3 + sum(map(len, TimingRecorder(_tree(info)).depths_per_sample())))
     assert broadcast.call_count == 2
     iterations, records = broadcast.call_args_list[1].args[0]
     assert iterations == 3
@@ -186,7 +186,7 @@ def test_every_timeable_node_is_timed(mocker, dataset):
 
 
 def test_the_timing_pass_runs_each_sample_once_per_its_depths(mocker, dataset):
-    """``begin_iteration`` is called once per depth of ``TimingRecorder.depths_per_iteration()``, in order."""
+    """``begin_iteration`` is called once per depth of ``TimingRecorder.depths_per_sample()``, in order."""
     model, fn = _vla()
     begin = mocker.spy(TimingRecorder, "begin_iteration")
 
@@ -194,7 +194,7 @@ def test_the_timing_pass_runs_each_sample_once_per_its_depths(mocker, dataset):
 
     tree = _tree(info)
     assert [c.args[1] for c in begin.call_args_list] == list(
-        itertools.chain.from_iterable(TimingRecorder(tree).depths_per_iteration())
+        itertools.chain.from_iterable(TimingRecorder(tree).depths_per_sample())
     )
 
 
@@ -204,7 +204,7 @@ def test_ranks_verify_the_same_timing_depths(mocker, dataset):
 
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
-    verify.assert_called_once_with(TimingRecorder(_tree(info)).depths_per_iteration(), "call tree timing depths")
+    verify.assert_called_once_with(TimingRecorder(_tree(info)).depths_per_sample(), "call tree timing depths")
 
 
 def test_calls_that_only_some_samples_make_are_timed(mocker):
@@ -247,7 +247,7 @@ def test_calls_that_only_some_samples_make_are_timed(mocker):
     assert branch in tree.sequences[0] and branch in tree.sequences[2]
     assert branch not in tree.sequences[1] and branch not in tree.sequences[3]
     # only the branch reaches depth 3, so only samples 0 and 2 get an iteration at that depth
-    assert TimingRecorder(tree).depths_per_iteration() == [[1, 2, 3], [1, 2], [1, 2, 3], [1, 2]]
+    assert TimingRecorder(tree).depths_per_sample() == [[1, 2, 3], [1, 2], [1, 2, 3], [1, 2]]
     assert tree.nodes[branch].time_ms is not None
     assert tree.nodes[deep].time_ms is not None
     warning.assert_not_called()
@@ -649,7 +649,7 @@ def test_timing_pass_ends_every_run(mocker, dataset):
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
 
     # once per timing iteration, plus one when the timing pass ends
-    assert spy.call_count == sum(map(len, TimingRecorder(_tree(info)).depths_per_iteration())) + 1
+    assert spy.call_count == sum(map(len, TimingRecorder(_tree(info)).depths_per_sample())) + 1
 
 
 def test_default_inspect_creates_no_recorder(mocker, dataset):

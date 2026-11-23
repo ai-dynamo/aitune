@@ -58,7 +58,7 @@ def inspect(
             ``max_depth=8``. Details are in ``docs/guides/aot_inspect.md``.
         max_timing_depth: Deepest call-path depth the timing pass times, with the root call at depth 1; None times
             every depth. Deeper nodes are still recorded but keep ``time_ms`` None. Limits the timing pass to at
-            most ``number_of_iterations`` times ``max_timing_depth`` iterations.
+            most ``max_timing_depth`` iterations per sample.
 
     Returns:
         InspectedModulesInfo object.
@@ -182,19 +182,19 @@ def _time_call_tree(
     number_of_iterations: int,
 ) -> None:
     """Time the tree's nodes in place, replaying each sample once per depth its calls reach."""
-    depths_per_iteration = timer.depths_per_iteration()
+    depths_per_sample = timer.depths_per_sample()
     # Ranks must run the same number of inferences or the barriers in _run_inference deadlock.
-    coordinator.verify_equal(depths_per_iteration, "call tree timing depths")
+    coordinator.verify_equal(depths_per_sample, "call tree timing depths")
     logger.info(
         "Timing the call tree: %d samples, %d call-path depths, %d iterations "
         "(each sample once per depth its calls reach).",
         len(timer.tree.sequences),
-        len(set(itertools.chain.from_iterable(depths_per_iteration))),
-        sum(map(len, depths_per_iteration)),
+        len(set(itertools.chain.from_iterable(depths_per_sample))),
+        sum(map(len, depths_per_sample)),
     )
     samples = samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations)
     with _pass_on_all_ranks(timer, "call tree timing pass"):
-        for depths, (_, args, kwargs) in zip(depths_per_iteration, samples, strict=True):
+        for depths, (_, args, kwargs) in zip(depths_per_sample, samples, strict=True):
             for depth in depths:
                 timer.begin_iteration(depth)
                 _run_inference(inference_function, args, kwargs)

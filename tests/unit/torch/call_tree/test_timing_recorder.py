@@ -34,20 +34,20 @@ def test_every_sample_replays_once_per_depth_its_calls_reach():
     paths: list[tuple[str, ...]] = [("a",), ("a", "b"), ("a", "b", "c")]
     tree = _tree_of([paths for _ in range(2)])
 
-    assert TimingRecorder(tree).depths_per_iteration() == [[1, 2, 3], [1, 2, 3]]
+    assert TimingRecorder(tree).depths_per_sample() == [[1, 2, 3], [1, 2, 3]]
 
 
 def test_a_depth_only_some_samples_reach_is_planned_only_for_them():
     root, child = ("a",), ("a", "b")
     tree = _tree_of([[root, child], [root]])
 
-    assert TimingRecorder(tree).depths_per_iteration() == [[1, 2], [1]]
+    assert TimingRecorder(tree).depths_per_sample() == [[1, 2], [1]]
 
 
-def test_a_sample_without_calls_gets_no_runs():
+def test_a_sample_without_calls_gets_no_replays():
     tree = _tree_of([[("a",)], []])
 
-    assert TimingRecorder(tree).depths_per_iteration() == [[1], []]
+    assert TimingRecorder(tree).depths_per_sample() == [[1], []]
 
 
 def test_calls_inside_a_compiled_part_are_not_planned():
@@ -56,29 +56,29 @@ def test_calls_inside_a_compiled_part_are_not_planned():
     tree = _tree_of([[root, inner]] * 2)
     tree.nodes[inner].inside_compiled_part = True
 
-    assert TimingRecorder(tree).depths_per_iteration() == [[1], [1]]
+    assert TimingRecorder(tree).depths_per_sample() == [[1], [1]]
 
 
-def test_a_sample_with_only_inside_compiled_calls_gets_no_runs():
+def test_a_sample_with_only_inside_compiled_calls_gets_no_replays():
     root, inner = ("a",), ("a", "b")
     tree = _tree_of([[root], [inner]])
     tree.nodes[inner].inside_compiled_part = True
 
-    assert TimingRecorder(tree).depths_per_iteration() == [[1], []]
+    assert TimingRecorder(tree).depths_per_sample() == [[1], []]
 
 
 def test_max_depth_limits_the_plan_to_shallower_depths():
     paths: list[tuple[str, ...]] = [("a",), ("a", "b"), ("a", "b", "c")]
     tree = _tree_of([paths for _ in range(2)])
 
-    assert TimingRecorder(tree, max_depth=2).depths_per_iteration() == [[1, 2], [1, 2]]
+    assert TimingRecorder(tree, max_depth=2).depths_per_sample() == [[1, 2], [1, 2]]
 
 
-def test_a_sample_with_only_calls_deeper_than_max_depth_gets_no_runs():
+def test_a_sample_with_only_calls_deeper_than_max_depth_gets_no_replays():
     root, inner = ("a",), ("a", "b")
     tree = _tree_of([[root], [inner]])
 
-    assert TimingRecorder(tree, max_depth=1).depths_per_iteration() == [[1], []]
+    assert TimingRecorder(tree, max_depth=1).depths_per_sample() == [[1], []]
 
 
 def test_calls_inside_a_timed_call_are_skipped(mocker):
@@ -460,7 +460,7 @@ def _record_and_time(structure, model, call):
             structure.end_iteration()
         tree = structure.result()
         with TimingRecorder(tree) as timer:
-            for depths in timer.depths_per_iteration():
+            for depths in timer.depths_per_sample():
                 for depth in depths:
                     timer.begin_iteration(depth)
                     call()
@@ -599,7 +599,7 @@ def test_timing_a_copy_leaves_the_originals_times(mocker):
     assert tree.nodes[("root.forward",)].time_ms == original
 
 
-def test_only_calls_at_the_run_depth_are_timed(mocker):
+def test_only_calls_at_the_timed_depth_are_timed(mocker):
     mocker.patch("aitune.torch.call_tree.recording.timing_recorder.torch.cuda.is_available", return_value=False)
     root_path, child_path = ("root.forward",), ("root.forward", "root.child.forward")
     tree = _tree_of([[root_path, child_path], [root_path]])
@@ -801,7 +801,7 @@ def test_a_transparent_container_gives_its_children_the_same_path_in_both_passes
         tree = structure.result()
         warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
         with TimingRecorder(tree) as timer:
-            for depths in timer.depths_per_iteration():
+            for depths in timer.depths_per_sample():
                 for depth in depths:
                     timer.begin_iteration(depth)
                     model(x)

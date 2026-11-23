@@ -27,7 +27,7 @@ class TimingRecorder(CallRecorder):
     """Time the calls of the nodes a ``StructureRecorder`` recorded: the timing pass of the call tree.
 
     The pass replays each sample of the structure pass once per call-path depth its calls reach
-    (``depths_per_iteration``). Each replay is one iteration (``begin_iteration``): it runs the whole sample but
+    (``depths_per_sample``). Each replay is one iteration (``begin_iteration``): it runs the whole sample but
     times only the calls at its depth. Deeper calls run inside a timed call and are ignored (see ``_skips_calls``);
     shallower calls are only tracked to know each call's path. Together, the replays time every call once, except
     calls inside a compiled part and calls deeper than ``max_depth``.
@@ -87,10 +87,10 @@ class TimingRecorder(CallRecorder):
         ...         _ = infer(x)
         ...         structure.end_iteration()
         >>> timer = TimingRecorder(structure.result())
-        >>> timer.depths_per_iteration()
+        >>> timer.depths_per_sample()
         [[1, 2], [1, 2]]
         >>> with timer:
-        ...     for depths, x in zip(timer.depths_per_iteration(), samples, strict=True):
+        ...     for depths, x in zip(timer.depths_per_sample(), samples, strict=True):
         ...         for depth in depths:
         ...             timer.begin_iteration(depth)
         ...             _ = infer(x)
@@ -122,8 +122,8 @@ class TimingRecorder(CallRecorder):
         """The tree the pass times into."""
         return self._tree
 
-    def depths_per_iteration(self) -> list[list[int]]:
-        """For each iteration, the depths the timing pass times, one replay of the sample per depth.
+    def depths_per_sample(self) -> list[list[int]]:
+        """For each sample, the depths the timing pass times, one replay of the sample per depth.
 
         Each replay runs the whole sample but times only the calls at one depth. A sample whose calls go three
         levels deep is replayed three times: once to time the root call, once its children, and once theirs.
@@ -132,7 +132,8 @@ class TimingRecorder(CallRecorder):
         Only reads the tree, so it can be called before entering the ``with`` block.
 
         Returns:
-            One sorted list of depths per iteration, for example ``[[1, 2, 3], [1, 2]]``.
+            One sorted list of depths per sample, indexed like ``CallTree.sequences``, for example
+            ``[[1, 2, 3], [1, 2]]``.
 
         Example:
             The first sample is replayed twice, timing depth 1 and then depth 2. The second sample never calls the
@@ -148,7 +149,7 @@ class TimingRecorder(CallRecorder):
             >>> first_sample = [root.path, child.path]
             >>> second_sample = [root.path]
             >>> tree = CallTree(nodes={root.path: root, child.path: child}, sequences=[first_sample, second_sample])
-            >>> TimingRecorder(tree).depths_per_iteration()
+            >>> TimingRecorder(tree).depths_per_sample()
             [[1, 2], [1]]
         """
         return [
