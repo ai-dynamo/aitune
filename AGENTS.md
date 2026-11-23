@@ -71,6 +71,11 @@ Use these references when the task touches the corresponding area:
 Read and follow `CODING_GUIDELINES.md` before you write or review code. It contains the SPDX header,
 the ruff and pyrefly rules, and the rules for layout, control flow, typing, errors, and tests.
 
+## Pull Requests
+
+Follow the "Pull Requests" section in `CONTRIBUTING.md`. Keep each pull request to one logical
+change and about 400 changed lines. If the change is larger, split it into a stack with `gh stack`.
+
 ## Test Fixtures
 
 Key fixtures in `conftest.py` (all autouse unless noted):
