@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import torch
 from torch import nn
-from transformers import StaticCache
+from transformers import StaticCache, StaticLayer
 from transformers.models.llama import LlamaConfig
 
 import aitune.torch as ait
@@ -166,6 +166,8 @@ def _check_decode_updates(model: Callable, device: torch.device, tolerance: Tole
             tolerance.assert_close(actual["values"], expected["values"])
             assert actual["cache"] is cache
             layer, reference_layer = cache.layers[0], reference_cache.layers[0]
+            assert isinstance(layer, StaticLayer)
+            assert isinstance(reference_layer, StaticLayer)
             tolerance.assert_close(layer.keys, reference_layer.keys)
             tolerance.assert_close(layer.values, reference_layer.values)
             assert layer.is_initialized

@@ -9,8 +9,7 @@ import pytest
 import torch
 import wrapt
 
-from aitune.torch.libs.exporting import ONNXExporter as TensorONNXExporter
-from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
+from aitune.torch.libs.exporting import ONNXExporter
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.utilities.helpers import make_graph_spec
 
@@ -40,9 +39,8 @@ class SpeechModel(torch.nn.Module):
         return input_signal + 1, input_signal_length
 
 
-@pytest.mark.parametrize("exporter_class", [ONNXExporter, TensorONNXExporter], ids=["legacy", "flat-tensor"])
 @pytest.mark.parametrize("signal_kind", ["input", "processed"])
-def test_trace_export_preserves_keyword_only_calls(tmp_path, exporter_class, signal_kind):
+def test_trace_export_preserves_keyword_only_calls(tmp_path, signal_kind):
     model = SpeechModel().eval()
     inputs = {
         f"{signal_kind}_signal": torch.arange(6, dtype=torch.float32).reshape(2, 3),
@@ -53,7 +51,7 @@ def test_trace_export_preserves_keyword_only_calls(tmp_path, exporter_class, sig
     graph_spec = make_graph_spec(model.forward, sample, expected)
     output_path = tmp_path / "speech.onnx"
 
-    exporter_class(output_path, use_dynamo=False, opset_version=17).export(model, sample, graph_spec)
+    ONNXExporter(output_path, use_dynamo=False, opset_version=17).export(model, sample, graph_spec)
 
     # Validate the exported product, including signal lengths, through a real CPU runtime.
     session = ort.InferenceSession(str(output_path), providers=["CPUExecutionProvider"])
