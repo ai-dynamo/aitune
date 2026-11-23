@@ -12,7 +12,6 @@ thread, and all threads must see the active recorder.
 
 from __future__ import annotations
 
-import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from types import TracebackType
@@ -32,10 +31,10 @@ class CallRecorder(ABC):
     timing pass.
 
     The active recorder is kept in ``CallRecorder._active``, one slot shared by all subclasses. Whichever recorder
-    is in it holds ``CallRecorder._active_lock``: ``__enter__`` acquires it without waiting, so a second recorder
-    fails at once, also when two threads enter at the same time. Both are always assigned through
-    ``CallRecorder``, never through ``self`` or ``type(self)``, which would give an instance or a subclass a slot
-    of its own.
+    is in it is the only recorder: ``__enter__`` raises when a second recorder enters while one is active.
+    Recorders assume one thread drives the inference (AITune is single-threaded), so entering is not synchronized.
+    The slot is always assigned through ``CallRecorder``, never through ``self`` or ``type(self)``, which would
+    give an instance or a subclass a slot of its own.
 
     Calls from any thread reach the active recorder, but each recorder keeps one stack of open calls for all
     threads. Calls on other threads are therefore recorded correctly only when they do not overlap with calls on
@@ -49,7 +48,6 @@ class CallRecorder(ABC):
     """
 
     _active: ClassVar[CallRecorder | None] = None
-    _active_lock: ClassVar[threading.Lock] = threading.Lock()
 
     @classmethod
     def active(cls) -> CallRecorder | None:
@@ -62,14 +60,13 @@ class CallRecorder(ABC):
         Raises:
             RuntimeError: If another call recorder is already recording.
         """
-        if not CallRecorder._active_lock.acquire(blocking=False):
+        if CallRecorder._active is not None:
             raise RuntimeError("Another call recorder is already recording.")
         CallRecorder._active = self
         try:
             self._start()
         except BaseException:
             CallRecorder._active = None
-            CallRecorder._active_lock.release()
             raise
         return self
 
@@ -82,7 +79,6 @@ class CallRecorder(ABC):
         finally:
             if CallRecorder._active is self:
                 CallRecorder._active = None
-                CallRecorder._active_lock.release()
 
     @final
     def call(

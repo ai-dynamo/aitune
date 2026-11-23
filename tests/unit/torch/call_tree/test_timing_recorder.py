@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import itertools
-import threading
 
 import pytest
 import torch
@@ -756,34 +755,12 @@ def test_a_node_timed_in_two_runs_gets_the_total(mocker):
     assert tree.nodes[a].time_ms == 8.0
 
 
-def test_a_recorder_entering_on_another_thread_fails_while_one_is_active():
-    errors = []
-
-    def enter():
-        try:
-            with TimingRecorder(CallTree()):
-                pass
-        except RuntimeError as error:
-            errors.append(str(error))
-
-    with TimingRecorder(CallTree()) as active:
-        thread = threading.Thread(target=enter)
-        thread.start()
-        thread.join(timeout=5)
-        assert not thread.is_alive()
-        assert errors == ["Another call recorder is already recording."]
-        assert CallRecorder.active() is active
-    assert CallRecorder.active() is None
-    assert not CallRecorder._active_lock.locked()
-
-
 def test_a_stray_exit_does_not_release_the_active_recorder():
     other = TimingRecorder(CallTree())
     with TimingRecorder(CallTree()) as active:
         other.__exit__(None, None, None)
         assert CallRecorder.active() is active
-        assert CallRecorder._active_lock.locked()
-    assert not CallRecorder._active_lock.locked()
+    assert CallRecorder.active() is None
 
 
 def test_a_transparent_container_gives_its_children_the_same_path_in_both_passes(mocker):
