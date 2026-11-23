@@ -667,6 +667,29 @@ def test_a_node_inside_a_compiled_part_is_never_counted(mocker):
     warning.assert_not_called()
 
 
+def test_a_call_inside_a_compiled_part_is_never_timed(mocker):
+    """A call reported with a compiled-part node's path gets no timer: its ``time_ms`` stays None."""
+    mocker.patch("aitune.torch.call_tree.recording.timing_recorder.torch.cuda.is_available", return_value=False)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+    a, ab, ac = ("a",), ("a", "b"), ("a", "c")
+    tree = _tree_of([[a, ab, ac]])
+    tree.nodes[ac].inside_compiled_part = True
+    model = nn.Linear(2, 2)
+
+    with TimingRecorder(tree) as timer:
+        timer.begin_iteration(1)
+        timer.end_call(timer.begin_call("a", model, "forward", ()))
+        timer.begin_iteration(2)
+        a_call = timer.begin_call("a", model, "forward", ())
+        timer.end_call(timer.begin_call("b", model, "forward", ()))
+        timer.end_call(timer.begin_call("c", model, "forward", ()))
+        timer.end_call(a_call)
+
+    assert tree.nodes[ab].time_ms is not None
+    assert tree.nodes[ac].time_ms is None
+    warning.assert_not_called()
+
+
 def test_a_complete_pass_does_not_warn(mocker):
     """Every call timed on the sample the structure pass recorded it on: nothing to report."""
     mocker.patch("aitune.torch.call_tree.recording.timing_recorder.torch.cuda.is_available", return_value=False)

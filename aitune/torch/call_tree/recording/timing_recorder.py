@@ -175,7 +175,7 @@ class TimingRecorder(CallRecorder):
         path = (*self._stack[-1].path, label) if self._stack else (label,)
         node = self._tree.nodes.get(path)
         start = device = stream = None
-        if node is not None and len(path) == self._depth:
+        if node is not None and not node.inside_compiled_part and len(path) == self._depth:
             start, device, stream = self._start_timer()
         call = _TimedCall(path=path, node=node, start=start, device=device, stream=stream)
         self._stack.append(call)

@@ -100,7 +100,7 @@ class StructureRecorder(CallRecorder):
             obj: The object the method belongs to.
             method: Method name.
             args: Positional arguments of the call.
-            kwargs: Keyword arguments of the call; a callable among them makes the call transparent as well.
+            kwargs: Keyword arguments of the call.
 
         Returns:
             A frame to pass to ``end_call``, or None if this recorder is not the active one.
