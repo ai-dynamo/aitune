@@ -70,7 +70,7 @@ The user must run the configuration steps. Do not modify their Git or signing-ke
 feat(plan): add diffusers benchmark group
 fix(ci): correct needs dependency in generate job
 chore: update aitune-benchmarks to main branch
-docs: add plan file format to CLAUDE.md
+docs: clarify development commands in AGENTS.md
 refactor(builds): consolidate hub Dockerfiles
 feat!: rename platform key for Colossus GPU
 
