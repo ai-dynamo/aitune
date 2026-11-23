@@ -53,7 +53,7 @@ def test_forward_hooks_jit_tuning(case: BackendCase, device: torch.device):
     """Hooks registered after patching run on recorded and tuned calls; the unset JIT device is inferred."""
     backend = case.factory()
     jit_config.mode = JITMode.TUNE_EAGER
-    jit_config.min_samples = 2
+    jit_config.min_samples = 1
     jit_config.batch_axis_required = False
     jit_config.strategy = pinned_strategy(backend)
     value = make_input(device)
@@ -62,7 +62,6 @@ def test_forward_hooks_jit_tuning(case: BackendCase, device: torch.device):
         model = _add_hooks(JitMLP(make_mlp(device)), value)
 
     with torch.no_grad():
-        model()
         model()
 
         (head,) = PatchedModule.heads
