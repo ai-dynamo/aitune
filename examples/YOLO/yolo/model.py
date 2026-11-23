@@ -31,8 +31,8 @@ def sample_input(dtype: torch.dtype = torch.float32) -> torch.Tensor:
     """Generate a reproducible RGB input for the graph's fixed 640x640 shape."""
     if dtype not in {torch.float16, torch.float32}:
         raise ValueError(f"Expected floating-point YOLO image input, got {dtype}")
-    generator = torch.Generator().manual_seed(0)
-    return torch.rand((1, 3, 640, 640), generator=generator).to(device="cuda", dtype=dtype)
+    generator = torch.Generator(device="cuda").manual_seed(0)
+    return torch.rand((1, 3, 640, 640), generator=generator, device="cuda", dtype=dtype)
 
 
 def source_input(model: OnnxModule) -> torch.Tensor:

@@ -1723,13 +1723,6 @@
       "severity": "error"
     },
     {
-      "column": 12,
-      "path": "examples/YOLO/yolo/model.py",
-      "name": "pytorch-efficiency-lint-cuda-call",
-      "concise_description": "`Tensor.cuda()` hard-codes the target device",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "examples/common/aitune_examples_common/batching.py",
       "name": "missing-attribute",
