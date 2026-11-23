@@ -18,7 +18,9 @@ The suite fails (does not skip) when CUDA is not available.
 
 ## Rules
 
-- Use only plain `torch` toy models: no diffusers, Hugging Face, or other model libraries, and no weight downloads.
+- Use plain `torch` toy models with no weight downloads. Integration tests may use real library state objects,
+  such as Transformers `StaticCache`, with a locally constructed configuration and a tiny PyTorch module.
+  Keep full third-party models and pretrained weights in the separate functional or example workflows.
 - Keep toys realistic. If a toy finds a backend gap that also affects real models, fix AITune, not the toy.
 - Give each test a `@pytest.mark.matrix(...)` marker for the feature-matrix cells that it proves.
 
@@ -56,6 +58,7 @@ their own strategies.
 | `artifacts.py` | Runs exported artifacts (`pt2`, `tensorrt_plan`, `onnx`) in their native runtime, without AITune |
 | `conftest.py` | `device` fixture, cleanup after each test, `matrix` marker and JSON writer |
 | `test_wrap_shared_weights.py` | `wrap` on modules from `inspect(..., call_tree=True)` on toys from `tests/toy_models/call_tree_models.py` with shared weights: without the call tree they fail after offloading, with it they match eager (`export` backends, which build ahead of time and offload) |
+| `test_transformers_static_cache.py` | Real Transformers `StaticCache` with lazy and initialized state on every backend: AOT tuning and checkpoint reload, plus JIT tuning and consecutive decode updates; no model downloads |
 | `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py`, `test_multiple_graphs.py`, `test_pipelines.py` |
 | other `test_*.py` | One file per feature area: lifecycle, shapes, topology, JIT, strategies, precision, ONNX input, pipelines, kernel selector, inspect call tree (`test_inspect_call_tree.py`, no backend) |
 
