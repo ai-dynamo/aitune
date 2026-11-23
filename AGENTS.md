@@ -74,7 +74,8 @@ the ruff and pyrefly rules, and the rules for layout, control flow, typing, erro
 ## Pull Requests
 
 Follow the "Pull Requests" section in `CONTRIBUTING.md`. Keep each pull request to one logical
-change and about 400 changed lines. If the change is larger, split it into a stack with `gh stack`.
+change and about 400 changed lines, not counting generated files such as `uv.lock`. If a larger
+change is not mechanical (a rename, a move, or a tool auto-fix), split it into a stack with `gh stack`.
 
 ## Test Fixtures
 
