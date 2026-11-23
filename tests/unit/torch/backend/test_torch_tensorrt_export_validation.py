@@ -4,7 +4,7 @@
 import pytest
 import torch
 
-from aitune.torch.libs.exporting.export_validation import validate_export_profiles
+from aitune.torch.backend.torch_tensorrt_aot_backend import validate_export_profiles
 from tests.utilities.helpers import make_recorded_graph_spec, update_input_spec
 
 
