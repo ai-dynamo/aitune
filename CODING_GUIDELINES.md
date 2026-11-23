@@ -40,6 +40,45 @@ Adding an abstraction later, when a second use exists, is cheap. Removing an unu
 **Why:** A good name removes the need for a comment, and the reader does not have to open the
 definition to understand the call.
 
+### Write in plain language
+
+These rules apply to comments, docstrings, error and log messages, docs, commit messages, and pull
+request descriptions.
+
+1. **Put the main point first.** Start with the result, behavior, or problem. Then explain how it
+   works. In a pull request description, say what changed and why, and leave the details to the code.
+2. **Show how ideas connect.** Use `because`, `if`, `although`, or `therefore` to show cause,
+   condition, contrast, or result. Do not write a chain of short, disconnected sentences.
+   For example: "The cache is not used because the model has dynamic shapes."
+3. **Use the active voice and simple words.** Say who does what: "The backend rejects empty
+   profiles", not "Empty profiles are rejected". Write `use`, `before`, and `if`, not `utilize`,
+   `prior to`, and `in the event that`.
+4. **Use one term for one thing.** Do not switch between two names for the same object. Define a
+   new term the first time you use it.
+5. **Separate facts from plans.** Keep what the code does now apart from what a change will do.
+   Mark assumptions and open questions as such.
+6. **Give an example for non-obvious behavior.** Use the smallest input and output that show the
+   behavior. If the example is not real, say so.
+7. **Make error messages actionable.** Say what is wrong and what the user can do.
+
+**Why:** Many readers are not native English speakers, and many read quickly. Plain language is
+faster to read and is harder to misread.
+
+**Bad:**
+
+```python
+raise AITuneUserInputError("Invalid profiles.")
+```
+
+**Better:**
+
+```python
+raise AITuneUserInputError(
+    "TensorRT profiles cannot be provided together with module dynamic shape definitions. "
+    "Remove `profiles` or remove the dynamic shapes."
+)
+```
+
 ## Enforced by tools
 
 Run `make lint` before you push. It runs these checks:
@@ -57,10 +96,10 @@ Run `make lint` before you push. It runs these checks:
 - **SPDX header**: every new file must begin with this header, written as comments for its file
   type. If the file starts with a shebang (`#!`) or a Dockerfile `# syntax=` line, put the header
   after it, because that line must stay first. In Markdown, put the header in the front matter, as
-  in `AGENTS.md`. Files without comment syntax,
-  such as JSON, do not need it. ruff (`CPY`) checks Python files. The "License headers" job in
-  `.github/workflows/ci.yml` checks the other file types, for example shell, Markdown, YAML, TOML,
-  HTML, CSS, and `Makefile`. `make lint` does not run that job.
+  in `AGENTS.md`. Files without comment syntax, such as JSON, do not need it. ruff (`CPY`) checks
+  Python files. The "License headers" job in `.github/workflows/ci.yml` checks the other file types,
+  for example shell, Markdown, YAML, TOML, HTML, CSS, and `Makefile`. `make lint` does not run that
+  job.
 
   ```python
   # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
