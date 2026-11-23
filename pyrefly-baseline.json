@@ -1387,24 +1387,10 @@
       "severity": "error"
     },
     {
-      "column": 21,
-      "path": "examples/FLUX/flux/tune.py",
-      "name": "unexpected-keyword",
-      "concise_description": "Unexpected keyword argument `use_distributed_mode_trace` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 78,
+      "column": 75,
       "path": "examples/FLUX/flux/tune.py",
       "name": "unexpected-keyword",
       "concise_description": "Unexpected keyword argument `truncate_double` in function `aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 51,
-      "path": "examples/FLUX/flux/tune.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[TorchAOBackend | TorchInductorJitBackend | TorchTensorRTJitBackend] | list[Unknown]` is not assignable to parameter `backends` with type `list[Backend[Unknown]]` in function `aitune.torch.tune_strategy.profiling_tune_strategy.ProfilingTuneStrategy.__init__`",
       "severity": "error"
     },
     {
