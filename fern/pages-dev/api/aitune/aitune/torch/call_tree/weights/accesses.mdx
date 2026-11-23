@@ -70,10 +70,10 @@ One access to a weight: which call or code did it, and how.
 
 
 <ParamField path="by" type="str">
-The path of the recorded call it ran in (``forward > llm.embed.forward``, see ``CallNode.path``); outside
-any recorded call, the code found by ``unrecorded_caller()`` (``<unrecorded: Pipe.encode>``) or
-``<outside any call>``. ``shared_weights_of`` reports unrecorded code by its qualified name
-(``Pipe.encode``).
+The path of the recorded call it ran in (``forward > llm.embed.forward``, see
+``CallNode.path_str``); outside any recorded call, the code found by ``unrecorded_caller()``
+(``<unrecorded: Pipe.encode>``) or ``<outside any call>``. ``shared_weights_of`` reports unrecorded code
+by its qualified name (``Pipe.encode``).
 </ParamField>
 
 <ParamField path="kind" type="Literal['read', 'device', 'move']">

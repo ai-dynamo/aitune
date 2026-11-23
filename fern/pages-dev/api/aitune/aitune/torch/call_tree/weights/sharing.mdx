@@ -26,7 +26,7 @@ modules (``nn.Module._apply``: ``.to()``, ``.cuda()``, recorded by the recorder'
 |------|-------------|
 | [`_accesses`](#aitune-torch-call_tree-weights-sharing-_accesses) | For each owned weight, the accesses from outside the unit. |
 | [`_code_name`](#aitune-torch-call_tree-weights-sharing-_code_name) | An access's ``by`` as reported: unrecorded code by its qualified name, recorded paths unchanged. |
-| [`_opaque_reads`](#aitune-torch-call_tree-weights-sharing-_opaque_reads) | Owned tensors held directly by an outside module whose ``forward`` ran, as reads of that call. |
+| [`_opaque_reads`](#aitune-torch-call_tree-weights-sharing-_opaque_reads) | Owned tensors held directly by an outside module whose ``forward`` ran, as reads by its ``path_str``. |
 | [`_weight_index`](#aitune-torch-call_tree-weights-sharing-_weight_index) | The live weights of the tree's registered modules: by name, and each tensor id to its names, first name first. |
 | [`shared_weights_of`](#aitune-torch-call_tree-weights-sharing-shared_weights_of) | The weights ``unit`` holds that something outside it still uses or moves. |
 | [`shared_weights_with_ids`](#aitune-torch-call_tree-weights-sharing-shared_weights_with_ids) | Like ``shared_weights_of``, paired with the id of each weight's live tensor for keeping it on the device. |
@@ -98,7 +98,7 @@ aitune.torch.call_tree.weights.sharing._accesses(
 
 For each owned weight, the accesses from outside the unit.
 
-An access inside the unit — ``by`` is a unit node's path or below one — does not count; an access from an
+An access inside the unit — ``by`` is a unit node's ``path_str`` or below one — does not count; an access from an
 ancestor (a caller of the unit, e.g. its forward doing ``F.linear(x, unit.weight)``) is outside and counts.
 Unrecorded and outside-any-call markers start with ``<`` so they never match a unit path.
 
@@ -142,7 +142,7 @@ aitune.torch.call_tree.weights.sharing._opaque_reads(
 
 <Indent>
 
-Owned tensors held directly by an outside module whose ``forward`` ran, as reads of that call.
+Owned tensors held directly by an outside module whose ``forward`` ran, as reads by its ``path_str``.
 
 The call may pass them to code torch functions do not see, such as a C++ or CUDA extension (TransformerEngine,
 apex), even when it touches its other tensors with visible ops. Counting them keeps those tensors;
@@ -206,7 +206,7 @@ ops recorded by ``WeightAccessMode`` during the call-tree pass; moves are record
 </ParamField>
 
 <ParamField path="unit" type="UnitSpec">
-[`UnitSpec`](../units.mdx#aitune-torch-call_tree-units-UnitSpec) — A node path (``"forward > dit_forward"``, see ``CallNode.path``), a module (all its recorded
+[`UnitSpec`](../units.mdx#aitune-torch-call_tree-units-UnitSpec) — A node path (``"forward > dit_forward"``, see ``CallNode.path_str``), a module (all its recorded
 ``forward`` calls), or a list of them as one unit.
 </ParamField>
 

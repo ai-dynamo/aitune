@@ -35,17 +35,28 @@ available and ``time.perf_counter`` otherwise; ``flush()`` resolves the pending 
 | Name | Description |
 |------|-------------|
 | [`CallRecorder`](#aitune-torch-call_tree-recorder-CallRecorder) | Record a context-keyed call tree from begin_call/end_call callbacks. |
-| [`_Frame`](#aitune-torch-call_tree-recorder-_Frame) | An open call: its node and the start of its timer. |
+| [`_Frame`](#aitune-torch-call_tree-recorder-_Frame) | An open call: its node, the start of its timer, the raw key of its inputs, its call index and what it sees. |
+| [`_SourceIndex`](#aitune-torch-call_tree-recorder-_SourceIndex) | An index of the values visible inside one call, or at the top level of an iteration: where each was last seen. |
 
 ### Functions
 
 | Name | Description |
 |------|-------------|
-| [`_tensor_bytes`](#aitune-torch-call_tree-recorder-_tensor_bytes) | Total bytes of the tensor leaves of ``tree``, deduplicated by object identity. |
+| [`_children`](#aitune-torch-call_tree-recorder-_children) | The direct children of ``obj`` as ``(suffix, child)`` pairs, or None when ``obj`` is a leaf. |
+| [`_class_name`](#aitune-torch-call_tree-recorder-_class_name) | A class's signature type string: builtin ``__qualname__``, else ``module.QualName``. |
+| [`_field_values`](#aitune-torch-call_tree-recorder-_field_values) | The ``(.field, value)`` pairs of a dataclass instance's fields, skipping fields that have no value. |
+| [`_leaves_and_bytes`](#aitune-torch-call_tree-recorder-_leaves_and_bytes) | The walked leaves as ``(object, Leaf)`` pairs, and their tensor byte total, in one pass. |
+| [`_named_leaves`](#aitune-torch-call_tree-recorder-_named_leaves) | Yield ``(name, leaf)`` for every leaf inside ``value``, with ``name`` built on ``root``. |
+| [`_signature`](#aitune-torch-call_tree-recorder-_signature) | A new ``CallSignature`` for one raw signature key, with no calls yet: ``outputs`` None when the calls raised. |
+| [`_suffixed_children`](#aitune-torch-call_tree-recorder-_suffixed_children) | The ``(suffix, child)`` pairs of a container that pytree registers without keys. |
 
 ### Data
 
 [`_NO_RESULT`](#aitune-torch-call_tree-recorder-_NO_RESULT)
+
+[`_PRIMITIVES`](#aitune-torch-call_tree-recorder-_PRIMITIVES)
+
+[`_SignatureKey`](#aitune-torch-call_tree-recorder-_SignatureKey)
 
 ### API
 
@@ -80,40 +91,37 @@ Example:
 <ParamField path="_apply_depth" type="= 0">
 </ParamField>
 
-<ParamField path="_current_sequence" type="list[NodeKey] | None = None">
+<ParamField path="_current_sequence" type="list[CallPath] | None = None">
 </ParamField>
 
-<ParamField path="_events" type="dict[NodeKey, list[tuple[Any, Any]]] = &#123;&#125;">
+<ParamField path="_declared_signatures" type="dict[int, tuple[Any, ForwardSignature | None]] = &#123;&#125;">
 </ParamField>
 
-<ParamField path="_modules" type="list[tuple[str, Module]] = []">
+<ParamField path="_events" type="list[tuple[CallNode, Any, Any]] = []">
 </ParamField>
 
-<ParamField path="_ms" type="dict[NodeKey, float] = &#123;&#125;">
+<ParamField path="_modules" type="dict[int, tuple[str, Module]] = &#123;&#125;">
 </ParamField>
 
-<ParamField path="_nodes" type="dict[NodeKey, CallNode] = &#123;&#125;">
-</ParamField>
-
-<ParamField path="_order" type="= 0">
+<ParamField path="_nodes" type="dict[CallPath, CallNode] = &#123;&#125;">
 </ParamField>
 
 <ParamField path="_original_apply" type="Callable[..., Any] | None = None">
 </ParamField>
 
-<ParamField path="_paths" type="dict[NodeKey, str] = &#123;&#125;">
-</ParamField>
-
 <ParamField path="_recording_now" type="CallRecorder | None = None">
 </ParamField>
 
-<ParamField path="_registered" type="set[int] = set()">
+<ParamField path="_sequences" type="list[list[CallPath]] = []">
 </ParamField>
 
-<ParamField path="_sequences" type="list[list[NodeKey]] = []">
+<ParamField path="_signatures" type="dict[CallPath, dict[_SignatureKey, CallSignature]] = &#123;&#125;">
 </ParamField>
 
-<ParamField path="_stack" type="list[NodeKey] = []">
+<ParamField path="_stack" type="list[_Frame] = []">
+</ParamField>
+
+<ParamField path="_top_visible" type="= _SourceIndex()">
 </ParamField>
 
 <ParamField path="_use_cuda" type="= torch.cuda.is_available()">
@@ -164,6 +172,76 @@ Stop recording and restore ``nn.Module._apply``, also when the recorded code rai
 
 
 </Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_input_leaves">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._input_leaves(
+    obj: typing.Any,
+    method: str,
+    args: tuple[typing.Any, ...],
+    kwargs: dict[str, typing.Any] | None
+) -> list[tuple[str, typing.Any]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The call's arguments bound to parameter names, walked into ``(name, leaf)`` pairs.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_link_inputs">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallPath":"./nodes.mdx#aitune-torch-call_tree-nodes-CallPath","aitune.torch.call_tree.nodes.Leaf":"./nodes.mdx#aitune-torch-call_tree-nodes-Leaf","aitune.torch.call_tree.recorder._SourceIndex":"#aitune-torch-call_tree-recorder-_SourceIndex"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._link_inputs(
+    path: aitune.torch.call_tree.nodes.CallPath,
+    values: list[tuple[typing.Any, aitune.torch.call_tree.nodes.Leaf]]
+) -> tuple[tuple[aitune.torch.call_tree.nodes.Leaf, ...], aitune.torch.call_tree.recorder._SourceIndex]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Source a call's arguments from what its caller sees; return its input signature key and what it sees.
+
+An argument visible in the caller gets ``source`` set to where it was last seen: one of the caller's
+arguments or what one of the caller's earlier child calls returned. The call's arguments then become visible
+inside it.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_link_outputs">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallPath":"./nodes.mdx#aitune-torch-call_tree-nodes-CallPath","aitune.torch.call_tree.nodes.Leaf":"./nodes.mdx#aitune-torch-call_tree-nodes-Leaf","aitune.torch.call_tree.recorder._SourceIndex":"#aitune-torch-call_tree-recorder-_SourceIndex"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._link_outputs(
+    path: aitune.torch.call_tree.nodes.CallPath,
+    values: list[tuple[typing.Any, aitune.torch.call_tree.nodes.Leaf]],
+    own: aitune.torch.call_tree.recorder._SourceIndex
+) -> tuple[aitune.torch.call_tree.nodes.Leaf, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Source a call's results from what it saw (``own``), make them visible in the caller; return the output key.
+
+A result visible inside the call gets ``source`` set to where it was: one of the call's arguments or what one
+of its child calls returned.
+
+
+</Indent>
 <Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_make_apply_probe">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -184,7 +262,7 @@ Build the replacement for ``nn.Module._apply`` that ``__enter__`` installs.
 ``nn.Module._apply`` is the method that ``.to()``, ``.cuda()``, ``.half()`` and similar calls use to convert a
 module's parameters and buffers. The replacement runs ``original_apply`` unchanged. While the recorder is
 recording, it first records a ``"move"`` access on every tracked weight of the module and, unless
-``recurse=False``, of all its submodules: the innermost recorded call's key, or the code found by
+``recurse=False``, of all its submodules: the innermost recorded call's path, or the code found by
 ``unrecorded_caller`` if no recorded call is running. Only the outermost ``_apply`` of a conversion records,
 because ``_apply`` calls itself on each child. Recording goes through the storage map before
 ``original_apply`` runs, so a tied alias outside the moved subtree is moved as well, and the storage reads
@@ -239,6 +317,23 @@ aitune.torch.call_tree.CallRecorder._stop_timer(
 <Indent>
 
 Stop timing a call: queue the CUDA event pair for ``flush``, or add the CPU time to the node's total.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-CallRecorder-_visible_in_caller">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder._SourceIndex":"#aitune-torch-call_tree-recorder-_SourceIndex"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.CallRecorder._visible_in_caller() -> aitune.torch.call_tree.recorder._SourceIndex
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+What the caller of a starting or ending call sees: the innermost open call's ``visible`` or the top level.
 
 
 </Indent>
@@ -420,9 +515,9 @@ aitune.torch.call_tree.CallRecorder.result() -> aitune.torch.call_tree.call_tree
 
 Return the recorded call tree, with times resolved to milliseconds.
 
-Idempotent: resolved event times accumulate into a per-key total, so calling ``result`` again returns the
-same times, and recording more calls afterwards keeps accumulating. The returned tree is a snapshot: its nodes
-are copies, so later recording does not change it.
+Idempotent: resolved event times accumulate on the nodes, so calling ``result`` again returns the
+same times, and recording more calls afterwards keeps accumulating. The returned tree is a snapshot: its nodes,
+their ``children`` and ``signatures`` are copies, so later recording does not change it.
 
 
 </Indent>
@@ -430,12 +525,15 @@ are copies, so later recording does not change it.
 
 <Anchor id="aitune-torch-call_tree-recorder-_Frame">
 
-<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.call_tree.call_tree.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode","aitune.torch.call_tree.nodes.Leaf":"./nodes.mdx#aitune-torch-call_tree-nodes-Leaf","aitune.torch.call_tree.recorder._SourceIndex":"#aitune-torch-call_tree-recorder-_SourceIndex"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.call_tree.recorder._Frame(
     node: aitune.torch.call_tree.call_tree.CallNode,
     start: typing.Any,
+    input_key: tuple[aitune.torch.call_tree.nodes.Leaf, ...],
+    call_index: int,
+    visible: aitune.torch.call_tree.recorder._SourceIndex,
     device: int | None = None
 )
 ```
@@ -447,27 +545,36 @@ class aitune.torch.call_tree.recorder._Frame(
 
 <Badge>Dataclass</Badge>
 
-An open call: its node and the start of its timer.
+An open call: its node, the start of its timer, the raw key of its inputs, its call index and what it sees.
 
-The start is a CUDA event or a ``perf_counter`` value; ``device`` is the CUDA device the start event was
-recorded on.
+``call_index`` is the call's position among the node's calls in start order (the same order
+``CallTree.sequences`` records). The start is a CUDA event or a ``perf_counter`` value; ``device`` is the
+CUDA device the start event was recorded on. ``visible`` holds the values visible inside the call: its own
+arguments and what its child calls returned.
 
+
+<ParamField path="call_index" type="int">
+</ParamField>
 
 <ParamField path="device" type="int | None = None">
 </ParamField>
 
+<ParamField path="input_key" type="tuple[Leaf, ...]">
+</ParamField>
+
 <ParamField path="node" type="CallNode">
+</ParamField>
+
+<ParamField path="visible" type="_SourceIndex">
 </ParamField>
 </Indent>
 
-<Anchor id="aitune-torch-call_tree-recorder-_tensor_bytes">
+<Anchor id="aitune-torch-call_tree-recorder-_SourceIndex">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.call_tree.recorder._tensor_bytes(
-    tree: typing.Any
-) -> int
+class aitune.torch.call_tree.recorder._SourceIndex()
 ```
 
 </CodeBlock>
@@ -475,10 +582,271 @@ aitune.torch.call_tree.recorder._tensor_bytes(
 
 <Indent>
 
-Total bytes of the tensor leaves of ``tree``, deduplicated by object identity.
+An index of the values visible inside one call, or at the top level of an iteration: where each was last seen.
 
-Containers of tensors (lists, dicts, ModelOutputs, ...) are walked; non-tensor leaves (a ``DynamicCache``, a
-plain object) are ignored. The walk runs with torch function disabled so it records no weight accesses.
+Values are matched by identity. An entry is keyed by the object's ``id`` and holds a weak reference to it: the
+reference confirms that the id still belongs to the same object, because CPython gives a freed object's id to
+new objects, and it keeps recording from holding any value alive. Values that don't support weak references
+are not tracked.
+
+Example:
+    &gt;&gt;&gt; index = _SourceIndex()
+    &gt;&gt;&gt; x = torch.ones(2)
+    &gt;&gt;&gt; index.add(x, _Source(("root.forward",), "inputs", "x"))
+    &gt;&gt;&gt; index.source_of(x)
+    _Source(path=('root.forward',), side='inputs', name='x')
+    &gt;&gt;&gt; index.source_of(torch.ones(2)) is None  # an equal tensor, but another object
+    True
+    &gt;&gt;&gt; del x
+    &gt;&gt;&gt; index.source_of(torch.ones(2)) is None  # even if the new tensor got the freed one's id
+    True
+    &gt;&gt;&gt; size = (2, 3)  # a tuple doesn't support weak references
+    &gt;&gt;&gt; index.add(size, _Source(("root.forward",), "inputs", "size"))
+    &gt;&gt;&gt; index.source_of(size) is None
+    True
+
+
+<ParamField path="__slots__" type="= ('_entries',)">
+</ParamField>
+
+<ParamField path="_entries" type="dict[int, tuple[ref[Any], _Source]] = &#123;&#125;">
+</ParamField>
+<Anchor id="aitune-torch-call_tree-recorder-_SourceIndex-add">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes._Source":"./nodes.mdx#aitune-torch-call_tree-nodes-_Source"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._SourceIndex.add(
+    obj: typing.Any,
+    source: aitune.torch.call_tree.nodes._Source
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Make ``obj`` visible here as last seen at ``source``, replacing an earlier entry for the same object.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-recorder-_SourceIndex-source_of">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes._Source":"./nodes.mdx#aitune-torch-call_tree-nodes-_Source"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._SourceIndex.source_of(
+    obj: typing.Any
+) -> aitune.torch.call_tree.nodes._Source | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Where ``obj`` was last seen here, or None if it wasn't.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_children">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._children(
+    obj: typing.Any
+) -> list[tuple[str, typing.Any]] | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The direct children of ``obj`` as ``(suffix, child)`` pairs, or None when ``obj`` is a leaf.
+
+``suffix`` is appended to the container's name to name the child: the child at ``[0]`` of ``x`` is ``x[0]``. The
+suffixes depend on the kind of container:
+
+- ``UserDict``: its ``.data``, a plain dict, under an empty suffix, so its entries are named like a dict's.
+- A container pytree registers with keys (lists, tuples, dicts, namedtuples): pytree's keys, such as ``[0]``,
+  ``['key']`` or ``.field``.
+- A container pytree registers without keys, such as transformers' ``ModelOutput``: see ``_suffixed_children``.
+- A dataclass that pytree does not register: its fields, as ``.field`` (see ``_field_values``).
+
+Anything else is a leaf.
+
+Example:
+    &gt;&gt;&gt; [suffix for suffix, _ in _children([1, 2])], [suffix for suffix, _ in _children(&#123;"a": 1&#125;)]
+    (['[0]', '[1]'], ["['a']"])
+    &gt;&gt;&gt; _children(object()) is None
+    True
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_class_name">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._class_name(
+    cls: type
+) -> str
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+A class's signature type string: builtin ``__qualname__``, else ``module.QualName``.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_field_values">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._field_values(
+    instance: typing.Any
+) -> list[tuple[str, typing.Any]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The ``(.field, value)`` pairs of a dataclass instance's fields, skipping fields that have no value.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_leaves_and_bytes">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.Leaf":"./nodes.mdx#aitune-torch-call_tree-nodes-Leaf"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._leaves_and_bytes(
+    leaves: list[tuple[str, typing.Any]]
+) -> tuple[list[tuple[typing.Any, aitune.torch.call_tree.nodes.Leaf]], int]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The walked leaves as ``(object, Leaf)`` pairs, and their tensor byte total, in one pass.
+
+There is a named ``Leaf`` for each tensor and non-primitive object, in walk order. ``_link_inputs`` and
+``_link_outputs`` set their sources and build the raw signature key from them. Each tensor object counts its
+bytes once. Callers run it with torch functions disabled so the metadata reads don't go through the
+weight-access mode.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_named_leaves">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._named_leaves(
+    value: typing.Any,
+    root: str,
+    seen: set[int] | None = None
+) -> collections.abc.Iterator[tuple[str, typing.Any]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Yield ``(name, leaf)`` for every leaf inside ``value``, with ``name`` built on ``root``.
+
+Leaves are tensors and every other value a container does not cover. ``seen`` holds the ids of the containers
+already walked — the caller shares one set across a call's arguments — so a container reached again, whether
+by a cycle or shared as another argument, is skipped: each container is walked once, under its first name.
+
+The walk covers the containers pytree registers (lists, tuples, dicts, namedtuples, ``ModelOutput``, ...) and
+two kinds that pytree does not flatten:
+
+- ``UserDict``s, such as ``transformers.BatchFeature``, via their ``.data``: it is a plain dict, so the walk
+  runs no code of the mapping's class.
+- Dataclass instances, via the values of their fields (``dataclasses.fields``), read with ``getattr``, which
+  runs no code of the class unless a property shadows the field; a field without a value, such as an unset
+  slot, is skipped. Dataclasses that pytree flattens itself, such as ``ModelOutput``, are walked by pytree.
+
+Everything else is a leaf and not looked into. The suffixes follow pytree's ``keystr`` style: ``x[0]`` for
+sequences, ``x['key']`` for mappings, ``x.field`` for namedtuples and dataclass fields. pytree's
+``tree_flatten_with_path`` isn't used because transformers registers ``ModelOutput`` without a
+``flatten_with_keys_fn``, so it raises for model outputs.
+
+Example:
+    &gt;&gt;&gt; t = torch.zeros(2)
+    &gt;&gt;&gt; [(name, type(leaf).__name__) for name, leaf in _named_leaves(&#123;"ids": t, "extra": [t, "x"]&#125;, "inputs")]
+    [("inputs['ids']", 'Tensor'), ("inputs['extra'][0]", 'Tensor'), ("inputs['extra'][1]", 'str')]
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_signature">
+
+<CodeBlock links={{"aitune.torch.call_tree.recorder._SignatureKey":"#aitune-torch-call_tree-recorder-_SignatureKey","aitune.torch.call_tree.nodes.CallSignature":"./nodes.mdx#aitune-torch-call_tree-nodes-CallSignature"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._signature(
+    key: aitune.torch.call_tree.recorder._SignatureKey
+) -> aitune.torch.call_tree.nodes.CallSignature
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+A new ``CallSignature`` for one raw signature key, with no calls yet: ``outputs`` None when the calls raised.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-recorder-_suffixed_children">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._suffixed_children(
+    flat: list[typing.Any],
+    context: typing.Any
+) -> list[tuple[str, typing.Any]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The ``(suffix, child)`` pairs of a container that pytree registers without keys.
+
+``flat`` and ``context`` are what pytree's ``flatten_fn`` returns for the container: its children, and what
+pytree needs to rebuild it. When ``context`` is a list of distinct strings, one per child, those strings name the
+children like a dict's entries. That is how transformers registers ``ModelOutput``, with its field names, so its
+children get suffixes such as ``['logits']``. Any other context gives positional suffixes: ``[0]``, ``[1]``, ...
+
+Example:
+    &gt;&gt;&gt; _suffixed_children([1, 2], ["logits", "hidden_states"])
+    [("['logits']", 1), ("['hidden_states']", 2)]
+    &gt;&gt;&gt; _suffixed_children([1, 2], None)
+    [('[0]', 1), ('[1]', 2)]
 
 
 </Indent>
@@ -489,6 +857,30 @@ plain object) are ignored. The walk runs with torch function disabled so it reco
 
 ```python
 aitune.torch.call_tree.recorder._NO_RESULT = object()
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-call_tree-recorder-_PRIMITIVES">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._PRIMITIVES = (type(None), bool, int, float, complex, str, bytes, enum.Enum, torch.dtype, torc...
+```
+
+</CodeBlock>
+</Anchor>
+
+
+<Anchor id="aitune-torch-call_tree-recorder-_SignatureKey">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.recorder._SignatureKey = tuple[tuple[Leaf, ...], tuple[Leaf, ...] | None]
 ```
 
 </CodeBlock>

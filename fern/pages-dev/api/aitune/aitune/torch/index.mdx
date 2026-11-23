@@ -106,11 +106,11 @@ Dynamic dimension representing the module's logical batch size.
 
 <Anchor id="aitune-torch-call_tree-nodes-CallNode">
 
-<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"#aitune-torch-call_tree-nodes-NodeKey"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallPath":"#aitune-torch-call_tree-nodes-CallPath","aitune.torch.call_tree.nodes.CallSignature":"#aitune-torch-call_tree-nodes-CallSignature"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.CallNode(
-    key: aitune.torch.call_tree.nodes.NodeKey,
+    path: aitune.torch.call_tree.nodes.CallPath,
     label: str,
     owner_class: str,
     method: str,
@@ -119,7 +119,8 @@ class aitune.torch.CallNode(
     time_ms: float = 0.0,
     bytes_in: int = 0,
     bytes_out: int = 0,
-    children: list[aitune.torch.call_tree.nodes.NodeKey] = list(),
+    signatures: list[aitune.torch.call_tree.nodes.CallSignature] = list(),
+    children: list[aitune.torch.call_tree.nodes.CallPath] = list(),
     first_seen: int = 0
 )
 ```
@@ -135,15 +136,21 @@ One node of the call tree.
 
 ``bytes_in`` and ``bytes_out`` measure the tensor data passed into and returned from the node's calls. Only
 tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
-inside lists, tuples, dicts and ``ModelOutput`` count too. Everything else counts as 0 bytes: numbers, strings,
-``None``, and objects such as a ``DynamicCache``, including the tensors they hold.
+inside lists, tuples, dicts and ``ModelOutput`` count too; ``UserDict``s, such as transformers'
+``BatchFeature`` and ``BatchEncoding``, are walked into their values, and dataclass instances into their fields.
+Everything else counts as 0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache`` or
+``StaticCache``, including the tensors they hold. The ``signatures`` are recorded by the same walk and also list
+the non-tensor objects by type.
 
 **Example**
 
 &gt;&gt;&gt; node = CallNode(
-...     key=("root.forward", "root.dit_forward"), label="root.dit_forward", owner_class="Vla", method="dit_forward"
+...     path=("root.forward", "root.dit_forward"),
+...     label="root.dit_forward",
+...     owner_class="Vla",
+...     method="dit_forward",
 ... )
-&gt;&gt;&gt; node.path, node.parent_key
+&gt;&gt;&gt; node.path_str, node.parent_path
 ('forward &gt; dit_forward', ('root.forward',))
 
 
@@ -160,16 +167,12 @@ Tensor bytes in the results, summed over all recorded iterations.
 Number of calls over all recorded iterations.
 </ParamField>
 
-<ParamField path="children" type="list[NodeKey] = field(default_factory=list)">
-Keys of the called nodes in first-call order.
+<ParamField path="children" type="list[CallPath] = field(default_factory=list)">
+Call paths of the called nodes in first-call order.
 </ParamField>
 
 <ParamField path="first_seen" type="int = 0">
 Position of the node's first call among all nodes.
-</ParamField>
-
-<ParamField path="key" type="NodeKey">
-Labels of the calling chain, outermost first. Identifies the node.
 </ParamField>
 
 <ParamField path="label" type="str">
@@ -188,28 +191,83 @@ Module the method belongs to, or None for methods of plain objects.
 Class name of the object the method belongs to.
 </ParamField>
 
-<ParamField path="parent_key" type="NodeKey">
-Key of the calling node; empty for outermost calls.
+<ParamField path="parent_path" type="CallPath">
+Call path of the calling node; empty for outermost calls.
 </ParamField>
 
-<ParamField path="path" type="str">
-The node key in written form (``forward > dit_forward``): its call labels, outermost first.
+<ParamField path="path" type="CallPath">
+Labels of the calling chain, outermost first. Identifies the node and must not change after creation:
+``path_str`` is cached from it.
+</ParamField>
+
+<ParamField path="path_str" type="str">
+The call path in written form (``forward > dit_forward``): its call labels, outermost first.
+</ParamField>
+
+<ParamField path="signatures" type="list[CallSignature] = field(default_factory=list)">
+The distinct ``CallSignature``s of the node's calls, in first-seen order; each records the
+start-order indices of the calls that had it, so ``sum(len(s.call_indices)) == calls`` and every index
+appears exactly once. A signature whose calls raised has ``outputs`` None.
 </ParamField>
 
 <ParamField path="time_ms" type="float = 0.0">
 Time in milliseconds over all recorded iterations.
 </ParamField>
+<Anchor id="aitune-torch-call_tree-nodes-CallNode-calls_passing">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallNode.calls_passing(
+    name: str,
+    side: typing.Literal['inputs', 'outputs'] = 'inputs'
+) -> list[int]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The sorted indices of the calls that passed the argument ``name`` on ``side``.
+
+Calls that raised have no outputs, so they never count for ``side="outputs"``.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-nodes-CallNode-shapes">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallNode.shapes(
+    name: str,
+    side: typing.Literal['inputs', 'outputs'] = 'inputs'
+) -> list[tuple[int, ...]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+The distinct tensor shapes passed as the argument ``name`` on ``side``, in first-seen order.
+
+Signatures where ``name`` is missing or not a tensor are skipped.
+
+
+</Indent>
 </Indent>
 
 <Anchor id="aitune-torch-call_tree-call_tree-CallTree">
 
-<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-NodeKey","aitune.torch.call_tree.nodes.CallNode":"./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-CallNode","aitune.torch.call_tree.weights.accesses.WeightAccess":"./call_tree/weights/accesses.mdx#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallPath":"./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-CallPath","aitune.torch.call_tree.nodes.CallNode":"./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-CallNode","aitune.torch.call_tree.weights.accesses.WeightAccess":"./call_tree/weights/accesses.mdx#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.CallTree(
-    nodes: dict[aitune.torch.call_tree.nodes.NodeKey, aitune.torch.call_tree.nodes.CallNode] = dict(),
+    nodes: dict[aitune.torch.call_tree.nodes.CallPath, aitune.torch.call_tree.nodes.CallNode] = dict(),
     iterations: int = 0,
-    sequences: list[list[aitune.torch.call_tree.nodes.NodeKey]] = list(),
+    sequences: list[list[aitune.torch.call_tree.nodes.CallPath]] = list(),
     weight_accesses: dict[str, set[aitune.torch.call_tree.weights.accesses.WeightAccess]] = dict(),
     modules: list[tuple[str, torch.nn.Module]] = list()
 )
@@ -227,11 +285,11 @@ Call tree of one recording.
 **Example**
 
 &gt;&gt;&gt; outer = CallNode(
-...     key=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
+...     path=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
 ... )
 &gt;&gt;&gt; dit_module = nn.Linear(2, 2)
 &gt;&gt;&gt; dit = CallNode(
-...     key=("root.forward", "root.dit.forward"),
+...     path=("root.forward", "root.dit.forward"),
 ...     label="root.dit.forward",
 ...     owner_class="Dit",
 ...     method="forward",
@@ -240,15 +298,15 @@ Call tree of one recording.
 ...     time_ms=25.0,
 ...     first_seen=1,
 ... )
-&gt;&gt;&gt; outer.children.append(dit.key)
-&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, dit)&#125;, iterations=2)
-&gt;&gt;&gt; [n.path for n in tree.roots], tree.total_ms
+&gt;&gt;&gt; outer.children.append(dit.path)
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.path: n for n in (outer, dit)&#125;, iterations=2)
+&gt;&gt;&gt; [n.path_str for n in tree.roots], tree.total_ms
 (['forward'], 30.0)
-&gt;&gt;&gt; [n.path for n in tree.descendants(outer)]
+&gt;&gt;&gt; [n.path_str for n in tree.descendants(outer)]
 ['forward &gt; dit.forward']
-&gt;&gt;&gt; [(n.path, n.calls) for n in tree.find("dit")]
+&gt;&gt;&gt; [(n.path_str, n.calls) for n in tree.find("dit")]
 [('forward &gt; dit.forward', 10)]
-&gt;&gt;&gt; [n.path for n in tree.nodes_of(dit_module)]
+&gt;&gt;&gt; [n.path_str for n in tree.nodes_of(dit_module)]
 ['forward &gt; dit.forward']
 
 
@@ -260,16 +318,16 @@ Number of recorded iterations.
 Label prefix and module for every instrumented module, used for parameter names and sizes.
 </ParamField>
 
-<ParamField path="nodes" type="dict[NodeKey, CallNode] = field(default_factory=dict)">
-All nodes by key.
+<ParamField path="nodes" type="dict[CallPath, CallNode] = field(default_factory=dict)">
+All nodes by call path.
 </ParamField>
 
 <ParamField path="roots" type="list[CallNode]">
 Outermost nodes in first-call order.
 </ParamField>
 
-<ParamField path="sequences" type="list[list[NodeKey]] = field(default_factory=list)">
-Per iteration, the keys of the entered nodes in call order.
+<ParamField path="sequences" type="list[list[CallPath]] = field(default_factory=list)">
+Per iteration, the call paths of the entered nodes in the order the calls started.
 </ParamField>
 
 <ParamField path="total_ms" type="float">
@@ -317,6 +375,38 @@ aitune.torch.CallTree.find(
 <Indent>
 
 Nodes whose label contains ``text``, in first-call order.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-iteration_starts">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallPath":"./call_tree/nodes.mdx#aitune-torch-call_tree-nodes-CallPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.iteration_starts() -> dict[aitune.torch.call_tree.nodes.CallPath, list[int]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+For each node, how many of its calls were made before each iteration began.
+
+``iteration_starts()[path][i]`` is the index of the node's first call in iteration ``i`` when the node is
+called there, so it maps the call indices in ``CallSignature.call_indices`` to iterations. It assumes that all
+calls are recorded inside iterations, as ``inspect`` does.
+
+Example:
+    &gt;&gt;&gt; outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+    &gt;&gt;&gt; step = CallNode(path=("root.forward", "root.step"), label="root.step", owner_class="Vla", method="step")
+    &gt;&gt;&gt; tree = CallTree(
+    ...     nodes=&#123;n.path: n for n in (outer, step)&#125;,
+    ...     iterations=2,
+    ...     sequences=[[outer.path, step.path, step.path], [outer.path, step.path]],
+    ... )
+    &gt;&gt;&gt; tree.iteration_starts()[step.path]
+    [0, 2]
 
 
 </Indent>
@@ -383,14 +473,14 @@ per call.
 **Example**
 
 &gt;&gt;&gt; node = CallNode(
-...     key=("root.forward", "root.dit.forward"),
+...     path=("root.forward", "root.dit.forward"),
 ...     label="root.dit.forward",
 ...     owner_class="Dit",
 ...     method="forward",
 ...     first_seen=1,
 ... )
-&gt;&gt;&gt; outer = CallNode(key=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
-&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, node)&#125;, iterations=2)
+&gt;&gt;&gt; outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.path: n for n in (outer, node)&#125;, iterations=2)
 &gt;&gt;&gt; exported = tree.to_dict()["nodes"][1]
 &gt;&gt;&gt; exported["call_path"], exported["owner_class"]
 ('forward &gt; dit.forward', 'Dit')
@@ -3722,10 +3812,10 @@ One access to a weight: which call or code did it, and how.
 
 
 <ParamField path="by" type="str">
-The path of the recorded call it ran in (``forward > llm.embed.forward``, see ``CallNode.path``); outside
-any recorded call, the code found by ``unrecorded_caller()`` (``<unrecorded: Pipe.encode>``) or
-``<outside any call>``. ``shared_weights_of`` reports unrecorded code by its qualified name
-(``Pipe.encode``).
+The path of the recorded call it ran in (``forward > llm.embed.forward``, see
+``CallNode.path_str``); outside any recorded call, the code found by ``unrecorded_caller()``
+(``<unrecorded: Pipe.encode>``) or ``<outside any call>``. ``shared_weights_of`` reports unrecorded code
+by its qualified name (``Pipe.encode``).
 </ParamField>
 
 <ParamField path="kind" type="Literal['read', 'device', 'move']">
@@ -3811,13 +3901,16 @@ Maximum depth of the modules to inspect
 </ParamField>
 
 <ParamField path="call_tree" type="bool" default="False">
-Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran inside
-which, keyed by their chain of callers, with their times and tensor bytes in and out, plus the reads
-and device lookups code outside a module makes on its weights. This runs one more pass of ``number_of_iterations`` without per-module
-synchronization, so inspection takes longer. Parts compiled with ``torch.compile`` run compiled in
-the per-module pass, so calls inside them are not measured there; in the call-tree pass they run
-eagerly, so their calls and weight reads are recorded but their times are eager times. For deep
-models the walk must reach the linear layers, for example ``max_depth=8``.
+Also record the call tree (``InspectedModulesInfo.call_tree``): which module calls ran
+inside which, keyed by their chain of callers. Per node it records times and tensor bytes in and out,
+plus deduplicated ``signatures``: the dtypes and shapes of the tensors and the types of
+other objects passed in and returned, each signature listing which calls had it and, for each tensor or
+object, where it last appeared in a recorded call (``source``). It also records the
+reads and device lookups code outside a module makes on its weights. This runs one more pass of
+``number_of_iterations`` without per-module synchronization, so inspection takes longer. Parts compiled
+with ``torch.compile`` run compiled in the per-module pass, so calls inside them are not measured there;
+in the call-tree pass they run eagerly, so their calls and weight reads are recorded but their times
+are eager times. For deep models the walk must reach the linear layers, for example ``max_depth=8``.
 </ParamField>
 
 **Returns:** [`InspectedModulesInfo`](./inspecting/module_info.mdx#aitune-torch-inspecting-module_info-InspectedModulesInfo)

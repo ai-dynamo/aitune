@@ -18,6 +18,7 @@ The context-keyed call tree recorded by the call recorder.
 
 | Name | Description |
 |------|-------------|
+| [`_leaves_dict`](#aitune-torch-call_tree-call_tree-_leaves_dict) | A signature's leaves for export, keyed by name; the name is the key only, not repeated in the entry. |
 | [`_object_path`](#aitune-torch-call_tree-call_tree-_object_path) | The object path of a module's label prefix: ``root`` gives ``""``, ``root.vlm.lm_head`` gives ``vlm.lm_head``. |
 
 ### Data
@@ -28,13 +29,13 @@ The context-keyed call tree recorded by the call recorder.
 
 <Anchor id="aitune-torch-call_tree-call_tree-CallTree">
 
-<CodeBlock links={{"aitune.torch.call_tree.nodes.NodeKey":"./nodes.mdx#aitune-torch-call_tree-nodes-NodeKey","aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode","aitune.torch.call_tree.weights.accesses.WeightAccess":"./weights/accesses.mdx#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallPath":"./nodes.mdx#aitune-torch-call_tree-nodes-CallPath","aitune.torch.call_tree.nodes.CallNode":"./nodes.mdx#aitune-torch-call_tree-nodes-CallNode","aitune.torch.call_tree.weights.accesses.WeightAccess":"./weights/accesses.mdx#aitune-torch-call_tree-weights-accesses-WeightAccess"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.CallTree(
-    nodes: dict[aitune.torch.call_tree.nodes.NodeKey, aitune.torch.call_tree.nodes.CallNode] = dict(),
+    nodes: dict[aitune.torch.call_tree.nodes.CallPath, aitune.torch.call_tree.nodes.CallNode] = dict(),
     iterations: int = 0,
-    sequences: list[list[aitune.torch.call_tree.nodes.NodeKey]] = list(),
+    sequences: list[list[aitune.torch.call_tree.nodes.CallPath]] = list(),
     weight_accesses: dict[str, set[aitune.torch.call_tree.weights.accesses.WeightAccess]] = dict(),
     modules: list[tuple[str, torch.nn.Module]] = list()
 )
@@ -52,11 +53,11 @@ Call tree of one recording.
 **Example**
 
 &gt;&gt;&gt; outer = CallNode(
-...     key=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
+...     path=("root.forward",), label="root.forward", owner_class="Vla", method="forward", calls=2, time_ms=30.0
 ... )
 &gt;&gt;&gt; dit_module = nn.Linear(2, 2)
 &gt;&gt;&gt; dit = CallNode(
-...     key=("root.forward", "root.dit.forward"),
+...     path=("root.forward", "root.dit.forward"),
 ...     label="root.dit.forward",
 ...     owner_class="Dit",
 ...     method="forward",
@@ -65,15 +66,15 @@ Call tree of one recording.
 ...     time_ms=25.0,
 ...     first_seen=1,
 ... )
-&gt;&gt;&gt; outer.children.append(dit.key)
-&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, dit)&#125;, iterations=2)
-&gt;&gt;&gt; [n.path for n in tree.roots], tree.total_ms
+&gt;&gt;&gt; outer.children.append(dit.path)
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.path: n for n in (outer, dit)&#125;, iterations=2)
+&gt;&gt;&gt; [n.path_str for n in tree.roots], tree.total_ms
 (['forward'], 30.0)
-&gt;&gt;&gt; [n.path for n in tree.descendants(outer)]
+&gt;&gt;&gt; [n.path_str for n in tree.descendants(outer)]
 ['forward &gt; dit.forward']
-&gt;&gt;&gt; [(n.path, n.calls) for n in tree.find("dit")]
+&gt;&gt;&gt; [(n.path_str, n.calls) for n in tree.find("dit")]
 [('forward &gt; dit.forward', 10)]
-&gt;&gt;&gt; [n.path for n in tree.nodes_of(dit_module)]
+&gt;&gt;&gt; [n.path_str for n in tree.nodes_of(dit_module)]
 ['forward &gt; dit.forward']
 
 
@@ -85,16 +86,16 @@ Number of recorded iterations.
 Label prefix and module for every instrumented module, used for parameter names and sizes.
 </ParamField>
 
-<ParamField path="nodes" type="dict[NodeKey, CallNode] = field(default_factory=dict)">
-All nodes by key.
+<ParamField path="nodes" type="dict[CallPath, CallNode] = field(default_factory=dict)">
+All nodes by call path.
 </ParamField>
 
 <ParamField path="roots" type="list[CallNode]">
 Outermost nodes in first-call order.
 </ParamField>
 
-<ParamField path="sequences" type="list[list[NodeKey]] = field(default_factory=list)">
-Per iteration, the keys of the entered nodes in call order.
+<ParamField path="sequences" type="list[list[CallPath]] = field(default_factory=list)">
+Per iteration, the call paths of the entered nodes in the order the calls started.
 </ParamField>
 
 <ParamField path="total_ms" type="float">
@@ -142,6 +143,38 @@ aitune.torch.CallTree.find(
 <Indent>
 
 Nodes whose label contains ``text``, in first-call order.
+
+
+</Indent>
+<Anchor id="aitune-torch-call_tree-call_tree-CallTree-iteration_starts">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.CallPath":"./nodes.mdx#aitune-torch-call_tree-nodes-CallPath"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.CallTree.iteration_starts() -> dict[aitune.torch.call_tree.nodes.CallPath, list[int]]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+For each node, how many of its calls were made before each iteration began.
+
+``iteration_starts()[path][i]`` is the index of the node's first call in iteration ``i`` when the node is
+called there, so it maps the call indices in ``CallSignature.call_indices`` to iterations. It assumes that all
+calls are recorded inside iterations, as ``inspect`` does.
+
+Example:
+    &gt;&gt;&gt; outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+    &gt;&gt;&gt; step = CallNode(path=("root.forward", "root.step"), label="root.step", owner_class="Vla", method="step")
+    &gt;&gt;&gt; tree = CallTree(
+    ...     nodes=&#123;n.path: n for n in (outer, step)&#125;,
+    ...     iterations=2,
+    ...     sequences=[[outer.path, step.path, step.path], [outer.path, step.path]],
+    ... )
+    &gt;&gt;&gt; tree.iteration_starts()[step.path]
+    [0, 2]
 
 
 </Indent>
@@ -208,14 +241,14 @@ per call.
 **Example**
 
 &gt;&gt;&gt; node = CallNode(
-...     key=("root.forward", "root.dit.forward"),
+...     path=("root.forward", "root.dit.forward"),
 ...     label="root.dit.forward",
 ...     owner_class="Dit",
 ...     method="forward",
 ...     first_seen=1,
 ... )
-&gt;&gt;&gt; outer = CallNode(key=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
-&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.key: n for n in (outer, node)&#125;, iterations=2)
+&gt;&gt;&gt; outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
+&gt;&gt;&gt; tree = CallTree(nodes=&#123;n.path: n for n in (outer, node)&#125;, iterations=2)
 &gt;&gt;&gt; exported = tree.to_dict()["nodes"][1]
 &gt;&gt;&gt; exported["call_path"], exported["owner_class"]
 ('forward &gt; dit.forward', 'Dit')
@@ -228,6 +261,26 @@ A dict of str, int, float, list and dict values with these keys:
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-call_tree-call_tree-_leaves_dict">
+
+<CodeBlock links={{"aitune.torch.call_tree.nodes.Leaf":"./nodes.mdx#aitune-torch-call_tree-nodes-Leaf"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.call_tree.call_tree._leaves_dict(
+    leaves: dict[str, aitune.torch.call_tree.nodes.Leaf]
+) -> dict[str, dict]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+A signature's leaves for export, keyed by name; the name is the key only, not repeated in the entry.
+
+
 </Indent>
 
 <Anchor id="aitune-torch-call_tree-call_tree-_object_path">
