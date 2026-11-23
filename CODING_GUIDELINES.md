@@ -398,20 +398,18 @@ fails when the API changes, so the example stays correct.
 **Good:**
 
 ```python
-def dynamic_shapes_to_json(dynamic_shapes: DynamicShapes | None) -> list[dict[str, Any]] | None:
-    """Convert dynamic shape definitions to JSON-compatible data.
+def format_call_path(path: CallPath) -> str:
+    """Format a call path as text.
 
     Args:
-        dynamic_shapes: Shape definitions keyed by forward input path.
+        path: Call labels, outermost first.
 
     Returns:
-        A list with one dictionary per input, or `None` if `dynamic_shapes` is `None`.
+        The labels without the `root.` prefix, joined by ` > `.
 
     Examples:
-        >>> shapes = {("options", "mask"): (BatchDim("batch", min=1, opt=2, max=4), 128)}
-        >>> dynamic_shapes_to_json(shapes)  # doctest: +NORMALIZE_WHITESPACE
-        [{'path': ['options', 'mask'],
-          'shape': [{'type': 'BatchDim', 'name': 'batch', 'min': 1, 'max': 4, 'opt': 2}, 128]}]
+        >>> format_call_path(("root.forward", "root.vlm.forward"))
+        'forward > vlm.forward'
     """
 ```
 
