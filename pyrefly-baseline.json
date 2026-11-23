@@ -872,14 +872,14 @@
       "column": 38,
       "path": "aitune/torch/module/onnx_module.py",
       "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `session` with type `InferenceSession` in function `aitune.torch.libs.runtime.prepare_onnx_inputs`",
+      "concise_description": "Argument `Unknown | None` is not assignable to parameter `session` with type `InferenceSession` in function `aitune.torch.libs.onnx.runtime.prepare_onnx_inputs`",
       "severity": "error"
     },
     {
       "column": 25,
       "path": "aitune/torch/module/onnx_module.py",
       "name": "bad-argument-type",
-      "concise_description": "Argument `Unknown | None` is not assignable to parameter `session` with type `InferenceSession` in function `aitune.torch.libs.runtime.run_onnx`",
+      "concise_description": "Argument `Unknown | None` is not assignable to parameter `session` with type `InferenceSession` in function `aitune.torch.libs.onnx.runtime.run_onnx`",
       "severity": "error"
     },
     {

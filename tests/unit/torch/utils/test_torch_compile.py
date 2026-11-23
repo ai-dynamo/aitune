@@ -4,7 +4,7 @@
 
 from unittest.mock import Mock
 
-from aitune.torch.libs.torch_compile import resolve_compile_dynamic
+from aitune.torch.utils.torch_compile import resolve_compile_dynamic
 
 
 def _graph_spec_with_dynamic_axis(dynamic_axis: bool):

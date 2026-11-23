@@ -13,7 +13,7 @@ docs/guides/advanced/execution_graphs.md for the flat interface design example.
 
 Torch and ONNX export share this implementation so argument reconstruction, tensor ordering, and
 shape rules stay aligned with inference. ONNX execution and source-model metadata live separately
-in aitune.torch.libs.runtime and aitune.torch.libs.onnx_model_info; existing ONNX artifacts bypass export.
+in aitune.torch.libs.onnx.runtime and aitune.torch.libs.onnx.model_info; existing ONNX artifacts bypass export.
 """
 
 from aitune.torch.libs.exporting.onnx_exporter import ONNXExporter

@@ -91,7 +91,7 @@ def mock_onnx(mocker, graph_spec):
     mocker.patch("aitune.torch.libs.exporting.onnx_exporter.TopologicalSortPass")
     mocker.patch("onnx.checker.check_model")
     mocker.patch(
-        "aitune.torch.libs.runtime.memcpy_to_torch",
+        "aitune.torch.libs.onnx.runtime.memcpy_to_torch",
         return_value=torch.zeros(1, 5),
     )
     input_name = format_tensor_name(graph_spec.input_spec.tensor_data[0][0].path, "input")
