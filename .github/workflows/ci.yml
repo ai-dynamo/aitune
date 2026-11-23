@@ -187,7 +187,7 @@ jobs:
           if-no-files-found: error
 
   pythons-cpu:
-    name: Pythons CPU
+    name: Pythons CPU (${{ matrix.python-version }}, ${{ matrix.aitune-extra }}, transformers ${{ matrix.transformers-major }}.x)
     needs: wheel
     runs-on: linux-amd64-cpu4
     strategy:
@@ -195,12 +195,19 @@ jobs:
         include:
           - python-version: "3.11"
             aitune-extra: torch29
+            transformers-major: "5"
           - python-version: "3.12"
             aitune-extra: torch29
+            transformers-major: "5"
           - python-version: "3.13"
             aitune-extra: torch29
+            transformers-major: "5"
           - python-version: "3.14"
             aitune-extra: torch214
+            transformers-major: "5"
+          - python-version: "3.11"
+            aitune-extra: torch29
+            transformers-major: "4"
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -224,12 +231,19 @@ jobs:
           fi
         env:
           PYTHON_VERSION: ${{ matrix.python-version }}
+      # Use the project's 5.x default except for this explicit 4.x compatibility case.
+      # Run pytest directly below so uv does not restore the project's locked Transformers version.
+      - name: Install Transformers 4.x for compatibility
+        if: matrix.transformers-major == '4'
+        run: uv pip install 'transformers>=4.57.6,<5'
+      - name: Report Transformers version
+        run: .venv/bin/python -c 'import transformers; print(transformers.__version__)'
       - run: uv pip install --reinstall --no-deps dist/*.whl
       - run: .venv/bin/python -m pytest -q -rf -n auto tests/unit --junitxml=python-${{ matrix.python-version }}.test-report.xml
       - if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: python-cpu-test-report-${{ matrix.python-version }}
+          name: python-cpu-test-report-${{ matrix.python-version }}-transformers-${{ matrix.transformers-major }}
           path: python-${{ matrix.python-version }}.test-report.xml
           if-no-files-found: ignore
 
@@ -361,11 +375,15 @@ jobs:
           if-no-files-found: ignore
 
   functional-ci:
-    name: Functional CI GPU
+    name: Functional CI GPU (transformers ${{ matrix.transformers-major }}.x)
     needs: [wheel, pytorch-image]
     if: *wheel_and_image_ready
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        transformers-major: ["4", "5"]
     permissions:
       contents: read
       packages: read
@@ -382,6 +400,11 @@ jobs:
         with:
           name: dist
           path: dist
+      - name: Install Transformers 4.x for compatibility
+        if: matrix.transformers-major == '4'
+        run: python -m pip install --break-system-packages 'transformers>=4.57.6,<5'
+      - name: Report Transformers version
+        run: python -c 'import transformers; print(transformers.__version__)'
       - name: Functional CI tests
         run: |
           python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
@@ -391,7 +414,7 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: functional-ci-test-report
+          name: functional-ci-test-report-transformers-${{ matrix.transformers-major }}
           path: |
             functional-ci.test-report.xml
             functional-ci.matrix-updates.json

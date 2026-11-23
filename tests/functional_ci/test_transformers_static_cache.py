@@ -12,7 +12,7 @@ from transformers import StaticCache, StaticLayer
 from transformers.models.llama import LlamaConfig
 
 import aitune.torch as ait
-from aitune.torch.backend import Backend
+from aitune.torch.backend import Backend, TensorRTBackend, TorchTensorRTAotBackend, TorchTensorRTJitBackend
 from aitune.torch.jit.config import JITMode
 from aitune.torch.jit.config import config as jit_config
 from aitune.torch.jit.patched_module import ModuleState, PatchedModule
@@ -26,6 +26,13 @@ CACHE_LENGTH = 8
 NUM_HEADS = 2
 HEAD_DIM = 32
 DECODE_STEPS = 3
+# The projection and cache scaling differ from eager by up to 0.00176 on the CI runner.
+TENSORRT_CACHE_TOLERANCE = Tolerance(rtol=3e-3, atol=3e-3)
+TORCH_TENSORRT_JIT_XFAIL = pytest.mark.xfail(
+    reason="Torch-TensorRT JIT loses consecutive StaticCache updates; related upstream fix: pytorch/TensorRT#4894",
+    raises=AssertionError,
+    strict=True,
+)
 
 
 class StaticCacheModel(nn.Module):
@@ -44,11 +51,12 @@ class StaticCacheModel(nn.Module):
 
 
 @pytest.mark.matrix("aot_tuning.models.transformers-static-cache-{cache_state}")
-@with_backends("base")
+@with_backends("base", marks={"torch-tensorrt-jit": TORCH_TENSORRT_JIT_XFAIL})
 @pytest.mark.parametrize("cache_state", ["lazy", "initialized"])
 def test_static_cache_aot(case: BackendCase, device: torch.device, tmp_path: Path, cache_state: str):
     """Tune all cache states, compare consecutive updates, and repeat after checkpoint reload."""
     backend = case.factory()
+    tolerance = _cache_tolerance(backend, case.tolerance)
     tuned = ait.Module(StaticCacheModel(device).eval(), "static-cache", strategy=pinned_strategy(backend))
 
     def pipeline(value: torch.Tensor):
@@ -65,8 +73,8 @@ def test_static_cache_aot(case: BackendCase, device: torch.device, tmp_path: Pat
                 ignore_failing_modules=False,
             )
         assert isinstance(tuned.module, TunedModule)
-        _assert_pinned_backends(tuned.module, backend, cache_state)
-        _check_decode_updates(tuned, device, case.tolerance, cache_state)
+        _assert_pinned_backends(tuned.module, backend)
+        _check_decode_updates(tuned, device, tolerance, cache_state)
 
         checkpoint = tmp_path / "static_cache.ait"
         ait.save(tuned, checkpoint)
@@ -75,8 +83,8 @@ def test_static_cache_aot(case: BackendCase, device: torch.device, tmp_path: Pat
         restored = ait.load(StaticCacheModel(device, seed=1).eval(), checkpoint)
         assert isinstance(restored, ait.Module)
         assert isinstance(restored.module, TunedModule)
-        _assert_pinned_backends(restored.module, backend, cache_state)
-        _check_decode_updates(restored, device, case.tolerance, cache_state)
+        _assert_pinned_backends(restored.module, backend)
+        _check_decode_updates(restored, device, tolerance, cache_state)
     finally:
         if isinstance(restored, ait.Module):
             restored.deactivate()
@@ -84,11 +92,12 @@ def test_static_cache_aot(case: BackendCase, device: torch.device, tmp_path: Pat
 
 
 @pytest.mark.matrix("jit_tuning.models.transformers-static-cache-{cache_state}")
-@with_backends("base")
+@with_backends("base", marks={"torch-tensorrt-jit": TORCH_TENSORRT_JIT_XFAIL})
 @pytest.mark.parametrize("cache_state", ["lazy", "initialized"])
 def test_static_cache_jit(case: BackendCase, device: torch.device, cache_state: str):
     """JIT tuning must handle initialization and subsequent updates with the requested backend."""
     backend = case.factory()
+    tolerance = _cache_tolerance(backend, case.tolerance)
     jit_config.mode = JITMode.TUNE_EAGER
     jit_config.device = device
     jit_config.min_samples = DECODE_STEPS
@@ -106,8 +115,8 @@ def test_static_cache_jit(case: BackendCase, device: torch.device, cache_state: 
     tuned = head._wrapper
     assert isinstance(tuned, TunedModule)
     try:
-        _assert_pinned_backends(tuned, backend, cache_state)
-        _check_decode_updates(model, device, case.tolerance, cache_state)
+        _assert_pinned_backends(tuned, backend)
+        _check_decode_updates(model, device, tolerance, cache_state)
     finally:
         for selected in tuned.backends.values():
             selected.deactivate()
@@ -143,9 +152,16 @@ def _record_updates(model: Callable, value: torch.Tensor, cache_state: str) -> d
     return output
 
 
-def _assert_pinned_backends(tuned: TunedModule, backend: Backend, cache_state: str) -> None:
-    # Lazy initialization and initialized updates have different tensor input structures.
-    assert len(tuned.backends) == (2 if cache_state == "lazy" else 1)
+def _cache_tolerance(backend: Backend, default: Tolerance) -> Tolerance:
+    if isinstance(backend, (TensorRTBackend, TorchTensorRTAotBackend, TorchTensorRTJitBackend)):
+        return TENSORRT_CACHE_TOLERANCE
+    return default
+
+
+def _assert_pinned_backends(tuned: TunedModule, backend: Backend) -> None:
+    # cache_position selects separate prefill and decode graphs even when the cache is already initialized.
+    assert len(tuned.backends) == 2
+    assert {metadata.llm_phase for metadata in tuned.backends} == {"prefill", "decode"}
     for selected in tuned.backends.values():
         assert type(selected) is type(backend), f"Expected {type(backend).__name__}, got {type(selected).__name__}"
         assert selected.key() == backend.key()
@@ -168,12 +184,17 @@ def _check_decode_updates(model: Callable, device: torch.device, tolerance: Tole
             layer, reference_layer = cache.layers[0], reference_cache.layers[0]
             assert isinstance(layer, StaticLayer)
             assert isinstance(reference_layer, StaticLayer)
+            assert layer.keys is not None
+            assert layer.values is not None
+            assert reference_layer.keys is not None
+            assert reference_layer.values is not None
             tolerance.assert_close(layer.keys, reference_layer.keys)
             tolerance.assert_close(layer.values, reference_layer.values)
             assert layer.is_initialized
             assert layer.device == reference_layer.device
-            assert layer.dtype == reference_layer.dtype
+            assert layer.keys.dtype == reference_layer.keys.dtype
+            assert layer.values.dtype == reference_layer.values.dtype
             # Transformers 4 and 5 expose different dimension fields; validate those provided by the reference.
-            for field in ("max_batch_size", "batch_size", "num_heads", "head_dim", "k_head_dim", "v_head_dim"):
+            for field in ("dtype", "max_batch_size", "batch_size", "num_heads", "head_dim", "k_head_dim", "v_head_dim"):
                 if hasattr(reference_layer, field):
                     assert getattr(layer, field) == getattr(reference_layer, field), field

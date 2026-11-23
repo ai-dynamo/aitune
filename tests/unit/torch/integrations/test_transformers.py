@@ -95,14 +95,15 @@ def test_lazy_static_cache_initialization_survives_the_tensor_export_boundary():
     torch.testing.assert_close(runtime_layer.keys[..., :1, :], key)
     assert runtime_layer.is_initialized
     assert runtime_layer.device == key.device
-    assert runtime_layer.dtype == key.dtype
+    assert runtime_layer.keys.dtype == key.dtype
 
     reference_cache = _make_cache()
     reference_cache.update(key, key, 0, {"cache_position": torch.tensor([0])})
     reference_layer = reference_cache.layers[0]
     # Compare the fields supplied by this Transformers version, requiring each on the restored layer.
     # 4.x uses head_dim; 5.x splits key/value dimensions and newer releases rename max_batch_size.
-    for field in ("max_batch_size", "batch_size", "num_heads", "head_dim", "k_head_dim", "v_head_dim"):
+    # Recent 5.x releases keep dtype on the tensors instead of the layer.
+    for field in ("dtype", "max_batch_size", "batch_size", "num_heads", "head_dim", "k_head_dim", "v_head_dim"):
         if hasattr(reference_layer, field):
             assert getattr(runtime_layer, field) == getattr(reference_layer, field), field
     assert runtime_layer.values is not None
