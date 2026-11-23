@@ -215,7 +215,9 @@ Manage the stack:
 gh stack view --short            # show the branches and their pull requests
 gh stack down                    # go to the branch below; `gh stack up` goes to the one above
 gh stack rebase --upstack        # after you change a lower branch, rebase the branches above it
-gh stack sync                    # fetch, rebase on main, push, and update the pull requests
+gh stack push                    # push all branches of the stack
+gh stack sync                    # after main moves or a lower pull request merges: fetch, rebase, push
+gh stack sync --prune            # same, and delete local branches of merged pull requests
 gh stack merge <pr-number>       # merge this pull request and all unmerged ones below it
 ```
 
