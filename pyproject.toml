@@ -165,7 +165,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 include-package-data = true
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE.md"]
 
 [tool.setuptools.packages.find]
 namespaces = false
