@@ -15,10 +15,10 @@ import torch
 
 from aitune.torch import tune
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
-from aitune.torch.libs.torch_compile import TorchCompileMode
 from aitune.torch.module.wrapper_module import Module
 from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
+from aitune.torch.utils.torch_compile import TorchCompileMode
 
 logger = getLogger(__name__)
 

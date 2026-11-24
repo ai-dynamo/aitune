@@ -21,7 +21,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_recorded_graph_spec, requires_cuda
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -78,10 +78,17 @@ def mock_onnx(mocker, graph_spec):
     in CPU-only test environments without a real CUDA device or libcudart.
     """
 
-    def _export(*args, **kwargs):
-        Path(kwargs["f"]).write_bytes(b"onnx-model")
+    program = Mock()
+    program.save.side_effect = lambda path, **_: Path(path).write_bytes(b"onnx-model")
 
-    export = mocker.patch("torch.onnx.export", side_effect=_export)
+    def _export(*args, **kwargs):
+        if kwargs["dynamo"]:
+            return program
+        Path(kwargs["f"]).write_bytes(b"onnx-model")
+        return None
+
+    export = mocker.patch("torch.onnx.export", side_effect=_export, return_value=program)
+    mocker.patch("aitune.torch.libs.exporting.onnx_exporter.TopologicalSortPass")
     mocker.patch("onnx.checker.check_model")
     mocker.patch(
         "aitune.torch.libs.onnx.runtime.memcpy_to_torch",
@@ -285,15 +292,25 @@ def test_artifact_after_deactivation_exposes_the_final_onnx_interface(
     assert artifact.model.files == (artifact.model.path,)
 
 
+def export_with_external_data(*args, **kwargs):
+    def save(path, *, external_data=False):
+        path = Path(path)
+        path.write_bytes(b"onnx-model")
+        if external_data:
+            Path(f"{path}.data").write_bytes(b"external-data")
+
+    if kwargs["dynamo"]:
+        program = Mock()
+        program.save.side_effect = save
+        return program
+    save(kwargs["f"], external_data=True)
+    return None
+
+
 @requires_cuda
 def test_build_includes_onnx_external_data_in_the_artifact(
     mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
 ):
-    def export_with_external_data(*args, **kwargs):
-        model_path = Path(kwargs["f"])
-        model_path.write_bytes(b"onnx-model")
-        Path(f"{model_path}.data").write_bytes(b"external-data")
-
     mock_onnx.side_effect = export_with_external_data
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
@@ -418,28 +435,32 @@ def test_build_fails_when_execution_provider_warmup_fails(
 
 @requires_cuda
 def test_build_default_calls_onnx_export_with_dynamo_true(
-    mock_onnx, mocker, backend, model, graph_spec, sample_data, torch_device, tmp_path
+    mock_onnx, backend, model, graph_spec, sample_data, torch_device, tmp_path
 ):
     """Default config uses dynamo=True export."""
-    export_mock = mocker.patch("torch.onnx.export")
     backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
-    export_mock.assert_called_once()
-    _, call_kwargs = export_mock.call_args
+    mock_onnx.assert_called_once()
+    _, call_kwargs = mock_onnx.call_args
     assert call_kwargs.get("dynamo") is True
+    assert "f" not in call_kwargs
+    mock_onnx.return_value.save.assert_called_once_with(tmp_path / "model_raw.onnx", external_data=True)
+    assert (tmp_path / "model_raw.onnx").read_bytes() == b"onnx-model"
 
 
 @requires_cuda
 def test_build_trace_calls_onnx_export_with_dynamo_false(
-    mock_onnx, mocker, model, graph_spec, sample_data, torch_device, tmp_path
+    mock_onnx, model, graph_spec, sample_data, torch_device, tmp_path
 ):
     """Explicit use_dynamo=False uses the trace-based exporter."""
-    export_mock = mocker.patch("torch.onnx.export")
     ONNXRuntimeBackend(ONNXRuntimeBackendConfig(use_dynamo=False)).build(
         model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path
     )
-    export_mock.assert_called_once()
-    _, call_kwargs = export_mock.call_args
+    mock_onnx.assert_called_once()
+    _, call_kwargs = mock_onnx.call_args
     assert call_kwargs.get("dynamo") is False
+    assert call_kwargs["f"] == (tmp_path / "model_raw.onnx").as_posix()
+    mock_onnx.return_value.save.assert_not_called()
+    assert (tmp_path / "model_raw.onnx").read_bytes() == b"onnx-model"
 
 
 @requires_cuda
@@ -476,6 +497,44 @@ def test_infer_calls_session_and_returns_tensor(
     output = backend.infer(*args, **kwargs)
     assert backend._session.run_with_iobinding.call_count == 2
     assert isinstance(output, torch.Tensor)
+
+
+def test_infer_restores_mutable_state_with_ort_owned_tensor(mocker):
+    class StatefulDecoder(nn.Module):
+        def forward(self, x, cache):
+            cache[0].add_(x)
+            return x * 2
+
+    model = StatefulDecoder()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [torch.zeros(2)]), {}), strict=True)
+    backend = ONNXRuntimeBackend()
+    backend._graph_spec = graph_spec
+    backend._device = torch.device("cpu")
+    backend._session = mocker.Mock()
+    input_names = [format_tensor_name(locator.path, "input") for locator, _ in graph_spec.input_spec.tensor_data]
+    session_inputs = [mocker.Mock() for _ in input_names]
+    for session_input, name in zip(session_inputs, input_names, strict=True):
+        session_input.name = name
+    backend._session.get_inputs.return_value = session_inputs
+    returned_state = torch.full((2,), 3.0)
+    run_onnx = mocker.patch(
+        "aitune.torch.backend.onnx_runtime_backend.run_onnx",
+        return_value=dict(zip(graph_spec.output_names(), (x * 2, returned_state), strict=True)),
+    )
+    original_state = torch.zeros(2)
+    cache = [original_state]
+
+    result = backend._infer(x, cache)
+
+    run_onnx.assert_called_once_with(
+        backend._session,
+        dict(zip(input_names, (x, original_state), strict=True)),
+        backend._device,
+    )
+    torch.testing.assert_close(result, x * 2)
+    assert cache[0] is returned_state
+    torch.testing.assert_close(original_state, torch.zeros(2))
 
 
 @requires_cuda
@@ -546,7 +605,6 @@ def test_to_dict_contains_required_keys(mock_onnx, backend, model, graph_spec, s
     assert state[ONNXRuntimeBackend.STATE_ONNX_MODEL_PATH] == ArtifactPath(tmp_path, Path("model_raw.onnx"))
     assert state[ONNXRuntimeBackend.STATE_DEVICE] == torch_device
     assert ONNXRuntimeBackend.STATE_GRAPH_SPEC in state
-    assert ONNXRuntimeBackend.STATE_OUTPUT_OBJECT in state
     assert state[ONNXRuntimeBackend.STATE_SAMPLES] == backend._samples.to_dict()
     assert "sample_inputs" not in state
 
@@ -555,8 +613,6 @@ def test_to_dict_contains_required_keys(mock_onnx, backend, model, graph_spec, s
 def test_from_dict_restores_state(tmp_path, torch_device):
     toy = ToyTorchModel().to(torch_device)
     real_graph_spec = toy.graph_spec(batch_sizes=[1, 2], device=torch_device)
-    dummy_output = torch.zeros(1, 5)
-
     config = ONNXRuntimeBackendConfig()
     onnx_artifact = ArtifactPath(tmp_path, "model_raw.onnx")
     external_data_artifacts = [
@@ -570,14 +626,12 @@ def test_from_dict_restores_state(tmp_path, torch_device):
         ONNXRuntimeBackend.STATE_DEVICE: torch_device,
         ONNXRuntimeBackend.STATE_CONFIG: config.to_dict(),
         ONNXRuntimeBackend.STATE_GRAPH_SPEC: real_graph_spec.to_dict(),
-        ONNXRuntimeBackend.STATE_OUTPUT_OBJECT: dummy_output,
     }
     restored = ONNXRuntimeBackend.from_dict(None, state)
     assert restored._onnx_model_artifact == onnx_artifact
     assert restored._external_data_artifacts == external_data_artifacts
     assert restored._device == torch_device
     assert restored._graph_spec is not None
-    assert restored._output_object is not None
     assert restored.state == BackendState.CHECKPOINT_LOADED
 
 
@@ -586,11 +640,6 @@ def test_from_dict_restores_state(tmp_path, torch_device):
 def test_checkpoint_loaded_backend_recreates_external_data_artifact(
     mock_onnx, model, graph_spec, sample_data, torch_device, tmp_path, execution_provider
 ):
-    def export_with_external_data(*args, **kwargs):
-        model_path = Path(kwargs["f"])
-        model_path.write_bytes(b"onnx-model")
-        Path(f"{model_path}.data").write_bytes(b"external-data")
-
     mock_onnx.side_effect = export_with_external_data
     backend = ONNXRuntimeBackend(ONNXRuntimeBackendConfig(execution_provider=execution_provider)).build(
         model,
@@ -642,7 +691,7 @@ def test_onnx_config_from_dict_none_execution_provider():
 
 def test_onnx_config_rejects_invalid_execution_provider():
     with pytest.raises(ValueError, match="Invalid execution_provider"):
-        ONNXRuntimeBackendConfig(execution_provider="invalid")  # pytype: disable=wrong-arg-types
+        ONNXRuntimeBackendConfig(execution_provider="invalid")
 
 
 def test_onnx_config_from_dict_round_trip():

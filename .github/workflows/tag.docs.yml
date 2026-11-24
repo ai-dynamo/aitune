@@ -1,0 +1,94 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: Release docs
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-release-docs:
+    name: Preview release docs
+    runs-on: linux-amd64-cpu4
+    env:
+      FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check the release tag
+        run: |
+          [[ "$GITHUB_REF_TYPE" == tag && "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::Run on a vX.Y.Z tag, not $GITHUB_REF_TYPE $TAG"; exit 1; }
+      - uses: actions/checkout@v7.0.1
+        with:
+          path: aitune
+          persist-credentials: false
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: docs-website
+          path: docs-website
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "25"
+      - run: npm install -g fern-api
+
+      - run: make -C aitune docs
+      - run: aitune/.github/scripts/fern/sync_tag_docs.sh aitune docs-website "$TAG"
+      - name: Commit the release version
+        working-directory: docs-website
+        run: |
+          git add -A fern
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+            commit -m "docs(fern): release version $TAG" -m "Source tag: $TAG (${{ github.sha }})"
+          git format-patch -1 --stdout >"$RUNNER_TEMP/release-docs.patch"
+      - name: Publish a preview of docs-website with the release version
+        run: fern generate --docs --preview
+        working-directory: docs-website/fern
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: release-docs-patch
+          path: ${{ runner.temp }}/release-docs.patch
+          if-no-files-found: error
+
+  publish-release-docs:
+    name: Publish release docs
+    needs: preview-release-docs
+    runs-on: linux-amd64-cpu4
+    # Required reviewers on this environment gate the publish after the preview.
+    environment: docs-release
+    concurrency:
+      group: docs-website
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    env:
+      FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: docs-website
+          path: docs-website
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: release-docs-patch
+          path: ${{ runner.temp }}
+      - name: Apply the release version on top of the current docs-website
+        working-directory: docs-website
+        run: |
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+            am "$RUNNER_TEMP/release-docs.patch"
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "25"
+      - run: npm install -g fern-api
+
+      - name: Publish docs-website with the release version
+        run: fern generate --docs
+        working-directory: docs-website/fern
+      - name: Push the release version to docs-website
+        run: git -C docs-website push origin HEAD:docs-website

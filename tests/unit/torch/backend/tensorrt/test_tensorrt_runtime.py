@@ -3,7 +3,9 @@
 """Unit tests for TensorRTRuntime."""
 
 import pytest
+import torch
 
+from aitune.torch.backend.tensorrt.tensorrt_engine_info import TensorRTEngineInfo
 from aitune.torch.backend.tensorrt.tensorrt_runtime import (
     TensorRTRuntime,
 )
@@ -93,6 +95,27 @@ def test_create_execution_context(mock_trt, mocker):
     assert engine_info is mock_engine_info
 
 
+def test_engine_info_discovers_output_input_aliases(mocker):
+    mock_trt = mocker.patch("aitune.torch.backend.tensorrt.tensorrt_engine_info.trt")
+    mock_trt.TensorIOMode.INPUT = "input"
+    mock_trt.TensorIOMode.OUTPUT = "output"
+    mocker.patch(
+        "aitune.torch.backend.tensorrt.tensorrt_engine_info._get_dtype_mapping",
+        return_value={"float32": torch.float32},
+    )
+    engine = mocker.MagicMock()
+    engine.num_io_tensors = 2
+    engine.get_tensor_name.side_effect = lambda index: ("cache_input", "cache_output")[index]
+    engine.get_tensor_mode.side_effect = lambda name: "input" if name == "cache_input" else "output"
+    engine.get_tensor_dtype.return_value = "float32"
+    engine.get_tensor_shape.return_value = (2,)
+    engine.get_aliased_input_tensor.return_value = "cache_input"
+
+    engine_info = TensorRTEngineInfo(engine)
+
+    assert engine_info.output_input_aliases == {"cache_output": "cache_input"}
+
+
 def test_load_engine(tmp_path):
     """Test load_engine method."""
     # Create mock engine file
@@ -100,8 +123,7 @@ def test_load_engine(tmp_path):
     engine_path = tmp_path / "tensorrt" / "test_model.plan"
     engine_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(engine_path, "wb") as f:
-        f.write(engine_content)
+    engine_path.write_bytes(engine_content)
 
     # Create builder
     runtime = TensorRTRuntime()

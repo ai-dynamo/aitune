@@ -9,9 +9,9 @@ import torch
 
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.checkpoint.storage_tasks import TorchLoadTask, TorchSaveTask
-from aitune.torch.libs.torch_compile import TorchCompileMode
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
+from aitune.torch.utils.torch_compile import TorchCompileMode
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import make_sample_store, requires_cuda
 
@@ -102,10 +102,9 @@ def test_torch_inductor_build_keeps_sample_store_without_retaining_data(mocker, 
     )
 
     assert isinstance(backend._samples, SampleStore)
-    assert backend._data is None
     state = backend.to_dict()
     assert state[TorchInductorJitBackend.STATE_SAMPLES] == backend._samples.to_dict()
-    assert TorchInductorJitBackend.STATE_DATA not in state
+    assert "data" not in state
 
 
 def test_torch_inductor_warmup_uses_autocast_inference(mocker, tmp_path):
@@ -130,7 +129,7 @@ def test_torch_inductor_warmup_uses_autocast_inference(mocker, tmp_path):
     infer_with_autocast.assert_called_once()
 
 
-def test_torch_inductor_loads_legacy_inline_samples(mocker, tmp_path):
+def test_torch_inductor_rejects_legacy_inline_samples(mocker, tmp_path):
     toy = ToyTorchModel().eval()
     graph_spec = toy.graph_spec(batch_sizes=[1])
     inline_samples = toy.samples(batch_sizes=[1])
@@ -146,13 +145,12 @@ def test_torch_inductor_loads_legacy_inline_samples(mocker, tmp_path):
     )
     state = backend.to_dict()
     state.pop(TorchInductorJitBackend.STATE_SAMPLES)
-    state[TorchInductorJitBackend.STATE_DATA] = inline_samples
+    state["data"] = inline_samples
 
-    loaded_backend = TorchInductorJitBackend.from_dict(toy, state)
     compile_mock.reset_mock()
-    loaded_backend.activate()
-
-    compile_mock.assert_called_once()
+    with pytest.raises(KeyError, match="samples"):
+        TorchInductorJitBackend.from_dict(toy, state)
+    compile_mock.assert_not_called()
 
 
 def test_torch_inductor_auto_dynamic_setting_is_restored_from_state_dict(mocker, tmp_path):
@@ -287,7 +285,7 @@ def test_torch_inductor_backend_with_mode_and_options():
 
 def test_torch_inductor_config_rejects_invalid_mode():
     with pytest.raises(ValueError, match="Invalid mode"):
-        TorchInductorJitBackendConfig(mode="invalid")  # pytype: disable=wrong-arg-types
+        TorchInductorJitBackendConfig(mode="invalid")
 
 
 @requires_cuda
@@ -323,3 +321,32 @@ def test_inductor_jit_config_from_dict_round_trip():
     original = TorchInductorJitBackendConfig(fullgraph=True, dynamic=True)
     restored = TorchInductorJitBackendConfig.from_dict(original.to_dict())
     assert restored == original
+
+
+def test_torch_inductor_jit_preserves_warmup_samples_after_deployment(mocker, tmp_path):
+    model = torch.nn.Linear(2, 2)
+    backend = TorchInductorJitBackend()
+    backend._orig_module = model
+    backend._device = torch.device("cpu")
+    backend._samples = SampleStore.from_samples([((torch.ones(1, 2),), {})], tmp_path, "warmup")
+    loaded_backend = TorchInductorJitBackend.from_dict(model, backend.to_dict())
+    # Exercise deployment and serialization without compiling a backend.
+    mocker.patch.object(loaded_backend, "_activate")
+    loaded_backend.deploy(torch.device("cpu"))
+
+    state = loaded_backend.to_dict()
+    assert state[TorchInductorJitBackend.STATE_SAMPLES] == backend.to_dict()[TorchInductorJitBackend.STATE_SAMPLES]
+
+    restored_backend = TorchInductorJitBackend.from_dict(model, state)
+
+    assert (
+        restored_backend.to_dict()[TorchInductorJitBackend.STATE_SAMPLES]
+        == state[TorchInductorJitBackend.STATE_SAMPLES]
+    )
+    assert restored_backend._samples is not None
+    restored_samples = list(restored_backend._samples.iter_samples(torch.device("cpu")))
+    assert len(restored_samples) == 1
+    args, kwargs = restored_samples[0]
+    assert len(args) == 1
+    torch.testing.assert_close(args[0], torch.ones(1, 2))
+    assert kwargs == {}

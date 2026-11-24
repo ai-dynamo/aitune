@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """PyTorch module utilities for parameter counting, device management, and memory offloading."""
 
-import inspect
-from collections.abc import Callable, Iterable
+import weakref
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Optional
 from weakref import WeakValueDictionary
 
@@ -45,12 +45,11 @@ def format_num_parameters(num: int) -> str:
     """
     if num >= 1_000_000_000:
         return f"{num / 1_000_000_000:.1f}B"
-    elif num >= 1_000_000:
+    if num >= 1_000_000:
         return f"{num / 1_000_000:.1f}M"
-    elif num >= 1_000:
+    if num >= 1_000:
         return f"{num / 1_000:.1f}K"
-    else:
-        return f"{num}"
+    return f"{num}"
 
 
 def count_parameters(module: nn.Module) -> int:
@@ -70,27 +69,6 @@ def count_parameters(module: nn.Module) -> int:
     """
     num_params = sum(p.numel() for p in module.parameters())
     return num_params
-
-
-def get_forward_arguments_names(forward_func: Callable) -> tuple[list[str], list[str]]:
-    """Get the forward_func signature arguments names.
-
-    Args:
-        forward_func: PyTorch module forward function
-    Returns:
-        Tuples of forward positional only arguments and forward keyword arguments (and positional that could be passed as kwargs)
-    """
-    forward_signature = inspect.signature(forward_func)
-    params_list = list(forward_signature.parameters.values())
-
-    if len(params_list) == 0:
-        raise ValueError(f"Forward function '{forward_func.__name__}' has no parameters!")
-
-    allowed_kinds = {inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD}
-    forward_args = [p.name for p in params_list if p.kind == inspect.Parameter.POSITIONAL_ONLY]
-    forward_kwargs = [p.name for p in params_list if p.kind in allowed_kinds]
-
-    return forward_args, forward_kwargs
 
 
 def get_module_device(module: nn.Module) -> Optional["torch.device"]:
@@ -191,15 +169,70 @@ def move_module_to_device(module: nn.Module, device: str | torch.device) -> None
 def move_tensors_to_device(value: Any, device: str | torch.device) -> Any:
     """Recursively move ordinary tensor leaves while preserving distributed tensors."""
     for locator, tensor in Locator.find_leaves(value, only_tensors=True):
-        if isinstance(tensor, DTensor):
+        # Registered types can expose non-tensor metadata even when traversal requests tensors only.
+        if not isinstance(tensor, torch.Tensor) or isinstance(tensor, DTensor):
             continue
 
         value = locator.set_value(value, tensor.to(device))
     return value
 
 
+# Weights that offloading must leave where they are, because something outside the offloaded module still uses or
+# moves them (``ait.wrap`` on modules from ``ait.inspect(..., call_tree=True)``). Weak, so the set does not keep
+# models alive.
+# Keyed by ``id``: a WeakSet would compare tensors with ``==``, which is element-wise.
+# Each entry has owners (the ids of the wrapped modules that keep it, ``None`` for unowned): a tensor stays kept
+# while any owner keeps it, so releasing one wrapped module does not drop what another still needs.
+_KEPT_ON_DEVICE: dict[int, tuple["weakref.ref[torch.Tensor]", set[int | None]]] = {}
+
+
+def _owner_key(owner: object | None) -> int | None:
+    # An AITune wrapper proxy stands for the module it wraps.
+    return None if owner is None else id(getattr(owner, "__wrapped__", owner))
+
+
+def keep_on_device(tensors: Iterable[torch.Tensor], owner: object | None = None) -> None:
+    """Exclude ``tensors`` from every later ``offload``; they stay the same objects on the same device.
+
+    Args:
+        tensors: The tensors to keep.
+        owner: The wrapped module that keeps them, so ``release_kept_on_device(owner)`` can drop its share; None
+            keeps them until ``clear_kept_on_device``.
+    """
+    for tensor in tensors:
+        entry = _KEPT_ON_DEVICE.get(id(tensor))
+        owners = entry[1] if entry is not None and entry[0]() is tensor else set()
+        owners.add(_owner_key(owner))
+        _KEPT_ON_DEVICE[id(tensor)] = (weakref.ref(tensor), owners)
+
+
+def is_kept_on_device(tensor: torch.Tensor, owner: object | None = None) -> bool:
+    """Whether ``tensor`` is kept and still alive; with ``owner``, whether that owner keeps it."""
+    entry = _KEPT_ON_DEVICE.get(id(tensor))
+    if entry is None or entry[0]() is not tensor:
+        return False
+    return owner is None or _owner_key(owner) in entry[1]
+
+
+def release_kept_on_device(owner: object) -> None:
+    """Drop ``owner``'s share of every kept tensor; a tensor no other owner keeps is no longer kept."""
+    key = _owner_key(owner)
+    for tensor_id in list(_KEPT_ON_DEVICE):
+        owners = _KEPT_ON_DEVICE[tensor_id][1]
+        owners.discard(key)
+        if not owners:
+            del _KEPT_ON_DEVICE[tensor_id]
+
+
+def clear_kept_on_device() -> None:
+    """Forget the tensors registered with ``keep_on_device``."""
+    _KEPT_ON_DEVICE.clear()
+
+
 def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
     """Offload an ordinary module while preserving application-managed placement.
+
+    Parameters and buffers registered with ``keep_on_device`` are not moved, so modules that share them keep working.
 
     Args:
         model: Model to offload, including any nested ONNX Runtime sessions.
@@ -213,7 +246,12 @@ def offload(model: nn.Module, device: str | torch.device = "meta") -> None:
         return
 
     with annotate("Offloading module"):
-        model.to(device)
+        kept = {id(t) for t in (*model.parameters(), *model.buffers()) if is_kept_on_device(t)}
+        if kept:
+            # Same conversion as ``model.to(device)``, which goes through ``_apply`` too, minus the kept tensors.
+            model._apply(lambda t: t if id(t) in kept else t.to(device))
+        else:
+            model.to(device)
 
         if isinstance(model, OnnxModule):
             model.offload(device)

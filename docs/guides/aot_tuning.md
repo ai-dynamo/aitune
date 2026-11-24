@@ -285,6 +285,9 @@ With `config.strict_mode=True` (the default), different non-tensor argument valu
 scalar arguments fixed when you want one graph, or exercise each option in the wrapper when those variants should be
 tuned.
 
+Input-dependent changes to Python counters and other non-tensor input state have
+[known limitations](../known_issues.md). Keep these updates outside the compiled module.
+
 ## Configuration Options
 
 AITune has configuration for the tuning process, and each backend has its configuration.
@@ -305,7 +308,9 @@ config.min_num_samples = 5
 # Set maximum stored samples per graph
 config.max_num_samples_stored = 100
 
-# Device to move model after tuning
+# Device to move model after tuning; weights that wrap keeps for modules from inspect(..., call_tree=True) stay
+# where they are
+# (see "Shared weights and wrap" in the AOT inspect guide)
 config.device_after_tuning = "cuda"
 
 # Enable/disable strict mode for input validation

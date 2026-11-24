@@ -185,8 +185,7 @@ class KernelOptimizer:
         """Return function names supported by providers or generators."""
         function_names = set()
         for source in self._kernel_sources():
-            for function_name in self._supported_functions(source):
-                function_names.add(function_name)
+            function_names.update(self._supported_functions(source))
         return function_names
 
     def _select_source_functions(

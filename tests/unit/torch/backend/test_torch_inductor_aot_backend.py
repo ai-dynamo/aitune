@@ -23,7 +23,7 @@ from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.pt2_artifact import PT2CallContract
 from tests.toy_models import ToyTorchModel
-from tests.utilities.helpers import requires_cuda
+from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store, requires_cuda
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -60,15 +60,15 @@ def _graph_spec_for(model: nn.Module, samples: list[Sample]) -> GraphSpec:
     forward_signature = ForwardSignature.from_callable(model.forward)
     graph_spec = None
     for args, kwargs in samples:
+        if graph_spec is None:
+            graph_spec = make_recorded_graph_spec(model, (args, kwargs), name="structured", batch_size=args[0].shape[0])
+            continue
         normalized = forward_signature.normalize(args, kwargs)
         with torch.no_grad():
             output = model(*args, **kwargs)
         inputs = SampleMetadata.from_inputs(normalized.arguments, batch_size=args[0].shape[0])
         outputs = SampleMetadata.from_outputs(output, batch_size=args[0].shape[0])
-        if graph_spec is None:
-            graph_spec = GraphSpec("structured", inputs, outputs, forward_signature)
-        else:
-            graph_spec.update_shapes_seen(inputs, outputs)
+        graph_spec.update_shapes_seen(inputs, outputs)
     if graph_spec is None:
         raise ValueError("At least one sample is required")
     return graph_spec
@@ -224,7 +224,7 @@ def test_build_exposes_structured_pt2_call_in_pytree_order(mocker, tmp_path):
     backend = TorchInductorAotBackend().build(
         model,
         graph_spec,
-        samples,
+        make_sample_store(samples, tmp_path),
         device=torch.device("cpu"),
         cache_dir=tmp_path,
     )
@@ -266,7 +266,7 @@ def test_unsupported_pt2_call_does_not_fail_backend_build(mocker, tmp_path):
     backend = TorchInductorAotBackend().build(
         model,
         graph_spec,
-        samples,
+        make_sample_store(samples, tmp_path),
         device=torch.device("cpu"),
         cache_dir=tmp_path,
     )
@@ -276,7 +276,7 @@ def test_unsupported_pt2_call_does_not_fail_backend_build(mocker, tmp_path):
         backend.artifact()
 
 
-def test_call_contract_capture_exception_does_not_fail_backend_build(mocker, tmp_path):
+def test_call_effects_capture_exception_does_not_fail_backend_build(mocker, tmp_path):
     class CallContractCaptureError(Exception):
         pass
 
@@ -299,7 +299,7 @@ def test_call_contract_capture_exception_does_not_fail_backend_build(mocker, tmp
     backend = TorchInductorAotBackend().build(
         model,
         graph_spec,
-        samples,
+        make_sample_store(samples, tmp_path),
         device=torch.device("cpu"),
         cache_dir=tmp_path,
     )
@@ -313,7 +313,7 @@ def test_build_delegates_placement_preserving_module_operations(mocker, tmp_path
     model = ToyTorchModel().eval()
     move_module = mocker.patch("aitune.torch.backend.torch_inductor_aot_backend.move_module_to_device")
     graph_spec = model.graph_spec(batch_sizes=[1])
-    sample_data = model.samples(batch_sizes=[1])
+    sample_data = model.sample_store(tmp_path, batch_sizes=[1])
     mocker.patch("torch.export.export", return_value=Mock())
     mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
     mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
@@ -364,7 +364,9 @@ def test_build_static_graph_no_dynamic_shapes(mocker, model, torch_device, tmp_p
     mocker.patch.object(torch._inductor, "aoti_compile_and_package", side_effect=_fake_aoti_compile)
     mocker.patch.object(torch._inductor, "aoti_load_package", return_value=Mock())
 
-    TorchInductorAotBackend().build(model, gs, samples, device=torch_device, cache_dir=tmp_path)
+    TorchInductorAotBackend().build(
+        model, gs, make_sample_store(samples, tmp_path), device=torch_device, cache_dir=tmp_path
+    )
 
     _, call_kwargs = export_mock.call_args
     assert call_kwargs.get("dynamic_shapes") is None
@@ -421,6 +423,27 @@ def test_activate_reloads_runner(mock_aoti, backend, model, graph_spec, sample_d
 def test_to_dict_before_build_raises():
     with pytest.raises(RuntimeError, match="build"):
         TorchInductorAotBackend().to_dict()
+
+
+def test_infer_restores_mutable_structured_inputs(mocker):
+    class StatefulDecoder(nn.Module):
+        def forward(self, x, cache):
+            cache[0] = x + 1
+            return x * 2
+
+    model = StatefulDecoder()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [None]), {}), strict=True)
+    backend = TorchInductorAotBackend()
+    backend._graph_spec = graph_spec
+    backend._runner = mocker.Mock(return_value=(x * 2, x + 1))
+    cache = [None]
+
+    result = backend._infer(x, cache)
+
+    backend._runner.assert_called_once_with(x)
+    torch.testing.assert_close(result, x * 2)
+    torch.testing.assert_close(cache[0], x + 1)
 
 
 @requires_cuda
@@ -495,7 +518,7 @@ def test_serialization_round_trip(torch_device, tmp_path):
     gs = toy.graph_spec(batch_sizes=[1, 2], device=torch_device)
 
     backend = TorchInductorAotBackend()
-    backend.build(toy, gs, samples, device=torch_device, cache_dir=tmp_path)
+    backend.build(toy, gs, make_sample_store(samples, tmp_path), device=torch_device, cache_dir=tmp_path)
 
     state = backend.to_dict()
     torch.save(state, tmp_path / "state.pth")

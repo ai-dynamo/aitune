@@ -3,8 +3,12 @@
 name: Create AITune containers for nightly testing
 
 on:
-  schedule:
-    - cron: "0 0 * * 1,2,3,4,5"
+  push:
+    branches: [main]
+    paths:
+      - ".github/docker/Dockerfile"
+      - ".github/docker/*.Dockerfile"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -18,8 +22,9 @@ concurrency:
 env:
   PIP_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
-  UV_VERSION: 0.12.8
+  UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: &python_version "3.12"
+  TORCH_CI_IMAGE: &torch_ci_image ghcr.io/ai-dynamo/aitune/nvcr-torch-26.10-py3:latest
 
 defaults:
   run:
@@ -36,6 +41,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: *python_version
+          version: ${{ env.UV_VERSION }}
       - run: uv build
       - uses: actions/upload-artifact@v7.0.1
         with:
@@ -45,8 +51,8 @@ jobs:
 
   create-base-images:
     name: create pytorch ${{ matrix.torch_ci_image_base }} based AITune image
-    runs-on: linux-amd64-cpu4
-    timeout-minutes: 45
+    runs-on: linux-amd64-cpu16
+    timeout-minutes: 120
     needs: wheel
     permissions:
       contents: read
@@ -54,7 +60,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        torch_ci_image_base: [25.08-py3, 25.10-py3, 26.01-py3, 26.03-py3, 26.05-py3, 26.06-py3, 26.08-py3]
+        torch_ci_image_base: [25.08-py3, 25.10-py3, 26.01-py3, 26.03-py3, 26.05-py3, 26.06-py3, 26.08-py3, 26.10-py3]
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -68,11 +74,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4.4.0
+        with:
+          platforms: arm64
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.4.1
       - uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: .github/docker/Dockerfile
-          push: true
+          platforms: linux/amd64,linux/arm64
+          outputs: type=image,push=true,compression=zstd,force-compression=true,oci-mediatypes=true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/pytorch:${{ matrix.torch_ci_image_base }}
             AITUNE_CI_IMAGE_CREATION_DATE=${{ github.event.head_commit.timestamp }}
@@ -112,7 +125,7 @@ jobs:
         with:
           context: .
           file: .github/docker/triton.Dockerfile
-          push: true
+          outputs: type=image,push=true,compression=zstd,force-compression=true,oci-mediatypes=true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/tritonserver:${{ matrix.triton_ci_image_base }}
             AITUNE_EXTRAS=${{ matrix.aitune_extras }}
@@ -149,10 +162,29 @@ jobs:
         with:
           context: .
           file: .github/docker/cuda.Dockerfile
-          push: true
+          outputs: type=image,push=true,compression=zstd,force-compression=true,oci-mediatypes=true
           build-args: |
             FROM_IMAGE=nvcr.io/nvidia/cuda:${{ matrix.cuda_ci_image_base }}
             AITUNE_CI_IMAGE_CREATION_DATE=${{ github.event.head_commit.timestamp }}
           tags: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda_ci_image_base }}:latest
       - id: image
         run: echo "image=ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda_ci_image_base }}:latest" >> "$GITHUB_OUTPUT"
+
+  warm-gpu-runner-cache:
+    name: warm ${{ matrix.runner }} image cache
+    needs: create-base-images
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [prod-aitune-tester-rtx-pro-4500-v1]
+    # Pull the freshly pushed PR CI image onto the GPU node so the first PR job of the day starts warm.
+    container:
+      image: *torch_ci_image
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - run: python -c "import aitune"

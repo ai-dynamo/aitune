@@ -148,6 +148,9 @@ def test_unknown_tags_use_default_runner() -> None:
         (["gpu/2"], "prod-aitune-tester-rtx-pro-4500-4-v1"),
         (["gpu/4"], "prod-aitune-tester-rtx-pro-4500-4-v1"),
         (["gpu/8"], "prod-aitune-tester-rtx-pro-4500-8-v1"),
+        (["gpu/gb200"], "ai-dynamo-gb200-1-gpu"),
+        (["gpu/gb200/4"], "ai-dynamo-gb200-4-gpu"),
+        (["gpu/gb200", "gpu/4"], "ai-dynamo-gb200-4-gpu"),
     ],
 )
 def test_tags_map_to_runners(tags: list[str], expected: str) -> None:
@@ -198,6 +201,51 @@ def test_parse_args_accepts_comma_separated_only_tags(monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["generate.py", "--only-tags", "gpu/4, gpu/8"])
 
     assert generate.parse_args().only_tags == {"gpu/4", "gpu/8"}
+
+
+@pytest.mark.parametrize(("test_id", "expected"), [(None, [0, 1, 2]), ("0", [0]), ("2", [2])])
+def test_main_selects_example_variants(monkeypatch, capsys, tmp_path: Path, test_id, expected) -> None:
+    monkeypatch.chdir(REPO_ROOT)
+    output = tmp_path / "github-output"
+    argv = [
+        "generate.py",
+        "--projects-path",
+        "examples",
+        "--test",
+        "./examples/FLUX/",
+        "--stdout",
+        "--github-output",
+        str(output),
+    ]
+    if test_id is not None:
+        argv.extend(["--test-id", test_id])
+    monkeypatch.setattr(sys, "argv", argv)
+
+    generate.main()
+
+    matrix = json.loads(capsys.readouterr().out)
+    assert [job["test_number"] for job in matrix] == expected
+    assert {job["path"] for job in matrix} == {"examples/FLUX"}
+    assert f"matrix_count={len(expected)}" in output.read_text()
+
+
+@pytest.mark.parametrize("selection", [["--test-id", "0"], ["--test", "examples/FLUX", "--test-id", "-1"]])
+def test_parse_args_rejects_invalid_variant_selection(monkeypatch, capsys, selection) -> None:
+    monkeypatch.setattr(sys, "argv", ["generate.py", *selection])
+
+    with pytest.raises(SystemExit, match="2"):
+        generate.parse_args()
+
+    assert "--test-id requires --test and must be >= 0" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("selection", [["--test", "examples/missing"], ["--test", "examples/FLUX", "--test-id", "3"]])
+def test_main_rejects_unmatched_selection(monkeypatch, selection) -> None:
+    monkeypatch.chdir(REPO_ROOT)
+    monkeypatch.setattr(sys, "argv", ["generate.py", "--projects-path", "examples", *selection])
+
+    with pytest.raises(ValueError, match="No jobs match"):
+        generate.main()
 
 
 def test_custom_docker_image_is_marked_for_wheel_install() -> None:
@@ -264,7 +312,14 @@ def test_generate_matrix_from_repository_is_valid_json_and_under_limit() -> None
             "prod-aitune-tester-rtx-pro-4500-v1",
             "prod-aitune-tester-rtx-pro-4500-4-v1",
             "prod-aitune-tester-rtx-pro-4500-8-v1",
+            "ai-dynamo-gb200-1-gpu",
+            "ai-dynamo-gb200-4-gpu",
         }
+        runs_on = json.loads(entry["runs_on"])
+        if entry["runner"].startswith("ai-dynamo-gb200"):
+            assert runs_on == {"group": "ai-dynamo-gb200", "labels": entry["runner"]}
+        else:
+            assert runs_on == entry["runner"]
         assert isinstance(entry["is_custom_docker_image"], bool)
         json.loads(entry["environment"])
 

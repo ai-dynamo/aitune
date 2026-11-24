@@ -216,7 +216,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         outcome, gathered_results = coordinator.collect_results(result, local_error)
         if not outcome.succeeded:
             return None
-        assert result is not None
+        if result is None:
+            raise RuntimeError("Profiling succeeded on all ranks but produced no result")
         return self._aggregate_result(gathered_results)
 
     def _pre_tune(
@@ -277,7 +278,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             )
             return
 
-        assert result is not None
+        if result is None:
+            raise RuntimeError("Baseline profiling succeeded on all ranks but produced no result")
         result = self._aggregate_result(gathered_results)
         self._baseline_backend = backend
         self._baseline_result = result
@@ -406,7 +408,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         """Records and returns the eager comparison so profiling logs use the same speedup."""
         metric = result.metric
         if self._baseline_result is None or self._baseline_result.metric <= 0 or metric <= 0:
-            return
+            return None
         speedup = self._speedup(result, self._baseline_result)
         perf_result = BackendPerfResult(
             backend_description=backend.describe(),

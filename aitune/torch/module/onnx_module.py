@@ -9,7 +9,7 @@ import onnxruntime
 import torch
 from torch import nn
 
-from aitune.torch.libs.onnx.onnx_model_info import ONNXModelInfo
+from aitune.torch.libs.onnx.model_info import ONNXModelInfo
 from aitune.torch.libs.onnx.runtime import prepare_onnx_inputs, run_onnx
 from aitune.torch.module.graph_spec import GraphSpec
 
@@ -19,6 +19,11 @@ class OnnxModule(nn.Module):
 
     Wrap with ``aitune.torch.Module`` to record calls and select a backend with
     ``MaxThroughputStrategy``. Inputs must match the ONNX graph's names and dtypes.
+
+    The source graph is already an export artifact. Supported backends reuse it rather than trace
+    this runtime wrapper through Torch. Recorded tensors retain source graph names for bindings,
+    while calls use the shared ONNX Runtime executor. Automatic interception permits inspection
+    of this wrapper but excludes it from tuning modes.
     """
 
     def __init__(self, path: str | Path) -> None:
@@ -58,10 +63,12 @@ class OnnxModule(nn.Module):
             raise ValueError("OnnxModule requires at least one tensor input")
 
         device = values[0].device
-        assert all(value.device == device for value in values), "OnnxModule inputs must share a device"
-        assert self._device is None or self._device == device, (
-            f"OnnxModule is on {self._device}, but input is on {device}; call offload() to switch devices"
-        )
+        if any(value.device != device for value in values):
+            raise ValueError("OnnxModule inputs must share a device")
+        if self._device is not None and self._device != device:
+            raise ValueError(
+                f"OnnxModule is on {self._device}, but input is on {device}; call offload() to switch devices"
+            )
         self._ensure_session(device)
 
         inputs = prepare_onnx_inputs(self._session, args, kwargs)

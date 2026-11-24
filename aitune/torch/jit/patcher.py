@@ -14,11 +14,8 @@ from aitune.torch.config import AITuneMode
 from aitune.torch.jit.config import JITMode, config
 from aitune.torch.jit.inspect_module import InspectModule
 from aitune.torch.jit.patched_module import PatchedModule
-from aitune.torch.tune_data.reporting import (
-    has_active_report,
-    report_inspection_details,
-    report_tune_run_start,
-)
+from aitune.torch.module.onnx_module import OnnxModule
+from aitune.torch.tune_data.reporting import has_active_report, report_inspection_details, report_tune_run_start
 
 T = TypeVar("T")
 
@@ -241,6 +238,11 @@ class Patcher:
 
         Built-in defaults (``_DEFAULT_PATCH_EXCLUDE``) always apply;
         user-supplied ``jit_config.patch_exclude`` entries are additive.
+
+        This gate also controls inspection interception. AITune's own modules, including export adapters,
+        must not be wrapped recursively while inspecting or compiling user modules. OnnxModule is the
+        exception in INSPECT mode so users can inspect their source ONNX graphs. It remains excluded
+        in tuning modes, and explicit exclusions take precedence over the inspection exception.
         """
         patch_exclude = _DEFAULT_PATCH_EXCLUDE + config.patch_exclude
         module_cls = module.__class__
@@ -250,6 +252,11 @@ class Patcher:
         module_name = module_cls.__module__
         if any(module_name == p or module_name.startswith(p + ".") for p in patch_exclude):
             return False
+
+        # Do not patch AITune internals while inspecting or compiling user modules.
+        # OnnxModule is user-facing and may be inspected; explicit user exclusions above still apply.
+        if module_name == "aitune" or module_name.startswith("aitune."):
+            return config.mode == JITMode.INSPECT and isinstance(module, OnnxModule)
         return True
 
     @classmethod

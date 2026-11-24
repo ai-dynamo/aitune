@@ -31,6 +31,7 @@ from metadata import (  # noqa: E402
     Scope,
     get_runner,
     get_scope,
+    runs_on,
 )
 
 logger = logging.getLogger("generate")
@@ -85,6 +86,7 @@ def _matrix_entry(
         "docker_image": _replace_custom_docker_image(workflow_docker_image),
         "is_custom_docker_image": docker_image != default_docker_image,
         "runner": runner,
+        "runs_on": json.dumps(runs_on(runner)),
         "environment": json.dumps(_environment_for_job(config)),
         "kind": kind,
         "path": path,
@@ -300,7 +302,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--github-output", help="Path to the GitHub Actions output file.")
     parser.add_argument("--stdout", action="store_true", help="Print the generated matrix JSON to stdout.")
-    return parser.parse_args()
+    parser.add_argument("--test", help="Select jobs for this test or example path.")
+    parser.add_argument("--test-id", type=int, help="Select one variant of --test. IDs start at 0.")
+    args = parser.parse_args()
+    if args.test_id is not None and (not args.test or args.test_id < 0):
+        parser.error("--test-id requires --test and must be >= 0.")
+    return args
 
 
 def main() -> None:
@@ -317,6 +324,14 @@ def main() -> None:
         example_scope_env=args.example_scope_env,
         only_tags=args.only_tags,
     )
+    if args.test:
+        matrix = [
+            job
+            for job in matrix
+            if Path(job["path"]) == Path(args.test) and (args.test_id is None or job["test_number"] == args.test_id)
+        ]
+        if not matrix:
+            raise ValueError(f"No jobs match test={args.test!r}, test_id={args.test_id!r}.")
     logger.info("Generated %d matrix jobs", len(matrix))
     if len(matrix) > 256:
         raise ValueError(f"Generated matrix has {len(matrix)} jobs; GitHub Actions limit is 256.")

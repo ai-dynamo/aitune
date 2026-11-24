@@ -4,7 +4,7 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, Self, TypeVar
 
 from aitune.torch.module.sample_store import Sample
 
@@ -65,7 +65,7 @@ class KernelProvider(ABC):
         """Return a human-readable kernel provider description."""
         return self.name
 
-    def prepare(self: KernelProviderType, samples: list[Sample]) -> bool:
+    def prepare(self, samples: list[Sample]) -> bool:
         """Prepare this provider for inference using representative samples.
 
         Args:
@@ -123,9 +123,9 @@ class KernelProvider(ABC):
 
     @classmethod
     def from_dict(
-        cls: type[KernelProviderType],
+        cls,
         state_dict: dict[str, Any],
-    ) -> KernelProviderType:
+    ) -> Self:
         """Restore a provider that is ready for inference."""
         provider_type = state_dict.get(TYPE_KEY)
         if provider_type != cls.__name__:

@@ -78,6 +78,8 @@ def trtre_backend():
     """Set up test fixtures."""
     config = TensorRTBackendConfig(use_cuda_graphs=True)
     backend = TensorRTBackend(config=config)
+    backend._graph_spec = Mock()
+    backend._graph_spec.forward_signature.normalize.return_value.arguments = {}
 
     return backend
 
@@ -99,10 +101,9 @@ def test_deactivate_cleanup_cuda_graphs(trtre_backend):
 
 
 @pytest.fixture
-def trtre_backend_mock():
+def trtre_backend_mock(trtre_backend):
     """Set up test fixtures."""
-    config = TensorRTBackendConfig(use_cuda_graphs=True)
-    backend = TensorRTBackend(config=config)
+    backend = trtre_backend
 
     backend._context = Mock()
     backend._cuda_stream = Mock()
@@ -238,6 +239,7 @@ def test_inference_continues_without_recapturing_after_failure(trtre_backend_moc
     graph = mocker.patch("torch.cuda.CUDAGraph")
     mocker.patch("torch.cuda.graph")
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     backend._start_time = Mock()
     backend._end_time = Mock()
     backend._start_time.elapsed_time.return_value = 1.0
@@ -269,6 +271,7 @@ def test_static_inputs_live_until_synchronization(trtre_backend_mock, mocker, ca
     mocker.patch("torch.cuda.CUDAGraph")
     mocker.patch("torch.cuda.graph")
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     backend._start_time = Mock()
     backend._end_time = Mock()
     backend._start_time.elapsed_time.return_value = 1.0
@@ -399,6 +402,29 @@ def test_disabled_graphs_use_base_context(profile_backend, disabled_by):
     backend._base_context.engine.create_execution_context.assert_not_called()
 
 
+def test_aliased_state_executes_once_per_request_without_capture(profile_backend, mocker):
+    backend = profile_backend
+    backend._output_input_aliases = {"state_output": "x"}
+    backend._context = backend._base_context
+    backend._start_time = Mock()
+    backend._end_time = Mock()
+    state = torch.zeros(2, 3)
+    backend._base_context.execute_async_v3.side_effect = lambda stream: state.add_(1) is state
+    mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
+    mocker.patch.object(backend, "_prepare_inputs", return_value={"x": state})
+    mocker.patch.object(backend, "_set_input_tensors")
+    mocker.patch.object(backend, "_prepare_outputs_for_return", side_effect=lambda arguments: state)
+
+    for expected in (1, 2):
+        torch.testing.assert_close(backend._infer(), torch.full_like(state, expected))
+
+    assert backend._base_context.execute_async_v3.call_count == 2
+    backend._base_context.engine.create_execution_context.assert_not_called()
+    assert not backend._cuda_graphs.profiles
+    assert not backend._use_cuda_graphs
+
+
 def test_replay_does_not_rebind_context(trtre_backend_mock, mocker):
     backend = trtre_backend_mock
     backend._cuda_graphs.active.graph = Mock()
@@ -458,6 +484,7 @@ def test_capture_failure_releases_cached_profiles_after_execution(profile_backen
     mocker.patch("torch.cuda.CUDAGraph")
     mocker.patch("torch.cuda.graph")
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     backend._start_time = Mock()
     backend._end_time = Mock()
     backend._start_time.elapsed_time.return_value = 1.0
@@ -505,6 +532,7 @@ def test_profile_context_setup_failure_propagates(profile_backend, failure):
 
 def test_activation_starts_with_empty_profile_cache(trtre_backend, mocker):
     backend = trtre_backend
+    backend._device = torch.device("cuda:0")
     backend._config.max_cuda_graphs = 2
     backend._config.cuda_graph_cache_policy = "lru"
     backend._engine_artifact = Mock()
@@ -516,9 +544,14 @@ def test_activation_starts_with_empty_profile_cache(trtre_backend, mocker):
     mocker.patch("aitune.torch.backend.tensorrt.tensorrt_backend.cuda_set_device")
     mocker.patch("torch.cuda.Stream")
     mocker.patch("torch.cuda.Event")
-    mocker.patch.object(backend, "_create_output_allocator", side_effect=lambda context: Mock())
+    allocator_factory = mocker.patch(
+        "aitune.torch.backend.tensorrt.tensorrt_backend.TorchOutputAllocator", side_effect=lambda **kwargs: Mock()
+    )
     mocker.patch.object(backend, "_load_trt_optimization_profiles", return_value=[{"x": ((2, 3),) * 3}])
     backend._activate()
+    assert backend._output_allocator is backend._base_output_allocator
+    context.set_output_allocator.assert_called_once_with("y", backend._base_output_allocator)
+    assert allocator_factory.call_count == 1
     assert backend._cuda_graphs.max_graphs == 2
     assert backend._cuda_graphs.policy == "lru"
     assert backend._cuda_graphs.static_profile_indices == {0}
@@ -730,6 +763,7 @@ def test_lfu_rejected_request_executes_normally_and_cached_graph_still_replays(l
     mocker.patch("torch.cuda.CUDAGraph", side_effect=lambda: Mock())
     mocker.patch("torch.cuda.graph")
     mocker.patch("torch.cuda.stream")
+    mocker.patch("torch.cuda.current_stream")
     mocker.patch.object(backend, "_set_input_tensors")
     mocker.patch.object(backend, "_prepare_outputs_for_return")
     inputs = mocker.patch.object(backend, "_prepare_inputs", return_value={"x": torch.empty(1, 3)})

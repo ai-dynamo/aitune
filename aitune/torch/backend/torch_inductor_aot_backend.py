@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch Inductor AOT backend."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Self, cast
 
 import nvtx
 import torch
@@ -23,7 +23,7 @@ from aitune.torch.backend.backend import (
     ExecutionMode,
 )
 from aitune.torch.checkpoint.artifact import ArtifactPath
-from aitune.torch.libs.torch import TorchExporter
+from aitune.torch.libs.exporting import TorchExporter
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.module import move_module_to_device, offload
@@ -53,7 +53,7 @@ class TorchInductorAotBackendConfig(BackendConfig):
     inductor_configs: dict[str, Any] | None = None
 
 
-class TorchInductorAotBackend(Backend):
+class TorchInductorAotBackend(Backend[TorchInductorAotBackendConfig]):
     """Backend that compiles models using AOT Inductor (``torch._inductor.aoti_compile_and_package``).
 
     Requires PyTorch >= 2.6.
@@ -89,10 +89,9 @@ class TorchInductorAotBackend(Backend):
         Args:
             config: Configuration for AOT Inductor compilation.
         """
-        super().__init__()
-        self._config = config or TorchInductorAotBackendConfig()
+        super().__init__(config or TorchInductorAotBackendConfig())
         self._compiled_model_artifact: ArtifactPath | None = None
-        self._runner = None
+        self._runner: Callable[..., Any] | None = None
         self._graph_spec: GraphSpec | None = None
         self._pt2_call_contract: PT2CallContract | None = None
         self._pt2_call_contract_error: str | None = None
@@ -113,20 +112,20 @@ class TorchInductorAotBackend(Backend):
         except (OSError, RuntimeError, ValueError) as error:
             raise RuntimeError(f"PT2 artifact is not available for deployment: {error}") from error
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Export and compile the model with AOT Inductor, then load the runner."""
         self._graph_spec = graph_spec
         self._samples = samples
         module = module.eval()
-        move_module_to_device(module, self._device)
+        move_module_to_device(module, self.device)
 
         with self._track_build_step(TorchInductorAotBuildStep.TORCH_EXPORT):
-            export_result = TorchExporter().export(module, samples[0], graph_spec, device=self._device)
+            export_result = TorchExporter().export(module, samples[0], graph_spec, device=self.device)
             exported = export_result.exported_program
 
         # FIXME: This extra forward pass can mutate model state. Replace it with the shared export contract once the
         # exporter exposes the recorded output structure and tensor ordering.
-        self._capture_call_contract(module, export_result.sample)
+        self._capture_call_contract(module, samples[0])
 
         with self._track_build_step(TorchInductorAotBuildStep.AOT_COMPILE) as result:
             self._compiled_model_artifact = ArtifactPath(cache_dir, "model.pt2")
@@ -165,7 +164,7 @@ class TorchInductorAotBackend(Backend):
         """Load the compiled model from disk."""
         compiled_model_artifact = cast(ArtifactPath, self._compiled_model_artifact)
         logger.debug("Loading compiled AOT Inductor runner from %s.", compiled_model_artifact)
-        device_index = self._device.index if self._device.index is not None else 0
+        device_index = self.device.index or 0
         self._runner = torch._inductor.aoti_load_package(str(compiled_model_artifact.path), device_index=device_index)
 
     def _create_artifact(self) -> DeploymentArtifact:
@@ -222,6 +221,17 @@ class TorchInductorAotBackend(Backend):
     def _infer(self, *args: Any, **kwargs: Any) -> Any:
         """Run inference with the compiled AOT Inductor runner.
 
+        Flatten current arguments in the recorded input order. The forward effects specification consumes extra
+        state results, applies mutations, and restores structured outputs. Keep the default PRESERVE_INPUT
+        policy so a recorded in-place update reaches the original tensor, including references held
+        outside its container. Copy-back is skipped if the runner already returned that same object.
+        Recorded REPLACE_TENSOR changes still install a new tensor, matching assignment in forward.
+
+        For ``module(x, state={"bias": bias, "scale": 2})``, ``flat_inputs`` contains ``(x, bias)``
+        in recorded tensor-path order. The export adapter rebuilds the structured call and retains
+        the non-tensor value ``scale=2`` from the recorded sample. Inference extracts current tensor
+        references in that same order, so equivalent positional and keyword calls reach the same runner inputs.
+
         Args:
             *args: Inference arguments.
             **kwargs: Inference keyword arguments.
@@ -229,8 +239,14 @@ class TorchInductorAotBackend(Backend):
         Returns:
             Any: The result of the inference.
         """
+        graph_spec = cast(GraphSpec, self._graph_spec)
         with torch.no_grad():
-            return self._runner(*args, **kwargs)
+            # Internal lifecycle invariant: activation loads the runner before inference.
+            assert self._runner is not None, "Active AOT Inductor backend must have a loaded runner."  # noqa: S101
+            forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
+            flat_inputs = graph_spec.input_spec.flatten_tensors(forward_inputs.arguments)
+            flat_outputs = self._runner(*flat_inputs)
+            return graph_spec.restore_outputs(flat_outputs, forward_inputs.arguments)
 
     def _deactivate(self):
         """Deactivate backend."""
@@ -265,7 +281,7 @@ class TorchInductorAotBackend(Backend):
         backend._compiled_model_artifact = state_dict[cls.STATE_COMPILED_MODEL_PATH]
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
-        contract: PT2CallContractState | None = state_dict[cls.STATE_PT2_CALL_CONTRACT]
+        contract: PT2CallContractState | None = state_dict.get(cls.STATE_PT2_CALL_CONTRACT)
         backend._pt2_call_contract = PT2CallContract.from_dict(contract) if contract is not None else None
         samples_state = state_dict.get(cls.STATE_SAMPLES)
         backend._samples = SampleStore.from_dict(samples_state) if isinstance(samples_state, dict) else samples_state

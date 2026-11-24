@@ -11,7 +11,6 @@ import torch.nn as nn
 
 from aitune.torch.backend.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
-from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_metadata import SampleMetadata
@@ -33,6 +32,7 @@ from aitune.torch.tune_strategy.performance_validation import PerformanceValidat
 from aitune.torch.tune_strategy.tune_strategy import TuneStrategy
 from aitune.torch.tuning import tune
 from tests.toy_backends import SleepBackend
+from tests.utilities.helpers import make_recorded_graph_spec
 
 _PATCH_FIND_MAX_THROUGHPUT = (
     "aitune.torch.tune_strategy.mixin.performance_validation_mixin.find_max_throughput_for_backend"
@@ -413,13 +413,7 @@ def test_find_max_batch_size_explains_unsupported_format_and_fallback(mock_graph
 
 def test_find_max_batch_size_records_output_bounds(tmp_path):
     module = TinyModel()
-    signature = ForwardSignature.from_callable(module.forward)
-    graph_spec = GraphSpec(
-        name="graph",
-        input_spec=SampleMetadata.from_inputs({"x": torch.zeros(1, 4)}, batch_size=1),
-        output_spec=SampleMetadata.from_outputs(torch.zeros(1, 4), batch_size=1),
-        forward_signature=signature,
-    )
+    graph_spec = make_recorded_graph_spec(module, ((torch.zeros(1, 4),), {}), name="graph", batch_size=1)
     graph_spec.update_shapes_seen(
         SampleMetadata.from_inputs({"x": torch.zeros(4, 4)}, batch_size=4),
         SampleMetadata.from_outputs(torch.zeros(4, 4), batch_size=4),

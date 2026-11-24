@@ -128,7 +128,7 @@ def test_external_registration_rejects_onnx_in_the_complete_batch_before_install
     source = _ModuleTree()
     onnx = OnnxModule(tmp_path / "unused.onnx")
 
-    with pytest.raises(RuntimeError, match="does not support onnx modules"):
+    with pytest.raises(ValueError, match="Explicit JIT target is excluded from tuning"):
         register_for_jit_tuning([source, onnx], device_management="external")
 
     for target in (source, onnx):

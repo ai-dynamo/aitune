@@ -203,7 +203,8 @@ def _run_profiling_batch_size(
         if not coordinator.outcome(local_error).succeeded:
             return None
 
-        assert new_entries is not None
+        if new_entries is None:
+            raise RuntimeError("Profiling succeeded on all ranks but produced no entries")
         entries += new_entries
         if coordinator.decide_by_rank0(local_should_stop):
             break

@@ -21,7 +21,7 @@ from pydantic import ValidationError  # noqa: E402
 try:
     import tomllib
 except ImportError:
-    import tomli as tomllib  # pytype: disable=import-error
+    import tomli as tomllib
 
 logger = logging.getLogger("validate")
 

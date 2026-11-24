@@ -1,6 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Shared ONNX Runtime execution with Torch inputs."""
+"""Shared ONNX Runtime execution with Torch inputs.
+
+OnnxModule and ONNXRuntimeBackend use this path so input binding, stream synchronization, and output
+collection agree for source artifacts and tuned sessions. Inputs are matched to actual ONNX names;
+structured Python output reconstruction and recorded input mutations belong to the caller.
+"""
 
 from logging import getLogger
 
@@ -28,9 +33,18 @@ _TORCH_DTYPE_TO_NUMPY: dict[torch.dtype, type] = {
 def run_onnx(
     session: onnxruntime.InferenceSession, inputs: dict[str, torch.Tensor], device: torch.device
 ) -> dict[str, torch.Tensor]:
-    """Bind tensors directly and return outputs on the requested device."""
+    """Bind tensors directly and return outputs on the requested device.
+
+    Contiguous input buffers stay alive until ORT execution and output synchronization finish.
+    CUDA execution first waits for current-stream Torch writes because ORT uses its own stream.
+    CPU results become Torch tensors through NumPy; CUDA results are copied into Torch storage.
+    Returned names are the session's graph outputs, including any internal mutation results.
+    """
     # Keep contiguous buffers alive until inference completes.
     inputs = {name: value.contiguous() for name, value in inputs.items()}
+    # ONNX Runtime reads the bound buffers on its own stream, so finish the Torch writes first.
+    if device.type == "cuda":
+        torch.cuda.current_stream(device).synchronize()
     binding = session.io_binding()
 
     _bind_inputs(binding, inputs)
