@@ -132,6 +132,7 @@ jobs:
           RUNNER_TOOL_CACHE: ${{ runner.temp }}/tool-cache
         with:
           enable-cache: true
+          cache-suffix: ${{ github.job }}-${{ matrix.torch }}-${{ matrix.cuda.uv_torch_backend }}
           python-version: ${{ matrix.python_version }}
           version: ${{ env.UV_VERSION }}
       # - run: nvidia-smi

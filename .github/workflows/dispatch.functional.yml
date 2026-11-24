@@ -67,6 +67,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
+          cache-suffix: ${{ github.job }}
           python-version: *python_version
           version: ${{ env.UV_VERSION }}
       # Standalone dispatches and merge groups build the selected commit's wheel.
