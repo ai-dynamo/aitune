@@ -58,6 +58,9 @@ All extracted information is accessible as properties.
 <ParamField path="_output_dtypes">
 </ParamField>
 
+<ParamField path="_output_input_aliases" type="= &#123;&#125;">
+</ParamField>
+
 <ParamField path="_output_names">
 </ParamField>
 
@@ -74,6 +77,10 @@ Number of input and output tensors.
 
 <ParamField path="output_dtypes" type="dict[str, dtype]">
 List of output tensor dtypes.
+</ParamField>
+
+<ParamField path="output_input_aliases" type="dict[str, str]">
+Map outputs that share buffers to their corresponding inputs.
 </ParamField>
 
 <ParamField path="output_names" type="list[str]">

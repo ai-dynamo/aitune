@@ -6,6 +6,10 @@ title: aitune.torch.libs.onnx.runtime
 
 Shared ONNX Runtime execution with Torch inputs.
 
+OnnxModule and ONNXRuntimeBackend use this path so input binding, stream synchronization, and output
+collection agree for source artifacts and tuned sessions. Inputs are matched to actual ONNX names;
+structured Python output reconstruction and recorded input mutations belong to the caller.
+
 ## Module Contents
 
 ### Functions
@@ -134,6 +138,11 @@ aitune.torch.libs.onnx.runtime.run_onnx(
 <Indent>
 
 Bind tensors directly and return outputs on the requested device.
+
+Contiguous input buffers stay alive until ORT execution and output synchronization finish.
+CUDA execution first waits for current-stream Torch writes because ORT uses its own stream.
+CPU results become Torch tensors through NumPy; CUDA results are copied into Torch storage.
+Returned names are the session's graph outputs, including any internal mutation results.
 
 
 </Indent>

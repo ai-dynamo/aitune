@@ -748,21 +748,13 @@
           slug: aitune/aitune/torch/libs/onnx
           children:
             - type: section
-              title: onnx_exporter
-              slug: aitune/aitune/torch/libs/onnx/onnx_exporter
+              title: model_info
+              slug: aitune/aitune/torch/libs/onnx/model_info
               children:
                 - type: page
-                  title: onnx_exporter
-                  slug: aitune/aitune/torch/libs/onnx/onnx_exporter
-                  pageId: aitune/aitune/torch/libs/onnx/onnx_exporter.mdx
-            - type: section
-              title: onnx_model_info
-              slug: aitune/aitune/torch/libs/onnx/onnx_model_info
-              children:
-                - type: page
-                  title: onnx_model_info
-                  slug: aitune/aitune/torch/libs/onnx/onnx_model_info
-                  pageId: aitune/aitune/torch/libs/onnx/onnx_model_info.mdx
+                  title: model_info
+                  slug: aitune/aitune/torch/libs/onnx/model_info
+                  pageId: aitune/aitune/torch/libs/onnx/model_info.mdx
             - type: section
               title: runtime
               slug: aitune/aitune/torch/libs/onnx/runtime
@@ -771,26 +763,6 @@
                   title: runtime
                   slug: aitune/aitune/torch/libs/onnx/runtime
                   pageId: aitune/aitune/torch/libs/onnx/runtime.mdx
-        - type: section
-          title: torch
-          slug: aitune/aitune/torch/libs/torch
-          children:
-            - type: section
-              title: torch_exporter
-              slug: aitune/aitune/torch/libs/torch/torch_exporter
-              children:
-                - type: page
-                  title: torch_exporter
-                  slug: aitune/aitune/torch/libs/torch/torch_exporter
-                  pageId: aitune/aitune/torch/libs/torch/torch_exporter.mdx
-        - type: section
-          title: torch_compile
-          slug: aitune/aitune/torch/libs/torch_compile
-          children:
-            - type: page
-              title: torch_compile
-              slug: aitune/aitune/torch/libs/torch_compile
-              pageId: aitune/aitune/torch/libs/torch_compile.mdx
     - type: section
       title: module
       slug: aitune/aitune/torch/module
@@ -803,6 +775,14 @@
               title: exact_sample_metadata
               slug: aitune/aitune/torch/module/exact_sample_metadata
               pageId: aitune/aitune/torch/module/exact_sample_metadata.mdx
+        - type: section
+          title: forward_effects_spec
+          slug: aitune/aitune/torch/module/forward_effects_spec
+          children:
+            - type: page
+              title: forward_effects_spec
+              slug: aitune/aitune/torch/module/forward_effects_spec
+              pageId: aitune/aitune/torch/module/forward_effects_spec.mdx
         - type: section
           title: forward_signature
           slug: aitune/aitune/torch/module/forward_signature

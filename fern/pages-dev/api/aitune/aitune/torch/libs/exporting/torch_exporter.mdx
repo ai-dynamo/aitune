@@ -15,6 +15,13 @@ Export modules through the flat tensor boundary with Torch Export.
 | [`TorchExportResult`](#aitune-torch-libs-exporting-torch_exporter-TorchExportResult) | Program and dynamic-shape rules produced by Torch Export. |
 | [`TorchExporter`](#aitune-torch-libs-exporting-torch_exporter-TorchExporter) | Export a module through AITune's flat tensor interface. |
 
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_as_dynamic_hints`](#aitune-torch-libs-exporting-torch_exporter-_as_dynamic_hints) | Replace explicit dimensions with bounded dynamic hints while preserving shared dimensions. |
+| [`_is_constraint_violation`](#aitune-torch-libs-exporting-torch_exporter-_is_constraint_violation) | Return whether Torch Export rejected the supplied shape constraints. |
+
 ### Data
 
 [`logger`](#aitune-torch-libs-exporting-torch_exporter-logger)
@@ -47,7 +54,8 @@ Input constraints used for export, or None when all input dimensions are static.
 </ParamField>
 
 <ParamField path="exported_program" type="ExportedProgram">
-Program accepting flat tensors and returning a tuple of recorded output tensors.
+Program accepting flat tensors and returning user tensor results followed by
+any additional tensors required to restore input mutations.
 </ParamField>
 </Indent>
 
@@ -58,7 +66,8 @@ Program accepting flat tensors and returning a tuple of recorded output tensors.
 ```python
 class aitune.torch.libs.exporting.TorchExporter(
     use_auto: bool = True,
-    strict: bool | None = None
+    strict: bool | None = None,
+    fallback_to_dynamic_hints: bool = False
 )
 ```
 
@@ -72,6 +81,8 @@ Export a module through AITune's flat tensor interface.
 The returned program uses the adapter's tensor order, rather than the original Python call layout.
 For ``module(x, state={"bias": bias})`` returning ``{"result": x + bias}``, its module accepts
 ``(x, bias)`` and returns ``(result,)``. Backend integration must restore the Python output structure.
+Mutating modules can return additional state tensors described by the graph's forward effects specification;
+backends consume these internally to restore input changes before returning user outputs.
 
 Default tracing tries strict export, then non-strict export for modules that strict tracing cannot
 capture. Each attempt prepares fresh sample containers and an adapter; the original module is shared,
@@ -86,6 +97,10 @@ use named bounded dimensions; inferred dimensions with matching bounds share a d
 
 <ParamField path="strict" type="bool | None" default="None">
 Select strict or non-strict export. ``None`` tries strict export first and then falls back.
+</ParamField>
+
+<ParamField path="fallback_to_dynamic_hints" type="bool" default="False">
+Retry rejected explicit constraints with bounded ``Dim.DYNAMIC`` hints.
 </ParamField>
 
 
@@ -111,6 +126,46 @@ Prepare a tensor-only example call and export the module.
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-torch_exporter-_as_dynamic_hints">
+
+<CodeBlock links={{"aitune.torch.libs.exporting.dynamic_shapes.TorchDynamicShapes":"./dynamic_shapes.mdx#aitune-torch-libs-exporting-dynamic_shapes-TorchDynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.torch_exporter._as_dynamic_hints(
+    dynamic_shapes: aitune.torch.libs.exporting.dynamic_shapes.TorchDynamicShapes | None
+) -> aitune.torch.libs.exporting.dynamic_shapes.TorchDynamicShapes | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Replace explicit dimensions with bounded dynamic hints while preserving shared dimensions.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-torch_exporter-_is_constraint_violation">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.torch_exporter._is_constraint_violation(
+    error: Exception
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return whether Torch Export rejected the supplied shape constraints.
+
+
 </Indent>
 
 <Anchor id="aitune-torch-libs-exporting-torch_exporter-logger">

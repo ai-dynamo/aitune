@@ -49,6 +49,11 @@ the legacy tracer receives ONNX dynamic-axis annotations. The selected mode is u
 Export returns the artifact path after ONNX structural validation, which does not establish numerical
 equivalence with the original module. An incomplete artifact is removed on failure when possible.
 
+User tensor outputs precede internal mutation outputs in the graph's forward effects specification order.
+For ``cache[0] = x + 1; return x * 2``, the two outputs carry the user result and updated cache.
+Runtime restoration consumes the second internally. Legacy tracing annotates varying state axes
+from post-call metadata, since an update can create a tensor absent from the original inputs.
+
 **Parameters:**
 
 <ParamField path="output_path" type="Path">
@@ -64,6 +69,34 @@ ONNX operator-set version, or None to use Torch's default.
 </ParamField>
 
 
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_add_state_dynamic_axes">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.ONNXExporter._add_state_dynamic_axes(
+    dynamic_axes: dict,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Declare dynamic axes for outputs that carry changed input tensors.
+
+Use post-call bounds because a mutation can create or resize a tensor, for example replacing
+a None cache slot with an input-dependent result. With observed sizes (2, 4) and (3, 4), axis
+zero of that internal state output is dynamic even though no pre-call cache tensor existed.
+Ignore missing post-call specifications and static axes. Only extra mutation outputs are added
+here; a changed tensor already returned as a user output uses the ordinary output annotations.
+
+
+</Indent>
 <Anchor id="aitune-torch-libs-exporting-onnx_exporter-ONNXExporter-_create_dynamic_axes">
 
 <CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
@@ -102,7 +135,11 @@ aitune.torch.libs.exporting.ONNXExporter._export_dynamo(
 
 <Indent>
 
-Export the prepared adapter with the Dynamo-based ONNX exporter.
+Export, sort, and save the prepared adapter with Dynamo.
+
+Request an in-memory ONNX program so dependency ordering can be repaired before serialization.
+The existing unbind/Split optimizer workaround requires producers before their consumers.
+Save with external tensor data enabled so large weights can be stored outside the graph file.
 
 
 </Indent>

@@ -413,13 +413,13 @@ Returns the state_dict of the backend.
 
 <Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig">
 
-<CodeBlock links={{"aitune.torch.libs.torch_compile.TorchCompileMode":"../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode","aitune.torch.backend.torchao_backend.QuantizationType":"#aitune-torch-backend-torchao_backend-QuantizationType"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.torchao_backend.QuantizationType":"#aitune-torch-backend-torchao_backend-QuantizationType"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.backend.TorchAOBackendConfig(
     fullgraph: bool = False,
     dynamic: bool | None = None,
-    mode: aitune.torch.libs.torch_compile.TorchCompileMode | None = 'max-autotune',
+    mode: aitune.torch.utils.torch_compile.TorchCompileMode | None = 'max-autotune',
     quantization: aitune.torch.backend.torchao_backend.QuantizationType | None = None,
     quantization_config: torchao.core.config.AOBaseConfig | None = None,
     filter_fn: collections.abc.Callable[[nn.Module, str], bool] | None = None
@@ -449,7 +449,7 @@ graph specs with detected dynamic axes, without mutating this config.
 </ParamField>
 
 <ParamField path="mode" type="TorchCompileMode | None" default="'max-autotune'">
-[`TorchCompileMode`](../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode) `| None` — Passed through to ``torch.compile(mode=...)``. Valid presets are ``"default"``,
+Passed through to ``torch.compile(mode=...)``. Valid presets are ``"default"``,
 ``"reduce-overhead"``, ``"max-autotune"``, and ``"max-autotune-no-cudagraphs"``.
 </ParamField>
 

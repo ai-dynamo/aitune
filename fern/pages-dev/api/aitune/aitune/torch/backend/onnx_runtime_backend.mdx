@@ -117,9 +117,6 @@ ait.load(model, "model.ait")
 <ParamField path="STATE_ONNX_MODEL_PATH" type="= 'onnx_model_path'">
 </ParamField>
 
-<ParamField path="STATE_OUTPUT_OBJECT" type="= 'output_object'">
-</ParamField>
-
 <ParamField path="STATE_SAMPLES" type="= 'samples'">
 </ParamField>
 
@@ -305,7 +302,7 @@ aitune.torch.backend.ONNXRuntimeBackend._export_onnx(
 
 <Indent>
 
-Export a Torch module and preserve its output structure.
+Export a Torch module through the recorded flat tensor contract.
 
 
 </Indent>
@@ -330,43 +327,6 @@ Return execution providers based on config (no automatic CPU fallback).
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_get_output_object">
-
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.ONNXRuntimeBackend._get_output_object(
-    module: torch.nn.Module,
-    sample: aitune.torch.module.sample_store.Sample
-) -> typing.Any
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Get the output object from the module and sample.
-
-Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
-the output object.
-
-**Parameters:**
-
-<ParamField path="module" type="nn.Module">
-PyTorch module
-</ParamField>
-
-<ParamField path="sample" type="Sample">
-[`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Sample input to use for model inference.
-</ParamField>
-
-**Returns:** `Any`
-
-The output object from the module.
-
-
-</Indent>
 <Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_infer">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -383,7 +343,7 @@ aitune.torch.backend.ONNXRuntimeBackend._infer(
 
 <Indent>
 
-Run inference through the shared ONNX Runtime I/O binding executor.
+Run the ONNX session and restore recorded output and input state.
 
 
 </Indent>
@@ -393,8 +353,7 @@ Run inference through the shared ONNX Runtime I/O binding executor.
 
 ```python
 aitune.torch.backend.ONNXRuntimeBackend._prepare_inputs(
-    args: tuple,
-    kwargs: dict
+    arguments: dict[str, typing.Any]
 ) -> dict[str, typing.Any]
 ```
 
@@ -403,10 +362,10 @@ aitune.torch.backend.ONNXRuntimeBackend._prepare_inputs(
 
 <Indent>
 
-Map args/kwargs to session input names using graph_spec locators.
+Select recorded tensors that remain ONNX session inputs.
 
-Tensors are returned as-is (preserving their device); I/O binding happens
-in the shared ``run_onnx`` executor.
+ONNX may remove unused inputs during export. The shared executor binds
+tensors on their current device.
 
 
 </Indent>
@@ -416,7 +375,8 @@ in the shared ``run_onnx`` executor.
 
 ```python
 aitune.torch.backend.ONNXRuntimeBackend._prepare_outputs(
-    outputs: dict[str, torch.Tensor]
+    outputs: dict[str, torch.Tensor],
+    arguments: dict[str, typing.Any]
 ) -> typing.Any
 ```
 
@@ -425,18 +385,24 @@ aitune.torch.backend.ONNXRuntimeBackend._prepare_outputs(
 
 <Indent>
 
-Reconstruct original output structure from session output tensors.
+Rebuild user outputs and apply input changes returned by ONNX Runtime.
+
+Order named results as user outputs followed by internal state outputs. REPLACE_INPUT makes
+the returned ORT buffers the current state, avoiding a separate copy-back into old tensor leaves,
+including for recorded in-place writes. This is a restoration choice, not a requirement imposed
+by ORT owning the buffers. Returned input containers retain their identity, but external references
+to old tensor leaves may not observe updates. Assignment to a top-level normalized argument does
+not rebind the caller's variable.
 
 
 </Indent>
 <Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_use_existing_onnx">
 
-<CodeBlock links={{"aitune.torch.module.onnx_module.OnnxModule":"../module/onnx_module.mdx#aitune-torch-module-onnx_module-OnnxModule","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.onnx_module.OnnxModule":"../module/onnx_module.mdx#aitune-torch-module-onnx_module-OnnxModule"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.ONNXRuntimeBackend._use_existing_onnx(
-    module: aitune.torch.module.onnx_module.OnnxModule,
-    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+    module: aitune.torch.module.onnx_module.OnnxModule
 ) -> None
 ```
 
@@ -445,7 +411,7 @@ aitune.torch.backend.ONNXRuntimeBackend._use_existing_onnx(
 
 <Indent>
 
-Prepare artifacts and output structure from an existing ONNX model.
+Track an existing ONNX graph and its external weights.
 
 
 </Indent>

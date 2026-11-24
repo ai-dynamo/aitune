@@ -1,0 +1,730 @@
+---
+layout: overview
+slug: aitune/aitune/torch/module/forward_effects_spec
+title: aitune.torch.module.forward_effects_spec
+---
+
+Record the Python behavior that must surround a flat compiled module call.
+
+For example, a module can update a cache without returning it:
+
+<CodeBlock showLineNumbers={false}>
+
+```python
+def forward(x, state):
+    state["cache"] = state["cache"] + 1
+    return {"value": x + state["cache"]}
+```
+
+</CodeBlock>
+
+Recording observes that forward changed state["cache"], and the export adapter appends its post-call value as an extra
+graph output. The compiled interface returns (value, updated_cache). ForwardEffectsSpec tells the backend to assign
+updated_cache to the caller's state and return &#123;"value": value&#125;. If forward also returns state,
+restoration reuses the caller's original container.
+
+Recording captures the specification once per graph and saves it with the graph for checkpoint reload.
+It describes observed leaf changes, not arbitrary Python code.
+
+## Module Contents
+
+### Classes
+
+| Name | Description |
+|------|-------------|
+| [`ForwardEffectsCapture`](#aitune-torch-module-forward_effects_spec-ForwardEffectsCapture) | Compare normalized inputs before and after one module call. |
+| [`ForwardEffectsSpec`](#aitune-torch-module-forward_effects_spec-ForwardEffectsSpec) | Recorded output structure and input changes for one graph. |
+| [`InputMutation`](#aitune-torch-module-forward_effects_spec-InputMutation) | One observable input change made by a module call. |
+| [`InputMutationKind`](#aitune-torch-module-forward_effects_spec-InputMutationKind) | How a recorded input leaf changed during forward. |
+| [`OutputInputAlias`](#aitune-torch-module-forward_effects_spec-OutputInputAlias) | An output path that returns the same object as an input path. |
+| [`TensorMutationPolicy`](#aitune-torch-module-forward_effects_spec-TensorMutationPolicy) | How a backend result should update a changed input tensor. |
+| [`_InputLeafSnapshot`](#aitune-torch-module-forward_effects_spec-_InputLeafSnapshot) | Pre-call evidence for one leaf, retaining the live value for identity comparison. |
+| [`_TensorMetadata`](#aitune-torch-module-forward_effects_spec-_TensorMetadata) | Tensor properties that cannot be reproduced by copying values. |
+
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_find_output_input_aliases`](#aitune-torch-module-forward_effects_spec-_find_output_input_aliases) | Find output tensors and containers that are also input objects. |
+| [`_mutation_kind`](#aitune-torch-module-forward_effects_spec-_mutation_kind) | Return the restoration kind for a detected input leaf change. |
+| [`_snapshot_leaf`](#aitune-torch-module-forward_effects_spec-_snapshot_leaf) | Save the identity and mutation evidence for one input leaf. |
+| [`_tensor_metadata`](#aitune-torch-module-forward_effects_spec-_tensor_metadata) | Read metadata used to distinguish copying from replacement. |
+| [`_tensor_values_equal`](#aitune-torch-module-forward_effects_spec-_tensor_values_equal) | Compare tensors exactly when a version counter is unavailable. |
+| [`_tensor_version`](#aitune-torch-module-forward_effects_spec-_tensor_version) | Read a version counter, or return None when unavailable. |
+| [`_values_equal`](#aitune-torch-module-forward_effects_spec-_values_equal) | Compare non-tensor leaves by identity, then by equality. |
+
+### API
+
+<Anchor id="aitune-torch-module-forward_effects_spec-ForwardEffectsCapture">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"./locator.mdx#aitune-torch-module-locator-Locator","aitune.torch.module.forward_effects_spec._InputLeafSnapshot":"#aitune-torch-module-forward_effects_spec-_InputLeafSnapshot"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_effects_spec.ForwardEffectsCapture(
+    _before: dict[aitune.torch.module.locator.Locator, aitune.torch.module.forward_effects_spec._InputLeafSnapshot]
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Compare normalized inputs before and after one module call.
+
+RecordingModule calls before_call for a new graph, executes the original module, and passes the
+same live arguments to after_call. Capture observes that execution rather than running another call.
+
+Capture includes registered non-tensor mutation fields, such as a static cache's is_initialized
+flag and dimensions, without adding them to ordinary input metadata. Initialization can create
+new fields; existing tensors can also become non-tensors hidden by tensor-only filtering. Capture
+therefore checks paths observed on either side against the live post-call objects. Paths that no
+longer resolve are skipped; attribute and container-entry deletion are not replayed.
+
+Tensor identity and metadata distinguish replacement from value changes. Version counters detect
+writes to ordinary tensors. Tensors created inside torch.inference_mode() have no version counter,
+even when later inspected outside the context, so those tensors require saved values instead.
+Entering inference_mode alone does not remove counters from tensors created outside it.
+Snapshot allocation and value comparison add recording cost; restoration does not repeat capture.
+
+
+<ParamField path="_before" type="dict[Locator, _InputLeafSnapshot]">
+</ParamField>
+<Anchor id="aitune-torch-module-forward_effects_spec-ForwardEffectsCapture-after_call">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"./sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.module.forward_effects_spec.ForwardEffectsSpec":"#aitune-torch-module-forward_effects_spec-ForwardEffectsSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec.ForwardEffectsCapture.after_call(
+    arguments: dict[str, typing.Any],
+    output: typing.Any,
+    output_spec: aitune.torch.module.sample_metadata.SampleMetadata
+) -> aitune.torch.module.forward_effects_spec.ForwardEffectsSpec
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Capture output structure, input changes, and input/output aliases after forward.
+
+Output structure and aliases are captured even when no input leaf changed. Compiled execution
+still needs them to rebuild the Python output and reuse input objects returned by forward.
+
+Traverse post-call leaves, including registered mutation fields, then revisit pre-call paths.
+For example, keys changing from a tensor to None disappears from tensor-only traversal, but
+its old path still resolves to None and must be restored. Conversely, a newly created dtype
+or device field has no pre-call entry and is recorded as a constant replacement.
+Revisited paths exclude ignored objects and their descendants, just like post-call traversal.
+
+**Parameters:**
+
+<ParamField path="arguments" type="dict[str, Any]">
+The same normalized argument dictionary captured before the call, now containing
+forward's changes. Paths observed before or after the call are considered if they still
+resolve on these objects; deletions are not recorded.
+</ParamField>
+
+<ParamField path="output" type="Any">
+Actual structured result from that call, used to find tensor results and input aliases.
+</ParamField>
+
+<ParamField path="output_spec" type="SampleMetadata">
+[`SampleMetadata`](./sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata) — Metadata for output, defining the user tensor order before mutation results are added.
+</ParamField>
+
+**Returns:** [`ForwardEffectsSpec`](#aitune-torch-module-forward_effects_spec-ForwardEffectsSpec)
+
+A specification containing the output template, input mutations, and input/output aliases.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-forward_effects_spec-ForwardEffectsCapture-before_call">
+
+<CodeBlock links={{"aitune.torch.module.forward_effects_spec.ForwardEffectsCapture":"#aitune-torch-module-forward_effects_spec-ForwardEffectsCapture"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec.ForwardEffectsCapture.before_call(
+    arguments: dict[str, typing.Any],
+    snapshot_arguments: dict[str, typing.Any] | None = None
+) -> aitune.torch.module.forward_effects_spec.ForwardEffectsCapture
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>classmethod</Badge>
+
+Capture input leaves immediately before forward executes.
+
+Include registered mutation fields so initialization metadata is observed alongside tensors.
+Attributes created during forward are discovered by after_call instead.
+
+**Parameters:**
+
+<ParamField path="arguments" type="dict[str, Any]">
+Live normalized inputs that forward will receive. Keep the original references
+so after_call can distinguish assignment from changes to an existing tensor.
+</ParamField>
+
+<ParamField path="snapshot_arguments" type="dict[str, Any] | None" default="None">
+Optional independent pre-call copy with the same recorded paths.
+RecordingModule already copies samples; reusing that copy avoids another tensor clone
+when a version counter is unavailable. It must remain unchanged until after_call.
+Without a usable snapshot tensor, capture clones the live tensor as needed.
+</ParamField>
+
+**Returns:** [`ForwardEffectsCapture`](#aitune-torch-module-forward_effects_spec-ForwardEffectsCapture)
+
+Pre-call evidence to compare against the live arguments after forward.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-ForwardEffectsSpec">
+
+<CodeBlock links={{"aitune.torch.module.forward_effects_spec.InputMutation":"#aitune-torch-module-forward_effects_spec-InputMutation","aitune.torch.module.forward_effects_spec.OutputInputAlias":"#aitune-torch-module-forward_effects_spec-OutputInputAlias","aitune.torch.module.locator.Locator":"./locator.mdx#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_effects_spec.ForwardEffectsSpec(
+    output_template: typing.Any,
+    input_mutations: tuple[aitune.torch.module.forward_effects_spec.InputMutation, ...] = (),
+    output_input_aliases: tuple[aitune.torch.module.forward_effects_spec.OutputInputAlias, ...] = (),
+    ignored_input_paths: tuple[aitune.torch.module.locator.Locator, ...] = ()
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Recorded output structure and input changes for one graph.
+
+**Example**
+
+If forward assigns ``cache[0] = x + 1`` and returns ``x * 2``, compiled execution returns
+``(x * 2, x + 1)``. The mutation points to output index 1. Restoration writes that tensor
+into the current cache and returns only index 0. If forward already returns the changed tensor,
+its user output index is reused. If it returns the cache container, an alias preserves that identity.
+
+**Assumptions**
+
+The recorded mutation paths and alias relationships must apply to later calls using this graph.
+Capture does not describe deleted leaves or arbitrary side effects on opaque objects. Non-tensor
+replacements are recorded values: capturing ``step[0] += 1`` from 0 stores 1, not an increment
+operation. Strict matching can reject different starting values but cannot make that update dynamic.
+
+
+<ParamField path="ignored_input_paths" type="tuple[Locator, ...] = ()">
+Post-call ignored objects whose paths and descendants are excluded from
+mutation validation. Compiled execution does not replay their Python replacements, so the
+caller may retain the original values at these paths. Other input state remains validated.
+</ParamField>
+
+<ParamField path="input_mutations" type="tuple[InputMutation, ...] = ()">
+Input leaf changes and the compiled output indices or constants that restore them.
+</ParamField>
+
+<ParamField path="output_input_aliases" type="tuple[OutputInputAlias, ...] = ()">
+Outputs that must reuse current input objects after their state is restored.
+</ParamField>
+
+<ParamField path="output_template" type="Any">
+Python output structure with tensor and aliased-object placeholders.
+</ParamField>
+<Anchor id="aitune-torch-module-forward_effects_spec-ForwardEffectsSpec-extra_tensor_mutations">
+
+<CodeBlock links={{"aitune.torch.module.forward_effects_spec.InputMutation":"#aitune-torch-module-forward_effects_spec-InputMutation"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec.ForwardEffectsSpec.extra_tensor_mutations(
+    user_output_count: int
+) -> tuple[aitune.torch.module.forward_effects_spec.InputMutation, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return tensor changes represented by additional graph outputs.
+
+User tensor outputs occupy indices below user_output_count. Changes absent from those outputs
+occupy the remaining indices, in capture order, so an unreturned cache update reaches the caller.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-forward_effects_spec-ForwardEffectsSpec-restore_outputs">
+
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"./sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.module.forward_effects_spec.TensorMutationPolicy":"#aitune-torch-module-forward_effects_spec-TensorMutationPolicy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec.ForwardEffectsSpec.restore_outputs(
+    flat_outputs: typing.Any,
+    arguments: dict[str, typing.Any],
+    output_spec: aitune.torch.module.sample_metadata.SampleMetadata,
+    tensor_mutation_policies: collections.abc.Mapping[int, aitune.torch.module.forward_effects_spec.TensorMutationPolicy] | None = None
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Apply input changes and rebuild the structured module output.
+
+Restore mutations first so outputs that alias inputs see the current state. Only user outputs
+are reconstructed; extra mutation tensors remain internal. Fresh output containers come from
+the template, while aliased outputs reuse input objects.
+
+**Parameters:**
+
+<ParamField path="flat_outputs" type="Any">
+User tensor results followed by extra mutation results in recorded order.
+A single tensor is also accepted for a one-result interface.
+</ParamField>
+
+<ParamField path="arguments" type="dict[str, Any]">
+Live normalized arguments from this inference call. Recorded paths update their
+tensors and nested containers; replacing a top-level binding only changes this dictionary.
+</ParamField>
+
+<ParamField path="output_spec" type="SampleMetadata">
+[`SampleMetadata`](./sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata) — Metadata defining user tensor output paths and order, excluding extra results.
+</ParamField>
+
+<ParamField path="tensor_mutation_policies" type="Mapping[int, TensorMutationPolicy] | None" default="None">
+`Mapping[int,` [`TensorMutationPolicy`](#aitune-torch-module-forward_effects_spec-TensorMutationPolicy) `] | None` — Optional policies keyed by flat output index. Defaults to copying
+COPY_TENSOR results into existing tensors. Backends can instead install their output buffers.
+</ParamField>
+
+**Returns:** `Any`
+
+The structured user output with recorded input/output identities preserved.
+
+
+</Indent>
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-InputMutation">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"./locator.mdx#aitune-torch-module-locator-Locator","aitune.torch.module.forward_effects_spec.InputMutationKind":"#aitune-torch-module-forward_effects_spec-InputMutationKind"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_effects_spec.InputMutation(
+    locator: aitune.torch.module.locator.Locator,
+    kind: aitune.torch.module.forward_effects_spec.InputMutationKind,
+    output_index: int | None = None,
+    value: typing.Any = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+One observable input change made by a module call.
+
+
+<ParamField path="kind" type="InputMutationKind">
+Whether to copy tensor values, replace a tensor, or assign a recorded non-tensor value.
+</ParamField>
+
+<ParamField path="locator" type="Locator">
+Path into normalized arguments where restoration applies the change.
+</ParamField>
+
+<ParamField path="output_index" type="int | None = None">
+Index in user tensor outputs followed by extra mutation outputs; None for constants.
+</ParamField>
+
+<ParamField path="value" type="Any = None">
+Recorded replacement for a non-tensor leaf, copied on restoration; unused for tensor changes.
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-InputMutationKind">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_effects_spec.InputMutationKind
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+How a recorded input leaf changed during forward.
+
+COPY_TENSOR means the same tensor was written to in place with unchanged metadata. The name refers
+to default restoration: copy the compiled result back into the existing input tensor. It does not
+mean the recorded forward call copied the tensor; a backend policy can also select replacement.
+REPLACE_TENSOR means a new tensor appeared or tensor metadata changed, requiring assignment rather
+than value copying.
+REPLACE_CONSTANT stores an observed non-tensor value; it does not evaluate an update on future inputs.
+
+<ParamField path="COPY_TENSOR" type="= 'copy_tensor'">
+</ParamField>
+
+<ParamField path="REPLACE_CONSTANT" type="= 'replace_constant'">
+</ParamField>
+
+<ParamField path="REPLACE_TENSOR" type="= 'replace_tensor'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-OutputInputAlias">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"./locator.mdx#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_effects_spec.OutputInputAlias(
+    output_locator: aitune.torch.module.locator.Locator,
+    input_locator: aitune.torch.module.locator.Locator
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+An output path that returns the same object as an input path.
+
+Restoration reads input_locator from the current arguments and inserts that object at output_locator.
+This records Python identity, not storage sharing between distinct tensor views. A container alias
+covers its descendants, so a returned cache is restored as one object rather than rebuilt leaf by leaf.
+
+
+<ParamField path="input_locator" type="Locator">
+</ParamField>
+
+<ParamField path="output_locator" type="Locator">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-TensorMutationPolicy">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_effects_spec.TensorMutationPolicy
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+**Bases:** `enum.Enum`
+
+How a backend result should update a changed input tensor.
+
+PRESERVE_INPUT copies COPY_TENSOR results into the existing tensor. REPLACE_INPUT installs the
+backend's result at the input path instead; retained references to the old tensor may stay unchanged.
+REPLACE_TENSOR mutations always assign the result, regardless of this policy.
+
+Mutation kind describes the recorded model behavior; this policy selects backend restoration.
+AOT Inductor and Torch-TensorRT AOT keep the default PRESERVE_INPUT so references to an in-place
+mutation target remain valid. ONNX Runtime and standalone TensorRT choose REPLACE_INPUT to use
+returned buffers as the current state rather than copy values back into old leaves. That choice
+preserves the containing object, but provides weaker tensor identity guarantees. Output-buffer
+ownership alone does not require replacement.
+
+For ``old_cache = state["cache"]``, preservation leaves ``state["cache"] is old_cache`` true
+and updates its values. Replacement installs the result at ``state["cache"]``; old_cache may
+still refer to the previous tensor. Backends must document this choice at their restoration entry point.
+
+<ParamField path="PRESERVE_INPUT" type="= 'preserve_input'">
+</ParamField>
+
+<ParamField path="REPLACE_INPUT" type="= 'replace_input'">
+</ParamField>
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-_InputLeafSnapshot">
+
+<CodeBlock links={{"aitune.torch.module.forward_effects_spec._TensorMetadata":"#aitune-torch-module-forward_effects_spec-_TensorMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_effects_spec._InputLeafSnapshot(
+    value: typing.Any,
+    tensor_version: int | None,
+    tensor_metadata: aitune.torch.module.forward_effects_spec._TensorMetadata | None = None,
+    tensor_value: torch.Tensor | None = None
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Pre-call evidence for one leaf, retaining the live value for identity comparison.
+
+Tensor metadata and a version number detect changes without saving tensor values. If no version
+counter is readable, tensor_value holds an independent pre-call tensor for exact value comparison.
+Non-tensor leaves retain their original reference; mutations inside opaque leaf objects are not copied.
+
+
+<ParamField path="tensor_metadata" type="_TensorMetadata | None = None">
+</ParamField>
+
+<ParamField path="tensor_value" type="Tensor | None = None">
+</ParamField>
+
+<ParamField path="tensor_version" type="int | None">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-_TensorMetadata">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+class aitune.torch.module.forward_effects_spec._TensorMetadata(
+    shape: tuple[int, ...],
+    stride: tuple[int, ...] | None,
+    storage_offset: int | torch.SymInt | None,
+    layout: torch.layout,
+    dtype: torch.dtype,
+    device: torch.device
+)
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>Dataclass</Badge>
+
+Tensor properties that cannot be reproduced by copying values.
+
+
+<ParamField path="device" type="device">
+</ParamField>
+
+<ParamField path="dtype" type="dtype">
+</ParamField>
+
+<ParamField path="layout" type="layout">
+</ParamField>
+
+<ParamField path="shape" type="tuple[int, ...]">
+</ParamField>
+
+<ParamField path="storage_offset" type="int | SymInt | None">
+</ParamField>
+
+<ParamField path="stride" type="tuple[int, ...] | None">
+</ParamField>
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-_find_output_input_aliases">
+
+<CodeBlock links={{"aitune.torch.module.forward_effects_spec.OutputInputAlias":"#aitune-torch-module-forward_effects_spec-OutputInputAlias"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec._find_output_input_aliases(
+    arguments: dict[str, typing.Any],
+    output: typing.Any
+) -> tuple[aitune.torch.module.forward_effects_spec.OutputInputAlias, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Find output tensors and containers that are also input objects.
+
+Record an aliased output container once and skip its descendants: reusing that input container
+also preserves the identity of its contents. This is what selecting the largest aliased values
+means. Distinct tensor views that share storage are not treated as the same object.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-_mutation_kind">
+
+<CodeBlock links={{"aitune.torch.module.forward_effects_spec._InputLeafSnapshot":"#aitune-torch-module-forward_effects_spec-_InputLeafSnapshot","aitune.torch.module.forward_effects_spec.InputMutationKind":"#aitune-torch-module-forward_effects_spec-InputMutationKind"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec._mutation_kind(
+    previous: aitune.torch.module.forward_effects_spec._InputLeafSnapshot | None,
+    value: typing.Any
+) -> aitune.torch.module.forward_effects_spec.InputMutationKind | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return the restoration kind for a detected input leaf change.
+
+COPY_TENSOR describes the default restoration action, not an operation performed by forward.
+A backend's tensor mutation policy may select replacement instead of copying values back.
+
+**Parameters:**
+
+<ParamField path="previous" type="_InputLeafSnapshot | None">
+Pre-call snapshot for this input path, or None if the path is new.
+</ParamField>
+
+<ParamField path="value" type="Any">
+Post-call value at the same input path.
+</ParamField>
+
+**Returns:** [`InputMutationKind`](#aitune-torch-module-forward_effects_spec-InputMutationKind) `| None`
+
+COPY_TENSOR when the same tensor retains its metadata but a version change or value
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-_snapshot_leaf">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"./locator.mdx#aitune-torch-module-locator-Locator","aitune.torch.module.forward_effects_spec._InputLeafSnapshot":"#aitune-torch-module-forward_effects_spec-_InputLeafSnapshot"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec._snapshot_leaf(
+    locator: aitune.torch.module.locator.Locator,
+    value: typing.Any,
+    snapshot_arguments: dict[str, typing.Any] | None
+) -> aitune.torch.module.forward_effects_spec._InputLeafSnapshot
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Save the identity and mutation evidence for one input leaf.
+
+Use a version counter when available. Otherwise reuse an independent tensor from snapshot_arguments,
+or clone the live tensor, because retaining its reference alone would also observe later writes.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-_tensor_metadata">
+
+<CodeBlock links={{"aitune.torch.module.forward_effects_spec._TensorMetadata":"#aitune-torch-module-forward_effects_spec-_TensorMetadata"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec._tensor_metadata(
+    tensor: torch.Tensor
+) -> aitune.torch.module.forward_effects_spec._TensorMetadata
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Read metadata used to distinguish copying from replacement.
+
+Some tensor layouts do not support stride or storage offset queries. If either query raises
+RuntimeError, store None for both fields so snapshots can still compare the remaining metadata.
+None marks unavailable metadata, not a zero stride or offset.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-_tensor_values_equal">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec._tensor_values_equal(
+    left: torch.Tensor,
+    right: torch.Tensor
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Compare tensors exactly when a version counter is unavailable.
+
+Floating-point and complex comparisons use zero tolerance and treat matching NaNs as equal.
+Return False if comparison raises: equality could not be established, so mutation capture
+conservatively records a tensor write.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-_tensor_version">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec._tensor_version(
+    tensor: torch.Tensor
+) -> int | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Read a version counter, or return None when unavailable.
+
+In particular, tensors created inside torch.inference_mode() do not expose a counter. The caller
+then uses saved tensor values; the active execution context alone does not determine availability.
+
+
+</Indent>
+
+<Anchor id="aitune-torch-module-forward_effects_spec-_values_equal">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.forward_effects_spec._values_equal(
+    left: typing.Any,
+    right: typing.Any
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Compare non-tensor leaves by identity, then by equality.
+
+Identical objects are accepted without inspecting their internal state. Otherwise, equality must
+return a Python bool. Exceptions and other result types, such as elementwise comparison arrays,
+return False so mutation capture conservatively records a replacement.
+
+
+</Indent>

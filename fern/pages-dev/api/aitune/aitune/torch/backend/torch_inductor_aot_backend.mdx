@@ -99,6 +99,9 @@ ait.load(model, "model.ait")
 <ParamField path="_pt2_call_contract_error" type="str | None = None">
 </ParamField>
 
+<ParamField path="_runner" type="Callable[..., Any] | None = None">
+</ParamField>
+
 <ParamField path="_samples" type="Sequence[Sample] | None = None">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_activate">
@@ -248,6 +251,17 @@ aitune.torch.backend.TorchInductorAotBackend._infer(
 <Indent>
 
 Run inference with the compiled AOT Inductor runner.
+
+Flatten current arguments in the recorded input order. The forward effects specification consumes extra
+state results, applies mutations, and restores structured outputs. Keep the default PRESERVE_INPUT
+policy so a recorded in-place update reaches the original tensor, including references held
+outside its container. Copy-back is skipped if the runner already returned that same object.
+Recorded REPLACE_TENSOR changes still install a new tensor, matching assignment in forward.
+
+For ``module(x, state={"bias": bias, "scale": 2})``, ``flat_inputs`` contains ``(x, bias)``
+in recorded tensor-path order. The export adapter rebuilds the structured call and retains
+the non-tensor value ``scale=2`` from the recorded sample. Inference extracts current tensor
+references in that same order, so equivalent positional and keyword calls reach the same runner inputs.
 
 **Parameters:**
 

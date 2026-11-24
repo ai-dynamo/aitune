@@ -4,4 +4,35 @@ slug: aitune/aitune/torch/integrations/transformers
 title: aitune.torch.integrations.transformers
 ---
 
-Transformers integrations.
+Register Transformers cache traversal and report devices for tuned modules.
+
+A StaticCache update can initialize key/value tensors and Python metadata in the same call. Restoring
+only tensor results would leave the caller's layer marked uninitialized or missing device and shape
+information. StaticLayer and StaticSlidingWindowLayer therefore register the initialization fields
+that forward-contract capture must observe in addition to tensors.
+
+For example, a fresh layer can change from keys=None and is_initialized=False to an allocated tensor
+and is_initialized=True. The compiled graph supplies the tensor; restoration assigns the recorded
+initialization fields to the caller's layer. These non-tensor fields stay out of ordinary SampleMetadata
+traversal so they do not become tensor inputs or ordinary graph-matching data. They are recorded values,
+not dynamic updates to arbitrary Python state. DynamicCache remains excluded from this traversal.
+
+## Module Contents
+
+### Data
+
+[`_STATIC_LAYER_INITIALIZATION_FIELDS`](#aitune-torch-integrations-transformers-_STATIC_LAYER_INITIALIZATION_FIELDS)
+
+### API
+
+<Anchor id="aitune-torch-integrations-transformers-_STATIC_LAYER_INITIALIZATION_FIELDS">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.integrations.transformers._STATIC_LAYER_INITIALIZATION_FIELDS = ('batch_size', 'device', 'dtype', 'head_dim', 'is_initialized', 'k_head_dim', 'm...
+```
+
+</CodeBlock>
+</Anchor>
+

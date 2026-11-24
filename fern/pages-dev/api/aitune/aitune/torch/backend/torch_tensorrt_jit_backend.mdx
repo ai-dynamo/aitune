@@ -89,6 +89,7 @@ class aitune.torch.backend.TorchTensorRTJitBackend(
 Torch TensorRT thought torch.compile(backend="torch_tensorrt").
 
 Backend does not use intermediate formats, and compiled model is not stored.
+Input mutations use native torch.compile behavior, without AITune contract replay.
 
 
 <ParamField path="STATE_COMPILE_DYNAMIC" type="= 'compile_dynamic'">

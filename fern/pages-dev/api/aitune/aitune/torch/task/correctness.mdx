@@ -183,13 +183,14 @@ Check if the output tensor shapes are the same as the original output tensor sha
 
 <Anchor id="aitune-torch-task-correctness-_check_post_input_metadata">
 
-<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"../module/sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"../module/sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.module.locator.Locator":"../module/locator.mdx#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.task.correctness._check_post_input_metadata(
     expected: aitune.torch.module.sample_metadata.SampleMetadata,
     actual: aitune.torch.module.sample_metadata.SampleMetadata,
-    name: str
+    name: str,
+    ignored_input_paths: tuple[aitune.torch.module.locator.Locator, ...] = ()
 ) -> None
 ```
 
@@ -204,6 +205,9 @@ Stateful modules may populate caches or advance indices through their inputs. A 
 return a valid output while missing these mutations, causing later calls to fail. This check
 compares tensor locations and shapes, plus non-tensor values as order-independent mappings.
 Tensor contents are not compared when their location and shape remain unchanged.
+Paths explicitly ignored after the recorded eager call are excluded from actual metadata,
+including descendants. Compiled execution may retain their pre-call values because ignored
+replacements are not replayed. Unexpected paths outside these exclusions still fail validation.
 
 **Parameters:**
 
@@ -217,6 +221,11 @@ Tensor contents are not compared when their location and shape remain unchanged.
 
 <ParamField path="name" type="str">
 Qualified backend name included in correctness errors.
+</ParamField>
+
+<ParamField path="ignored_input_paths" type="tuple[Locator, ...]" default="()">
+`tuple[` [`Locator`](../module/locator.mdx#aitune-torch-module-locator-Locator) `, ...]` — Ignored object paths recorded in the forward effects specification, never inferred
+from missing expected metadata or from the backend's result.
 </ParamField>
 
 **Raises:**

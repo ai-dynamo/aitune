@@ -18,7 +18,7 @@ Contains GraphSpec which represents a graph specification.
 
 <Anchor id="aitune-torch-module-graph_spec-GraphSpec">
 
-<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"./sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.module.forward_signature.ForwardSignature":"./forward_signature.mdx#aitune-torch-module-forward_signature-ForwardSignature","aitune.torch.dynamic_shapes.DynamicShapes":"../dynamic_shapes.mdx#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.sample_metadata.SampleMetadata":"./sample_metadata.mdx#aitune-torch-module-sample_metadata-SampleMetadata","aitune.torch.module.forward_signature.ForwardSignature":"./forward_signature.mdx#aitune-torch-module-forward_signature-ForwardSignature","aitune.torch.module.forward_effects_spec.ForwardEffectsSpec":"./forward_effects_spec.mdx#aitune-torch-module-forward_effects_spec-ForwardEffectsSpec","aitune.torch.dynamic_shapes.DynamicShapes":"../dynamic_shapes.mdx#aitune-torch-dynamic_shapes-DynamicShapes"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.module.graph_spec.GraphSpec(
@@ -26,6 +26,7 @@ class aitune.torch.module.graph_spec.GraphSpec(
     input_spec: aitune.torch.module.sample_metadata.SampleMetadata,
     output_spec: aitune.torch.module.sample_metadata.SampleMetadata,
     forward_signature: aitune.torch.module.forward_signature.ForwardSignature,
+    forward_effects_spec: aitune.torch.module.forward_effects_spec.ForwardEffectsSpec,
     dynamic_shapes: aitune.torch.dynamic_shapes.DynamicShapes = dict(),
     post_input_spec: aitune.torch.module.sample_metadata.SampleMetadata | None = None
 )
@@ -45,8 +46,15 @@ of the torch modules `forward` function is represented by SampleMetadata. Those 
 graph. AITune treats each unique input specification as a separate graph which is tuned separately. This object
 represents such a computational graph with a name and input_spec information.
 
+Input/output metadata describes tensor paths and shapes. The forward effects specification adds observable
+Python behavior: input changes and outputs that reuse input objects. Export and inference share
+the user tensor output order, followed by extra tensors needed only to restore changed inputs.
+
 
 <ParamField path="dynamic_shapes" type="DynamicShapes = field(default_factory=dict)">
+</ParamField>
+
+<ParamField path="forward_effects_spec" type="ForwardEffectsSpec">
 </ParamField>
 
 <ParamField path="forward_signature" type="ForwardSignature">
@@ -113,6 +121,23 @@ aitune.torch.module.graph_spec.GraphSpec._iter_batch_size_ranges(
 <Indent>
 
 Yield batch ranges from explicit definitions or inferred metadata.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-extra_tensor_mutations">
+
+<CodeBlock links={{"aitune.torch.module.forward_effects_spec.InputMutation":"./forward_effects_spec.mdx#aitune-torch-module-forward_effects_spec-InputMutation"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.extra_tensor_mutations() -> tuple[aitune.torch.module.forward_effects_spec.InputMutation, ...]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Return changed input tensors appended to the graph outputs.
 
 
 </Indent>
@@ -278,7 +303,35 @@ aitune.torch.module.graph_spec.GraphSpec.output_names() -> tuple[str, ...]
 
 <Indent>
 
-Return names for flat module outputs in their recorded order.
+Return names for user outputs followed by internal state outputs.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-graph_spec-GraphSpec-restore_outputs">
+
+<CodeBlock links={{"aitune.torch.module.forward_effects_spec.TensorMutationPolicy":"./forward_effects_spec.mdx#aitune-torch-module-forward_effects_spec-TensorMutationPolicy"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.graph_spec.GraphSpec.restore_outputs(
+    flat_outputs: typing.Any,
+    arguments: dict[str, typing.Any],
+    tensor_mutation_policies: collections.abc.Mapping[int, aitune.torch.module.forward_effects_spec.TensorMutationPolicy] | None = None
+) -> typing.Any
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Delegate input mutation restoration and output reconstruction to the forward effects specification.
+
+The specification applies recorded input changes first, then rebuilds the user output so returned
+aliases refer to the updated caller-owned objects.
+
+flat_outputs must follow output_names(), including internal state results. arguments contains
+the current call's normalized live inputs, not the recorded sample. Optional mutation policies
+select copy-back or buffer replacement; see ForwardEffectsSpec.restore_outputs for ownership rules.
 
 
 </Indent>

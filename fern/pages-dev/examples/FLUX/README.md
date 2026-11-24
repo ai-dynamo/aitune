@@ -55,8 +55,9 @@ The command:
 3. Profiles the configured backends and selects the highest-throughput backend for each module.
 4. Saves the tuned pipeline as an AITune checkpoint.
 
-The transformer compares Torch-TensorRT and TorchInductor with model-specific settings. Other tunable modules use
-the default dynamic backend candidates. Maximum-batch-size discovery is disabled for all modules to match this example's
+The transformer compares Torch-TensorRT and TorchInductor with model-specific settings. Multi-GPU runs use only
+TorchInductor for the transformer, because Torch-TensorRT compilation on every rank needs too much host memory.
+Other tunable modules use the default dynamic backend candidates. Maximum-batch-size discovery is disabled for all modules to match this example's
 single-image inference and serving workload.
 
 ### Optional transformer quantization

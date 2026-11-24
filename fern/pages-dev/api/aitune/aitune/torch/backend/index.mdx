@@ -1609,9 +1609,6 @@ ait.load(model, "model.ait")
 <ParamField path="STATE_ONNX_MODEL_PATH" type="= 'onnx_model_path'">
 </ParamField>
 
-<ParamField path="STATE_OUTPUT_OBJECT" type="= 'output_object'">
-</ParamField>
-
 <ParamField path="STATE_SAMPLES" type="= 'samples'">
 </ParamField>
 
@@ -1797,7 +1794,7 @@ aitune.torch.backend.ONNXRuntimeBackend._export_onnx(
 
 <Indent>
 
-Export a Torch module and preserve its output structure.
+Export a Torch module through the recorded flat tensor contract.
 
 
 </Indent>
@@ -1822,43 +1819,6 @@ Return execution providers based on config (no automatic CPU fallback).
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_get_output_object">
-
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.ONNXRuntimeBackend._get_output_object(
-    module: torch.nn.Module,
-    sample: aitune.torch.module.sample_store.Sample
-) -> typing.Any
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Get the output object from the module and sample.
-
-Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
-the output object.
-
-**Parameters:**
-
-<ParamField path="module" type="nn.Module">
-PyTorch module
-</ParamField>
-
-<ParamField path="sample" type="Sample">
-[`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Sample input to use for model inference.
-</ParamField>
-
-**Returns:** `Any`
-
-The output object from the module.
-
-
-</Indent>
 <Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_infer">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -1875,7 +1835,7 @@ aitune.torch.backend.ONNXRuntimeBackend._infer(
 
 <Indent>
 
-Run inference through the shared ONNX Runtime I/O binding executor.
+Run the ONNX session and restore recorded output and input state.
 
 
 </Indent>
@@ -1885,8 +1845,7 @@ Run inference through the shared ONNX Runtime I/O binding executor.
 
 ```python
 aitune.torch.backend.ONNXRuntimeBackend._prepare_inputs(
-    args: tuple,
-    kwargs: dict
+    arguments: dict[str, typing.Any]
 ) -> dict[str, typing.Any]
 ```
 
@@ -1895,10 +1854,10 @@ aitune.torch.backend.ONNXRuntimeBackend._prepare_inputs(
 
 <Indent>
 
-Map args/kwargs to session input names using graph_spec locators.
+Select recorded tensors that remain ONNX session inputs.
 
-Tensors are returned as-is (preserving their device); I/O binding happens
-in the shared ``run_onnx`` executor.
+ONNX may remove unused inputs during export. The shared executor binds
+tensors on their current device.
 
 
 </Indent>
@@ -1908,7 +1867,8 @@ in the shared ``run_onnx`` executor.
 
 ```python
 aitune.torch.backend.ONNXRuntimeBackend._prepare_outputs(
-    outputs: dict[str, torch.Tensor]
+    outputs: dict[str, torch.Tensor],
+    arguments: dict[str, typing.Any]
 ) -> typing.Any
 ```
 
@@ -1917,18 +1877,24 @@ aitune.torch.backend.ONNXRuntimeBackend._prepare_outputs(
 
 <Indent>
 
-Reconstruct original output structure from session output tensors.
+Rebuild user outputs and apply input changes returned by ONNX Runtime.
+
+Order named results as user outputs followed by internal state outputs. REPLACE_INPUT makes
+the returned ORT buffers the current state, avoiding a separate copy-back into old tensor leaves,
+including for recorded in-place writes. This is a restoration choice, not a requirement imposed
+by ORT owning the buffers. Returned input containers retain their identity, but external references
+to old tensor leaves may not observe updates. Assignment to a top-level normalized argument does
+not rebind the caller's variable.
 
 
 </Indent>
 <Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_use_existing_onnx">
 
-<CodeBlock links={{"aitune.torch.module.onnx_module.OnnxModule":"../module/onnx_module.mdx#aitune-torch-module-onnx_module-OnnxModule","aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.module.onnx_module.OnnxModule":"../module/onnx_module.mdx#aitune-torch-module-onnx_module-OnnxModule"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 aitune.torch.backend.ONNXRuntimeBackend._use_existing_onnx(
-    module: aitune.torch.module.onnx_module.OnnxModule,
-    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+    module: aitune.torch.module.onnx_module.OnnxModule
 ) -> None
 ```
 
@@ -1937,7 +1903,7 @@ aitune.torch.backend.ONNXRuntimeBackend._use_existing_onnx(
 
 <Indent>
 
-Prepare artifacts and output structure from an existing ONNX model.
+Track an existing ONNX graph and its external weights.
 
 
 </Indent>
@@ -2194,9 +2160,6 @@ Torch models are exported to ONNX; OnnxModule uses its source path directly.
 <ParamField path="STATE_GRAPH_SPEC" type="= 'graph_spec'">
 </ParamField>
 
-<ParamField path="STATE_OUTPUT_OBJECT" type="= 'output_object'">
-</ParamField>
-
 <ParamField path="STATE_QUANTIZATION_CONFIG" type="= 'quantization_config'">
 </ParamField>
 
@@ -2212,6 +2175,9 @@ Torch models are exported to ONNX; OnnxModule uses its source path directly.
 <ParamField path="STATE_USE_CUDA_GRAPHS" type="= 'use_cuda_graphs'">
 </ParamField>
 
+<ParamField path="_aliased_outputs" type="dict[str, Tensor] = &#123;&#125;">
+</ParamField>
+
 <ParamField path="_build_mode" type="= BuildMode.AHEAD_OF_TIME">
 </ParamField>
 
@@ -2225,6 +2191,9 @@ Torch models are exported to ONNX; OnnxModule uses its source path directly.
 </ParamField>
 
 <ParamField path="_execution_modes" type="= frozenset(&#123;ExecutionMode.SINGLE_GPU&#125;)">
+</ParamField>
+
+<ParamField path="_output_input_aliases" type="dict[str, str] = &#123;&#125;">
 </ParamField>
 
 <ParamField path="_samples" type="Sequence[Sample] | None = None">
@@ -2312,6 +2281,25 @@ aitune.torch.backend.TensorRTBackend._artifact_sample_inputs() -> tuple[aitune.r
 <Indent>
 
 Derive portable values from the first recorded sample.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_bind_aliased_outputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._bind_aliased_outputs(
+    bound_inputs: dict[str, torch.Tensor]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Bind aliased outputs to the addresses of their corresponding inputs.
 
 
 </Indent>
@@ -2564,6 +2552,26 @@ The cache directory to store the TensorRT model.
 
 
 </Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_configure_output_bindings">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.torch_output_allocator.TorchOutputAllocator":"./tensorrt/torch_output_allocator.mdx#aitune-torch-backend-tensorrt-torch_output_allocator-TorchOutputAllocator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._configure_output_bindings(
+    context,
+    allocator: aitune.torch.backend.tensorrt.torch_output_allocator.TorchOutputAllocator
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Register allocators for independent outputs and record input-aliased outputs.
+
+
+</Indent>
 <Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_create_artifact">
 
 <CodeBlock links={{"aitune.records.DeploymentArtifact":"../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
@@ -2701,43 +2709,6 @@ Dictionary mapping input names to tensors
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_get_output_object">
-
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.TensorRTBackend._get_output_object(
-    module: torch.nn.Module,
-    sample: aitune.torch.module.sample_store.Sample
-) -> typing.Any
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Get the output object from the module and sample.
-
-Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
-the output object.
-
-**Parameters:**
-
-<ParamField path="module" type="nn.Module">
-PyTorch module
-</ParamField>
-
-<ParamField path="sample" type="Sample">
-[`Sample`](../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Sample input to use for model inference.
-</ParamField>
-
-**Returns:** `Any`
-
-The output object from the module.
-
-
-</Indent>
 <Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_get_profiles_from_shapes">
 
 <CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
@@ -2869,8 +2840,7 @@ Load the TensorRT optimization profiles from a file.
 
 ```python
 aitune.torch.backend.TensorRTBackend._prepare_inputs(
-    args,
-    kwargs
+    arguments: dict[str, typing.Any]
 )
 ```
 
@@ -2879,16 +2849,12 @@ aitune.torch.backend.TensorRTBackend._prepare_inputs(
 
 <Indent>
 
-Prepare input tensors from args and kwargs.
+Prepare input tensors from normalized arguments.
 
 **Parameters:**
 
-<ParamField path="args">
-Positional input tensors
-</ParamField>
-
-<ParamField path="kwargs">
-Named input tensors
+<ParamField path="arguments" type="dict[str, Any]">
+Inputs keyed by normalized forward parameter name.
 </ParamField>
 
 **Returns:**
@@ -2940,7 +2906,9 @@ The ONNX model path
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.TensorRTBackend._prepare_outputs_for_return() -> typing.Any
+aitune.torch.backend.TensorRTBackend._prepare_outputs_for_return(
+    arguments: dict[str, typing.Any]
+) -> typing.Any
 ```
 
 </CodeBlock>
@@ -2948,14 +2916,15 @@ aitune.torch.backend.TensorRTBackend._prepare_outputs_for_return() -> typing.Any
 
 <Indent>
 
-Prepare the outputs for return.
+Collect TensorRT outputs, restore input changes, and rebuild the module result.
 
-This method will prepare the outputs for return according to the original model's output structure.
-Tensors are retrieved from the output allocator with correct shapes.
+Results include allocator outputs and outputs bound directly to input buffers. REPLACE_INPUT
+adopts these tensors as current state without a separate copy-back into old leaves. It also
+handles an aliased result through the same restoration path. This choice preserves returned
+input container identity but does not guarantee updates through retained references to old tensors.
 
-**Returns:** `Any`
-
-The outputs in the same format as the original model.
+CUDA graph results are cloned before adoption because replay reuses their output storage.
+This protects returned state from later replay; it does not restore the identity of the old leaf.
 
 
 </Indent>
@@ -4050,13 +4019,13 @@ Returns the state_dict of the backend.
 
 <Anchor id="aitune-torch-backend-torchao_backend-TorchAOBackendConfig">
 
-<CodeBlock links={{"aitune.torch.libs.torch_compile.TorchCompileMode":"../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode","aitune.torch.backend.torchao_backend.QuantizationType":"#aitune-torch-backend-torchao_backend-QuantizationType"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.backend.torchao_backend.QuantizationType":"#aitune-torch-backend-torchao_backend-QuantizationType"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.backend.TorchAOBackendConfig(
     fullgraph: bool = False,
     dynamic: bool | None = None,
-    mode: aitune.torch.libs.torch_compile.TorchCompileMode | None = 'max-autotune',
+    mode: aitune.torch.utils.torch_compile.TorchCompileMode | None = 'max-autotune',
     quantization: aitune.torch.backend.torchao_backend.QuantizationType | None = None,
     quantization_config: torchao.core.config.AOBaseConfig | None = None,
     filter_fn: collections.abc.Callable[[nn.Module, str], bool] | None = None
@@ -4086,7 +4055,7 @@ graph specs with detected dynamic axes, without mutating this config.
 </ParamField>
 
 <ParamField path="mode" type="TorchCompileMode | None" default="'max-autotune'">
-[`TorchCompileMode`](../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode) `| None` — Passed through to ``torch.compile(mode=...)``. Valid presets are ``"default"``,
+Passed through to ``torch.compile(mode=...)``. Valid presets are ``"default"``,
 ``"reduce-overhead"``, ``"max-autotune"``, and ``"max-autotune-no-cudagraphs"``.
 </ParamField>
 
@@ -4653,6 +4622,9 @@ ait.load(model, "model.ait")
 <ParamField path="_pt2_call_contract_error" type="str | None = None">
 </ParamField>
 
+<ParamField path="_runner" type="Callable[..., Any] | None = None">
+</ParamField>
+
 <ParamField path="_samples" type="Sequence[Sample] | None = None">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_inductor_aot_backend-TorchInductorAotBackend-_activate">
@@ -4802,6 +4774,17 @@ aitune.torch.backend.TorchInductorAotBackend._infer(
 <Indent>
 
 Run inference with the compiled AOT Inductor runner.
+
+Flatten current arguments in the recorded input order. The forward effects specification consumes extra
+state results, applies mutations, and restores structured outputs. Keep the default PRESERVE_INPUT
+policy so a recorded in-place update reaches the original tensor, including references held
+outside its container. Copy-back is skipped if the runner already returned that same object.
+Recorded REPLACE_TENSOR changes still install a new tensor, matching assignment in forward.
+
+For ``module(x, state={"bias": bias, "scale": 2})``, ``flat_inputs`` contains ``(x, bias)``
+in recorded tensor-path order. The export adapter rebuilds the structured call and retains
+the non-tensor value ``scale=2`` from the recorded sample. Inference extracts current tensor
+references in that same order, so equivalent positional and keyword calls reach the same runner inputs.
 
 **Parameters:**
 
@@ -5322,13 +5305,13 @@ Returns the state_dict of the backend.
 
 <Anchor id="aitune-torch-backend-torch_inductor_jit_backend-TorchInductorJitBackendConfig">
 
-<CodeBlock links={{"aitune.torch.libs.torch_compile.TorchCompileMode":"../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
 class aitune.torch.backend.TorchInductorJitBackendConfig(
     fullgraph: bool = False,
     dynamic: bool | None = None,
-    mode: aitune.torch.libs.torch_compile.TorchCompileMode | None = None,
+    mode: aitune.torch.utils.torch_compile.TorchCompileMode | None = None,
     options: dict[str, str | int | bool] | None = None,
     autocast_enabled: bool = False,
     autocast_dtype: torch.dtype | None = None
@@ -5366,7 +5349,7 @@ dynamic kernel upon recompile.
 </ParamField>
 
 <ParamField path="mode" type="TorchCompileMode or None" default="None">
-[`TorchCompileMode`](../libs/torch_compile.mdx#aitune-torch-libs-torch_compile-TorchCompileMode) `or None` — Can be either "default", "reduce-overhead", "max-autotune"
+Can be either "default", "reduce-overhead", "max-autotune"
 or "max-autotune-no-cudagraphs".
 
 - "default" is the default mode, which is a good balance between performance and overhead
@@ -5548,6 +5531,9 @@ Backend that compiles model using TensorRT.
 <ParamField path="STATE_DEVICE" type="= 'device'">
 </ParamField>
 
+<ParamField path="STATE_GRAPH_SPEC" type="= 'graph_spec'">
+</ParamField>
+
 <ParamField path="STATE_TYPE" type="= 'type'">
 </ParamField>
 
@@ -5561,6 +5547,9 @@ Backend that compiles model using TensorRT.
 </ParamField>
 
 <ParamField path="_exported_model_artifact" type="ArtifactPath | None = None">
+</ParamField>
+
+<ParamField path="_graph_spec" type="GraphSpec | None = None">
 </ParamField>
 <Anchor id="aitune-torch-backend-torch_tensorrt_aot_backend-TorchTensorRTAotBackend-_activate">
 
@@ -5700,21 +5689,12 @@ aitune.torch.backend.TorchTensorRTAotBackend._infer(
 
 <Indent>
 
-Run inference with TensorRT engine.
+Run the flat Torch-TensorRT module, then restore outputs and input changes.
 
-**Parameters:**
-
-<ParamField path="*args" type="Any" default="()">
-Inference arguments
-</ParamField>
-
-<ParamField path="**kwargs" type="Any" default="&#123;&#125;">
-Inference keyword arguments
-</ParamField>
-
-**Returns:** `Any`
-
-Model outputs
+The forward effects specification consumes user and extra state tensors in recorded order. PRESERVE_INPUT
+ensures recorded in-place changes update the original tensor and any retained references.
+It copies values back only when the result is a different object. Recorded tensor replacements
+still assign the result.
 
 
 </Indent>
@@ -5946,6 +5926,7 @@ class aitune.torch.backend.TorchTensorRTJitBackend(
 Torch TensorRT thought torch.compile(backend="torch_tensorrt").
 
 Backend does not use intermediate formats, and compiled model is not stored.
+Input mutations use native torch.compile behavior, without AITune contract replay.
 
 
 <ParamField path="STATE_COMPILE_DYNAMIC" type="= 'compile_dynamic'">

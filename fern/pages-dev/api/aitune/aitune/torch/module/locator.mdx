@@ -56,9 +56,18 @@ or user types).
 The primary entry point for this class is the `find_leaves` method, which yields all leaves
 found within a nested structure.
 
+Registered types can keep ordinary traversal tensor-only while exposing selected non-tensor fields
+to mutation capture. For example, a cache's is_initialized flag must be restored after lazy
+initialization, but does not belong in its ordinary tensor metadata. Call find_leaves with
+include_mutation_fields=True to include those registered fields.
+
 
 <ParamField path="_ignored_types" type="set[type] = set()">
 Class-level set of types that should not be traversed nor returned by find_leaves.
+</ParamField>
+
+<ParamField path="_mutation_fields" type="dict[type, frozenset[str]] = &#123;&#125;">
+Non-tensor leaf names per concrete registered type, included only when requested.
 </ParamField>
 
 <ParamField path="_user_types" type="dict[type, bool] = dict[type, bool]()">
@@ -318,6 +327,27 @@ The user type object to iterate.
 
 
 </Indent>
+<Anchor id="aitune-torch-module-locator-Locator-_resolve_mutation_fields">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator._resolve_mutation_fields(
+    obj_type: type
+) -> frozenset[str]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return mutation fields registered for this concrete type, without inheriting registrations.
+
+
+</Indent>
 <Anchor id="aitune-torch-module-locator-Locator-_resolve_only_tensors">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -414,7 +444,8 @@ Get the accessor at the given index.
 aitune.torch.module.locator.Locator.find_leaves(
     obj: object,
     only_tensors: bool = False,
-    is_output: bool = False
+    is_output: bool = False,
+    include_mutation_fields: bool = False
 ) -> collections.abc.Generator[tuple[aitune.torch.module.locator.Locator, object], None, None]
 ```
 
@@ -427,14 +458,39 @@ aitune.torch.module.locator.Locator.find_leaves(
 
 Walks the object and yields locators and their leaf values.
 
-Leaf value is anything that is stored in a sequence, dictionary, or dataclass. If `only_tensors` is True,
-only tensors are returned, otherwise all objects are returned.
+Containers are traversed until a value has no traversal handler. only_tensors supplies the initial
+filtering mode; registered user types override it for their contents. Mutation capture can also
+request selected non-tensor leaves without changing ordinary metadata traversal.
 
 Note:
 - if a user type is marked as ignore, it will not be traversed nor returned.
-- if a user type is registered, it will be traversed like a dataclass. If it was registered with
-      `only_tensors=True`, only tensors are returned irrespective of method argument `only_tensors`.
-      Such a case may happen when we want to handle LLM cache and look only for tensors inside cache object.
+- registered user types are traversed through public data fields. Their only_tensors setting
+      controls filtering, with selected mutation fields included only when explicitly requested.
+
+**Example**
+
+A cache has a tensor, an initialization flag, and an unrelated label. Ordinary traversal
+yields only the tensor. Mutation capture also includes the registered flag, while the label
+stays excluded. The returned locators identify these fields on the original cache object.
+
+&gt;&gt;&gt; import torch
+&gt;&gt;&gt; class Cache:
+...     def __init__(self):
+...         self.keys = torch.ones(1)
+...         self.is_initialized = False
+...         self.label = "decoder"
+&gt;&gt;&gt; cache = Cache()
+&gt;&gt;&gt; Locator.register_user_type(Cache, only_tensors=True, mutation_fields=("is_initialized",))
+&gt;&gt;&gt; try:
+...     print(sorted(locator.path for locator, value in Locator.find_leaves(cache)))
+...     print(sorted(
+...         locator.path
+...         for locator, value in Locator.find_leaves(cache, include_mutation_fields=True)
+...     ))
+... finally:
+...     Locator.unregister_user_type(Cache)
+['keys']
+['is_initialized', 'keys']
 
 **Parameters:**
 
@@ -449,6 +505,38 @@ Whether to only return tensors.
 <ParamField path="is_output" type="bool" default="False">
 Whether the locators point into forward outputs.
 </ParamField>
+
+<ParamField path="include_mutation_fields" type="bool" default="False">
+Include registered field names when encountered as leaves, even
+under tensor-only filtering. Missing attributes are not synthesized, and registering
+a container field does not automatically include every non-tensor leaf below it.
+</ParamField>
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-find_nodes">
+
+<CodeBlock links={{"aitune.torch.module.locator.Locator":"#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.find_nodes(
+    obj: object,
+    is_output: bool = False,
+    include_ignored: bool = False
+) -> collections.abc.Generator[tuple[aitune.torch.module.locator.Locator, object], None, None]
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Yield the root and every traversable descendant.
+
+Ignored objects are normally excluded. include_ignored yields their paths so mutation capture
+can record validation exclusions, but never traverses their contents.
 
 
 </Indent>
@@ -490,6 +578,27 @@ Ignore a type.
 
 
 </Indent>
+<Anchor id="aitune-torch-module-locator-Locator-is_ignored">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.is_ignored(
+    value: object
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return whether this concrete type is excluded from traversal and leaf capture.
+
+
+</Indent>
 <Anchor id="aitune-torch-module-locator-Locator-is_prefix_of">
 
 <CodeBlock links={{"aitune.torch.module.locator.Locator":"#aitune-torch-module-locator-Locator"}} showLineNumbers={false} wordWrap={true}>
@@ -506,6 +615,27 @@ aitune.torch.module.locator.Locator.is_prefix_of(
 <Indent>
 
 Return whether this path contains ``other``.
+
+
+</Indent>
+<Anchor id="aitune-torch-module-locator-Locator-is_traversable">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.module.locator.Locator.is_traversable(
+    value: object
+) -> bool
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+<Badge>staticmethod</Badge>
+
+Return whether this locator can visit children of ``value``.
 
 
 </Indent>
@@ -532,7 +662,8 @@ Yield (accessor, ObjectType) tuples for each step in the path.
 
 ```python
 aitune.torch.module.locator.Locator.register_user_type(
-    only_tensors: bool = False
+    only_tensors: bool = False,
+    mutation_fields: tuple[str, ...] = ()
 )
 ```
 
@@ -543,7 +674,31 @@ aitune.torch.module.locator.Locator.register_user_type(
 
 <Badge>staticmethod</Badge>
 
-Register a user type.
+Register traversal rules for a concrete user type.
+
+Use mutation fields when ``nn.Module.forward`` changes Python state that an exported backend
+must restore during inference. For example, lazy cache initialization changes ``is_initialized``
+from False to True as well as allocating tensors. Mutation capture records the flag's new value,
+and inference restores it alongside the tensor state so the next call can use the cache.
+
+Re-registering replaces both settings and clears cached lookups. Registration also removes
+the type from the ignored set. Unrelated non-tensor fields remain excluded under tensor-only filtering.
+
+**Parameters:**
+
+<ParamField path="cls" type="type">
+Type whose public data fields should be traversed. Subclasses require their own registration.
+</ParamField>
+
+<ParamField path="only_tensors" type="bool" default="False">
+Override filtering for this type's contents, subject to nested registrations.
+</ParamField>
+
+<ParamField path="mutation_fields" type="tuple[str, ...]" default="()">
+Field names included as leaves when find_leaves requests mutation fields,
+even under tensor-only filtering. Their recorded values are restored during inference;
+input-dependent Python updates, such as incrementing a counter, are not recomputed.
+</ParamField>
 
 
 </Indent>
@@ -626,7 +781,9 @@ aitune.torch.module.locator.Locator.unregister_user_type()
 
 <Badge>staticmethod</Badge>
 
-Unregister a user type.
+Remove a type's traversal and mutation-field settings and invalidate cached lookups.
+
+A later registration starts with its newly supplied settings, not the previous mutation fields.
 
 
 </Indent>

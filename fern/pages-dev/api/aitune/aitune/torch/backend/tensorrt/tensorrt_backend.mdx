@@ -62,9 +62,6 @@ Torch models are exported to ONNX; OnnxModule uses its source path directly.
 <ParamField path="STATE_GRAPH_SPEC" type="= 'graph_spec'">
 </ParamField>
 
-<ParamField path="STATE_OUTPUT_OBJECT" type="= 'output_object'">
-</ParamField>
-
 <ParamField path="STATE_QUANTIZATION_CONFIG" type="= 'quantization_config'">
 </ParamField>
 
@@ -80,6 +77,9 @@ Torch models are exported to ONNX; OnnxModule uses its source path directly.
 <ParamField path="STATE_USE_CUDA_GRAPHS" type="= 'use_cuda_graphs'">
 </ParamField>
 
+<ParamField path="_aliased_outputs" type="dict[str, Tensor] = &#123;&#125;">
+</ParamField>
+
 <ParamField path="_build_mode" type="= BuildMode.AHEAD_OF_TIME">
 </ParamField>
 
@@ -93,6 +93,9 @@ Torch models are exported to ONNX; OnnxModule uses its source path directly.
 </ParamField>
 
 <ParamField path="_execution_modes" type="= frozenset(&#123;ExecutionMode.SINGLE_GPU&#125;)">
+</ParamField>
+
+<ParamField path="_output_input_aliases" type="dict[str, str] = &#123;&#125;">
 </ParamField>
 
 <ParamField path="_samples" type="Sequence[Sample] | None = None">
@@ -180,6 +183,25 @@ aitune.torch.backend.TensorRTBackend._artifact_sample_inputs() -> tuple[aitune.r
 <Indent>
 
 Derive portable values from the first recorded sample.
+
+
+</Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_bind_aliased_outputs">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._bind_aliased_outputs(
+    bound_inputs: dict[str, torch.Tensor]
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Bind aliased outputs to the addresses of their corresponding inputs.
 
 
 </Indent>
@@ -432,6 +454,26 @@ The cache directory to store the TensorRT model.
 
 
 </Indent>
+<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_configure_output_bindings">
+
+<CodeBlock links={{"aitune.torch.backend.tensorrt.torch_output_allocator.TorchOutputAllocator":"./torch_output_allocator.mdx#aitune-torch-backend-tensorrt-torch_output_allocator-TorchOutputAllocator"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.TensorRTBackend._configure_output_bindings(
+    context,
+    allocator: aitune.torch.backend.tensorrt.torch_output_allocator.TorchOutputAllocator
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Register allocators for independent outputs and record input-aliased outputs.
+
+
+</Indent>
 <Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_create_artifact">
 
 <CodeBlock links={{"aitune.records.DeploymentArtifact":"../../../records/artifact.mdx#aitune-records-artifact-DeploymentArtifact"}} showLineNumbers={false} wordWrap={true}>
@@ -569,43 +611,6 @@ Dictionary mapping input names to tensors
 
 
 </Indent>
-<Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_get_output_object">
-
-<CodeBlock links={{"aitune.torch.module.sample_store.Sample":"../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample"}} showLineNumbers={false} wordWrap={true}>
-
-```python
-aitune.torch.backend.TensorRTBackend._get_output_object(
-    module: torch.nn.Module,
-    sample: aitune.torch.module.sample_store.Sample
-) -> typing.Any
-```
-
-</CodeBlock>
-</Anchor>
-
-<Indent>
-
-Get the output object from the module and sample.
-
-Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
-the output object.
-
-**Parameters:**
-
-<ParamField path="module" type="nn.Module">
-PyTorch module
-</ParamField>
-
-<ParamField path="sample" type="Sample">
-[`Sample`](../../module/sample_store.mdx#aitune-torch-module-sample_store-Sample) — Sample input to use for model inference.
-</ParamField>
-
-**Returns:** `Any`
-
-The output object from the module.
-
-
-</Indent>
 <Anchor id="aitune-torch-backend-tensorrt-tensorrt_backend-TensorRTBackend-_get_profiles_from_shapes">
 
 <CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
@@ -737,8 +742,7 @@ Load the TensorRT optimization profiles from a file.
 
 ```python
 aitune.torch.backend.TensorRTBackend._prepare_inputs(
-    args,
-    kwargs
+    arguments: dict[str, typing.Any]
 )
 ```
 
@@ -747,16 +751,12 @@ aitune.torch.backend.TensorRTBackend._prepare_inputs(
 
 <Indent>
 
-Prepare input tensors from args and kwargs.
+Prepare input tensors from normalized arguments.
 
 **Parameters:**
 
-<ParamField path="args">
-Positional input tensors
-</ParamField>
-
-<ParamField path="kwargs">
-Named input tensors
+<ParamField path="arguments" type="dict[str, Any]">
+Inputs keyed by normalized forward parameter name.
 </ParamField>
 
 **Returns:**
@@ -808,7 +808,9 @@ The ONNX model path
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.backend.TensorRTBackend._prepare_outputs_for_return() -> typing.Any
+aitune.torch.backend.TensorRTBackend._prepare_outputs_for_return(
+    arguments: dict[str, typing.Any]
+) -> typing.Any
 ```
 
 </CodeBlock>
@@ -816,14 +818,15 @@ aitune.torch.backend.TensorRTBackend._prepare_outputs_for_return() -> typing.Any
 
 <Indent>
 
-Prepare the outputs for return.
+Collect TensorRT outputs, restore input changes, and rebuild the module result.
 
-This method will prepare the outputs for return according to the original model's output structure.
-Tensors are retrieved from the output allocator with correct shapes.
+Results include allocator outputs and outputs bound directly to input buffers. REPLACE_INPUT
+adopts these tensors as current state without a separate copy-back into old leaves. It also
+handles an aliased result through the same restoration path. This choice preserves returned
+input container identity but does not guarantee updates through retained references to old tensors.
 
-**Returns:** `Any`
-
-The outputs in the same format as the original model.
+CUDA graph results are cloned before adoption because replay reuses their output storage.
+This protects returned state from later replay; it does not restore the identity of the old leaf.
 
 
 </Indent>

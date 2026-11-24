@@ -1,10 +1,10 @@
 ---
 layout: overview
-slug: aitune/aitune/torch/libs/onnx/onnx_model_info
-title: aitune.torch.libs.onnx.onnx_model_info
+slug: aitune/aitune/torch/libs/onnx/model_info
+title: aitune.torch.libs.onnx.model_info
 ---
 
-ONNX Model Info module for extracting information from ONNX models.
+Extract metadata from ONNX models.
 
 ## Module Contents
 
@@ -12,29 +12,29 @@ ONNX Model Info module for extracting information from ONNX models.
 
 | Name | Description |
 |------|-------------|
-| [`ONNXModelInfo`](#aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo) | Helper class to load ONNX model and provide access to its information. |
-| [`ONNXPrecision`](#aitune-torch-libs-onnx-onnx_model_info-ONNXPrecision) | Post-export quantization precision for the ONNX model. |
+| [`ONNXModelInfo`](#aitune-torch-libs-onnx-model_info-ONNXModelInfo) | Helper class to load ONNX model and provide access to its information. |
+| [`ONNXPrecision`](#aitune-torch-libs-onnx-model_info-ONNXPrecision) | Post-export quantization precision for the ONNX model. |
 
 ### Functions
 
 | Name | Description |
 |------|-------------|
-| [`_normalize_domain`](#aitune-torch-libs-onnx-onnx_model_info-_normalize_domain) | Use the empty string for both spellings of the standard ONNX domain. |
+| [`_normalize_domain`](#aitune-torch-libs-onnx-model_info-_normalize_domain) | Use the empty string for both spellings of the standard ONNX domain. |
 
 ### Data
 
-[`ONNX_DTYPE_TO_PRECISION`](#aitune-torch-libs-onnx-onnx_model_info-ONNX_DTYPE_TO_PRECISION)
+[`ONNX_DTYPE_TO_PRECISION`](#aitune-torch-libs-onnx-model_info-ONNX_DTYPE_TO_PRECISION)
 
-[`logger`](#aitune-torch-libs-onnx-onnx_model_info-logger)
+[`logger`](#aitune-torch-libs-onnx-model_info-logger)
 
 ### API
 
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo">
+<Anchor id="aitune-torch-libs-onnx-model_info-ONNXModelInfo">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo(
+class aitune.torch.libs.onnx.model_info.ONNXModelInfo(
     model_path: pathlib.Path
 )
 ```
@@ -153,12 +153,12 @@ Name of the producer/framework that created the model.
 <ParamField path="producer_version" type="str">
 Version of the producer/framework that created the model.
 </ParamField>
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo-_get_operators">
+<Anchor id="aitune-torch-libs-onnx-model_info-ONNXModelInfo-_get_operators">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._get_operators(
+aitune.torch.libs.onnx.model_info.ONNXModelInfo._get_operators(
     graph: onnx.GraphProto
 ) -> frozenset[str]
 ```
@@ -174,14 +174,14 @@ Collect operator types from a graph and any nested control-flow graphs.
 
 
 </Indent>
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo-_get_precision">
+<Anchor id="aitune-torch-libs-onnx-model_info-ONNXModelInfo-_get_precision">
 
-<CodeBlock links={{"aitune.torch.libs.onnx.onnx_model_info.ONNXPrecision":"#aitune-torch-libs-onnx-onnx_model_info-ONNXPrecision"}} showLineNumbers={false} wordWrap={true}>
+<CodeBlock links={{"aitune.torch.libs.onnx.model_info.ONNXPrecision":"#aitune-torch-libs-onnx-model_info-ONNXPrecision"}} showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._get_precision(
+aitune.torch.libs.onnx.model_info.ONNXModelInfo._get_precision(
     model: onnx.ModelProto
-) -> aitune.torch.libs.onnx.onnx_model_info.ONNXPrecision | None
+) -> aitune.torch.libs.onnx.model_info.ONNXPrecision | None
 ```
 
 </CodeBlock>
@@ -191,12 +191,12 @@ aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._get_precision(
 
 
 </Indent>
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo-_get_tensor_dtypes">
+<Anchor id="aitune-torch-libs-onnx-model_info-ONNXModelInfo-_get_tensor_dtypes">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._get_tensor_dtypes(
+aitune.torch.libs.onnx.model_info.ONNXModelInfo._get_tensor_dtypes(
     value_info_list
 ) -> dict[str, str]
 ```
@@ -212,12 +212,12 @@ Extract declared tensor element types where available.
 
 
 </Indent>
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXModelInfo-_get_tensor_shapes">
+<Anchor id="aitune-torch-libs-onnx-model_info-ONNXModelInfo-_get_tensor_shapes">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.libs.onnx.onnx_model_info.ONNXModelInfo._get_tensor_shapes(
+aitune.torch.libs.onnx.model_info.ONNXModelInfo._get_tensor_shapes(
     value_info_list
 ) -> dict[str, list[int | str | None]]
 ```
@@ -235,12 +235,12 @@ Extract shapes from ONNX graph ValueInfoProto list (e.g. model.graph.input).
 </Indent>
 </Indent>
 
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNXPrecision">
+<Anchor id="aitune-torch-libs-onnx-model_info-ONNXPrecision">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-class aitune.torch.libs.onnx.onnx_model_info.ONNXPrecision
+class aitune.torch.libs.onnx.model_info.ONNXPrecision
 ```
 
 </CodeBlock>
@@ -276,12 +276,12 @@ Runtime CUDA Execution Provider without TensorRT.
 
 </Indent>
 
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-_normalize_domain">
+<Anchor id="aitune-torch-libs-onnx-model_info-_normalize_domain">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.libs.onnx.onnx_model_info._normalize_domain(
+aitune.torch.libs.onnx.model_info._normalize_domain(
     domain: str
 ) -> str
 ```
@@ -296,24 +296,24 @@ Use the empty string for both spellings of the standard ONNX domain.
 
 </Indent>
 
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-ONNX_DTYPE_TO_PRECISION">
+<Anchor id="aitune-torch-libs-onnx-model_info-ONNX_DTYPE_TO_PRECISION">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.libs.onnx.onnx_model_info.ONNX_DTYPE_TO_PRECISION: dict[int, ONNXPrecision] = {10: ONNXPrecision.FP16, 3: ONNXPrecision.INT8, 17: ONNXPrecision.FP8, 22: ONNXP...
+aitune.torch.libs.onnx.model_info.ONNX_DTYPE_TO_PRECISION: dict[int, ONNXPrecision] = {10: ONNXPrecision.FP16, 3: ONNXPrecision.INT8, 17: ONNXPrecision.FP8, 22: ONNXP...
 ```
 
 </CodeBlock>
 </Anchor>
 
 
-<Anchor id="aitune-torch-libs-onnx-onnx_model_info-logger">
+<Anchor id="aitune-torch-libs-onnx-model_info-logger">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.libs.onnx.onnx_model_info.logger = logging.getLogger(__name__)
+aitune.torch.libs.onnx.model_info.logger = logging.getLogger(__name__)
 ```
 
 </CodeBlock>

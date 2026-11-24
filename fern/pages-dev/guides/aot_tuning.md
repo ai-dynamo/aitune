@@ -285,6 +285,9 @@ With `config.strict_mode=True` (the default), different non-tensor argument valu
 scalar arguments fixed when you want one graph, or exercise each option in the wrapper when those variants should be
 tuned.
 
+Input-dependent changes to Python counters and other non-tensor input state have
+[known limitations](../known_issues.md). Keep these updates outside the compiled module.
+
 ## Configuration Options
 
 AITune has configuration for the tuning process, and each backend has its configuration.
