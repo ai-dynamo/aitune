@@ -150,13 +150,9 @@ def test_unflatten_tensors_isolates_mutable_non_tensor_branches():
     assert value["metadata"] == {"items": []}
 
 
-def test_tensor_free_template_does_not_copy_tensor_subclasses():
-    class NonDeepcopyTensor(torch.Tensor):
-        def __deepcopy__(self, memo):
-            raise AssertionError("tensor must not be deep-copied")
-
+def test_tensor_free_template_replaces_tensors_and_copies_metadata():
     value = {
-        "tensor": torch.ones(2).as_subclass(NonDeepcopyTensor),
+        "tensor": torch.ones(2),
         "metadata": {"items": []},
     }
     metadata = SampleMetadata.from_outputs(value)

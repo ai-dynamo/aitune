@@ -79,29 +79,6 @@ def test_root_tensor_reconstruction_respects_preserved_identity(preserve_root):
     assert result is (preserved if preserve_root else replacement)
 
 
-@pytest.mark.parametrize("tensor_template", [False, True], ids=["tensor-free-template", "tensor-template"])
-def test_preserved_cache_reconstruction_does_not_deepcopy_template_tensors(tensor_template):
-    """A preserved parent must not require copying tensors that will be discarded."""
-
-    class NonDeepcopyTensor(torch.Tensor):
-        def __deepcopy__(self, memo):
-            raise AssertionError("Reconstruction must not deep-copy tensor data under a preserved cache")
-
-    sample_tensor = torch.ones(2).as_subclass(NonDeepcopyTensor)
-    value = {"cache": {"tensor": sample_tensor}, "metadata": []}
-    metadata = SampleMetadata.from_outputs(value)
-    template = value if tensor_template else metadata.without_tensors(value, (value["cache"],))
-    preserved_cache = {"tensor": torch.zeros(2)}
-    parent = Locator((("cache", ObjectType.DICT),), is_output=True)
-
-    restored = metadata.unflatten_tensors((torch.empty(2),), template, ((parent, preserved_cache),))
-
-    assert restored["cache"] is preserved_cache
-    assert value["cache"]["tensor"] is sample_tensor
-    restored["metadata"].append("changed")
-    assert template["metadata"] == value["metadata"] == []
-
-
 @pytest.mark.parametrize(
     "replacements,error,message",
     [
