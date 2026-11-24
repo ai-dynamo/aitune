@@ -202,7 +202,13 @@ class Locator:
         target = current if tuple_items is None else tuple_items
         for (accessor, obj_type), child_replacements in children.items():
             child = Locator._get_child(target, accessor, obj_type)
-            child = Locator._set_values_at_depth(child, tuple(child_replacements), depth + 1)
+            # A single replacement at this child needs no further grouping or recursive call.
+            # Keep the lookup above so missing paths and custom accessors retain their behavior.
+            # Overlapping parent/child paths still use recursion to resolve parent precedence.
+            if len(child_replacements) == 1 and child_replacements[0][0].depth == depth + 1:
+                child = child_replacements[0][1]
+            else:
+                child = Locator._set_values_at_depth(child, tuple(child_replacements), depth + 1)
             Locator._set_child(target, accessor, obj_type, child)
 
         if tuple_items is None:
