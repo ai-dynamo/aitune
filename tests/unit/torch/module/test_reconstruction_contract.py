@@ -97,6 +97,116 @@ def test_root_tensor_reconstruction_validates_results(replacements, error, messa
         metadata.unflatten_tensors(replacements, None)
 
 
+@pytest.mark.parametrize("tensor_count", [1, 16])
+@pytest.mark.parametrize("tensor_template", [False, True])
+@pytest.mark.parametrize("result_container", [tuple, list], ids=["tuple", "list"])
+@pytest.mark.parametrize("restore_metadata", [False, True], ids=["recorded", "restored"])
+def test_flat_tensor_tuple_reconstruction_preserves_order_and_identity(
+    tensor_count, tensor_template, result_container, restore_metadata
+):
+    original = tuple(torch.full((2,), float(index)) for index in range(tensor_count))
+    metadata = SampleMetadata.from_outputs(original)
+    template = original if tensor_template else metadata.without_tensors(original)
+    replacements = tuple(torch.zeros_like(tensor) for tensor in original)
+
+    first = metadata.unflatten_tensors(result_container(replacements), template)
+    if restore_metadata:
+        metadata = SampleMetadata.from_dict(metadata.to_dict())
+    next_replacements = tuple(torch.ones_like(tensor) for tensor in original)
+    second = metadata.unflatten_tensors(result_container(next_replacements), template)
+
+    assert type(first) is type(second) is tuple
+    for index in range(tensor_count):
+        assert first[index] is replacements[index]
+        assert second[index] is next_replacements[index]
+        assert template[index] is (original[index] if tensor_template else None)
+        torch.testing.assert_close(original[index], torch.full((2,), float(index)))
+
+
+@pytest.mark.parametrize("container_type", [list, namedtuple("Pair", ("first", "second"))])
+def test_flat_tensor_sequence_reconstruction_preserves_container_type(container_type):
+    original = (torch.ones(2), torch.zeros(2))
+    value = list(original) if container_type is list else container_type(*original)
+    metadata = SampleMetadata.from_outputs(value)
+    template = metadata.without_tensors(value)
+    replacements = (torch.zeros(2), torch.ones(2))
+
+    restored = metadata.unflatten_tensors(replacements, template)
+
+    assert type(restored) is container_type
+    assert restored[0] is replacements[0]
+    assert restored[1] is replacements[1]
+
+
+@pytest.mark.parametrize("metadata_index", [0, 1, 2])
+def test_tuple_reconstruction_keeps_constants_and_isolates_mutable_metadata(metadata_index):
+    items = [torch.ones(2), torch.zeros(2)]
+    items.insert(metadata_index, {"labels": []})
+    value = tuple(items)
+    metadata = SampleMetadata.from_outputs(value)
+    template = metadata.without_tensors(value)
+    replacements = (torch.zeros(2), torch.ones(2))
+
+    restored = metadata.unflatten_tensors(replacements, template)
+
+    tensor_indices = [index for index in range(3) if index != metadata_index]
+    assert type(restored) is tuple
+    assert len(restored) == 3
+    for index, tensor in zip(tensor_indices, replacements, strict=True):
+        assert restored[index] is tensor
+    restored[metadata_index]["labels"].append("changed")
+    assert template[metadata_index] == value[metadata_index] == {"labels": []}
+
+
+def test_tuple_reconstruction_preserves_nested_paths_when_tensor_count_matches_tuple_length():
+    value = ((torch.ones(2),), [torch.zeros(2)])
+    metadata = SampleMetadata.from_outputs(value)
+    template = metadata.without_tensors(value)
+    replacements = (torch.zeros(2), torch.ones(2))
+
+    restored = metadata.unflatten_tensors(replacements, template)
+
+    assert type(restored) is type(restored[0]) is tuple
+    assert type(restored[1]) is list
+    assert restored[0][0] is replacements[0]
+    assert restored[1][0] is replacements[1]
+    restored[1].append("changed")
+    assert template == ((None,), [None])
+    assert len(value[1]) == 1
+
+
+@pytest.mark.parametrize("preserve_root", [False, True])
+def test_flat_tensor_tuple_reconstruction_respects_preserved_values(preserve_root):
+    value = (torch.ones(2), torch.zeros(2))
+    metadata = SampleMetadata.from_outputs(value)
+    replacements = (torch.zeros(2), torch.ones(2))
+    preserved = (torch.full((2,), 3.0), torch.full((2,), 4.0))
+    locator = Locator((), is_output=True) if preserve_root else Locator(((0, ObjectType.SEQUENCE),), is_output=True)
+    preserved_value = preserved if preserve_root else preserved[0]
+
+    restored = metadata.unflatten_tensors(replacements, (None, None), ((locator, preserved_value),))
+
+    if preserve_root:
+        assert restored is preserved
+    else:
+        assert type(restored) is tuple
+        assert restored[0] is preserved[0]
+        assert restored[1] is replacements[1]
+
+
+@pytest.mark.parametrize(
+    "replacements,error,message",
+    [
+        ((torch.ones(2),), ValueError, "Expected 2 tensors, got 1"),
+        ((torch.ones(2), None), TypeError, "received NoneType, not a tensor"),
+    ],
+)
+def test_flat_tensor_tuple_reconstruction_validates_results(replacements, error, message):
+    metadata = SampleMetadata.from_outputs((torch.ones(2), torch.zeros(2)))
+    with pytest.raises(error, match=message):
+        metadata.unflatten_tensors(replacements, (None, None))
+
+
 class CacheModel(torch.nn.Module):
     def __init__(self, mutation, alias_count):
         super().__init__()

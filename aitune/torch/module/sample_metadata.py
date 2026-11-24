@@ -5,6 +5,7 @@
 import copy
 import pickle
 from collections.abc import Mapping
+from functools import cached_property
 from typing import Any, Literal, cast
 
 import torch
@@ -12,7 +13,7 @@ from tabulate import tabulate
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch.config import config
-from aitune.torch.module.locator import Locator
+from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
 from aitune.utils.serialization import json_serialize
 
@@ -271,6 +272,18 @@ class SampleMetadata:
         if len(self._tensor_data) == 1 and self._tensor_data[0][0].depth == 0 and not preserved_values:
             return tensors[0]
 
+        # Every slot is replaced, so a plain tensor tuple needs neither a copied template nor
+        # grouped locator replacements. Check the recorded order once; matching counts alone
+        # would lose constants or put tensors in the wrong slots. Tuple subclasses keep their
+        # existing reconstruction, including named-tuple fields and custom instance state.
+        if (
+            type(template) is tuple
+            and not preserved_values
+            and len(template) == len(tensors)
+            and self._is_flat_tensor_sequence
+        ):
+            return tensors
+
         tensor_memo = {}
         for locator, _ in self._tensor_data:
             if any(alias_locator.is_prefix_of(locator) for alias_locator, _ in preserved_values):
@@ -473,6 +486,18 @@ class SampleMetadata:
     def has_batch_axis(self) -> bool:
         """Check if metadata has batch axis."""
         return all(tensor_spec.has_batch_axis() for tensor_spec in self.tensor_specs)
+
+    @cached_property
+    def _is_flat_tensor_sequence(self) -> bool:
+        """Whether tensor paths cover consecutive top-level sequence slots in recorded order.
+
+        Paths remain fixed when shape observations change. Lazy preparation also supports metadata
+        restored from older checkpoints without adding a required serialized field or retaining tensors.
+        """
+        return bool(self._tensor_data) and all(
+            tuple(locator.path_iter()) == ((index, ObjectType.SEQUENCE),)
+            for index, (locator, _) in enumerate(self._tensor_data)
+        )
 
 
 def batch_tensor(tensor: torch.Tensor, tensor_spec: TensorSpec, batch_size: int) -> torch.Tensor:
