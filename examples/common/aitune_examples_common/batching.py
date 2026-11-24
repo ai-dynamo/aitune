@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-FileCopyrightText: Copyright 2023 Ray Authors
 # SPDX-License-Identifier: Apache-2.0
-"""Dynamic batching decorator for async endpoints in AI Dynamo."""
+"""Dynamic batching decorator for async endpoints in AI Dynamo.
+
+Modified from Ray Serve for AI Dynamo.
+See NOTICE.md at the repository root for attribution under the shared Apache 2.0 LICENSE.
+"""
 
 import asyncio
 import inspect
