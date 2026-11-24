@@ -5,8 +5,25 @@
 set -euo pipefail
 
 MODEL_ARGS=()
+VARIANT_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --variant)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for --variant" >&2
+        exit 2
+      fi
+      VARIANT_ARGS+=(--variant "$2")
+      shift 2
+      ;;
+    --variant=*)
+      if [[ -z "${1#--variant=}" ]]; then
+        echo "Missing value for --variant" >&2
+        exit 2
+      fi
+      VARIANT_ARGS+=("$1")
+      shift
+      ;;
     --tuned-model-path)
       if [[ $# -lt 2 || "$2" == --* ]]; then
         echo "Missing value for --tuned-model-path" >&2
@@ -45,7 +62,7 @@ ANALYZER_WORKSPACE="$MODEL_REPOSITORY-model-analyzer/$MODEL_NAME"
 DEPLOYMENT_REPOSITORY="${DEPLOYMENT_REPOSITORY:-$MODEL_REPOSITORY-deployment}"
 TRITON_LOG="${TRITON_LOG:-$(dirname "$MODEL_REPOSITORY")/tritonserver.log}"
 mkdir -p "$ANALYZER_WORKSPACE"
-python3 -m yolo.python_inference "${MODEL_ARGS[@]}"
+python3 -m yolo.python_inference "${MODEL_ARGS[@]}" "${VARIANT_ARGS[@]}"
 model-analyzer profile --config-file "$ANALYZER_CONFIG" \
   --triton-server-path "$TRITONSERVER" --perf-analyzer-path "$PERF_ANALYZER"
 python3 -m yolo.triton.promote \

@@ -29,10 +29,6 @@ def main() -> None:
 
     model = get_model(model_name)
 
-    # device_after_tuning="cpu" keeps AITune-wrapped sub-modules on CPU between requests;
-    # encode(device="cuda") moves inputs to GPU for each inference pass.
-    ait.config.device_after_tuning = "cpu"
-
     ait.load(model, tuned_model_path)
 
     def mapping(req) -> dict:
