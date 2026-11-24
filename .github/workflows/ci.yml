@@ -41,7 +41,7 @@ env:
   UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: &python_version "3.11"
   NODE_VERSION: &node_version "25"
-  TORCH_IMAGE: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.10-py3:latest
+  TORCH_CI_IMAGE: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.10-py3:latest
   PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
 defaults:
@@ -172,7 +172,7 @@ jobs:
             echo "image=$PYTORCH_CI_IMAGE" >> "$GITHUB_OUTPUT"
           else
             echo "build_image=false" >> "$GITHUB_OUTPUT"
-            echo "image=$TORCH_IMAGE" >> "$GITHUB_OUTPUT"
+            echo "image=$TORCH_CI_IMAGE" >> "$GITHUB_OUTPUT"
           fi
       - uses: astral-sh/setup-uv@v10.0.1
         with:
@@ -278,7 +278,7 @@ jobs:
           platforms: ${{ steps.platforms.outputs.platforms }}
           outputs: type=image,push=true,compression=zstd,oci-mediatypes=true
           build-args: |
-            FROM_IMAGE=${{ env.TORCH_IMAGE }}
+            FROM_IMAGE=${{ env.TORCH_CI_IMAGE }}
             ADDITIONAL_PACKAGES=pytest
           tags: ${{ env.PYTORCH_CI_IMAGE }}
           cache-from: |
