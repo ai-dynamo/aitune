@@ -148,7 +148,7 @@ the overridden methods show how the class fills the base class interface. Orderi
 their first call keeps the file readable from the top down, and the reviewer does not have to search
 for a helper. With the same order in every file, a reviewer knows where to look.
 
-**Good:**
+**Good** (a simplified sketch of `aitune/torch/backend/onnx_runtime_backend.py`, not the real code):
 
 ```python
 class ONNXRuntimeBackend(Backend):
