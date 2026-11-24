@@ -135,35 +135,50 @@ Use this order in a class:
 1. Class attributes.
 2. `__new__`, `__init__`, and `__post_init__`.
 3. Public methods, properties, and other special methods (for example `__call__` and `__repr__`).
-4. Private methods (names that start with `_`), in the order of their first call.
+4. Private methods (names that start with `_`).
 
-To order the helpers, read the code from the top and list each helper at its first call, including
-calls from other helpers. A helper that several methods call appears once, at its first call.
+In a subclass, put the methods that override a base class method first in their group (public or
+private). Put the other methods after them.
 
-**Why:** The public API is what a module or class offers, so a reviewer starts there. Ordering the
-helpers by their first call keeps the file readable from the top down, and the reviewer does not
-have to search for a helper. With the same order in every file, a reviewer knows where to look.
+Order the other private methods by the first time that the code above them calls them. If two
+methods call the same helper, the first call decides where the helper goes.
+
+**Why:** The public API is what a module or class offers, so a reviewer starts there. In a subclass,
+the overridden methods show how the class fills the base class interface. Ordering the helpers by
+their first call keeps the file readable from the top down, and the reviewer does not have to search
+for a helper. With the same order in every file, a reviewer knows where to look.
 
 **Good:**
 
 ```python
-class Backend:
-    def __init__(self, config: BackendConfig) -> None:
+class ONNXRuntimeBackend(Backend):
+    def __init__(self, config: ONNXRuntimeBackendConfig) -> None:
         self._config = config
 
-    def build(self, module: nn.Module) -> None:
-        self._assert_supported(module)
-        self._compile(module)
+    # Overrides Backend.key.
+    def key(self) -> str: ...
 
-    def load(self, path: Path) -> None:
-        self._assert_supported_file(path)
+    # Overrides Backend.describe.
+    def describe(self) -> str: ...
+
+    # Overrides Backend._build.
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
+        self._export_onnx(module, graph_spec, samples, cache_dir)
+        self._warmup(samples)
+        return self
+
+    # Overrides Backend._infer.
+    def _infer(self, *args: Any, **kwargs: Any) -> Any:
+        inputs = self._prepare_inputs(kwargs)
         ...
 
-    def _assert_supported(self, module: nn.Module) -> None: ...
+    def _export_onnx(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> None: ...
 
-    def _compile(self, module: nn.Module) -> None: ...
+    def _warmup(self, samples: SampleStore) -> None:
+        self._prepare_inputs(...)
+        ...
 
-    def _assert_supported_file(self, path: Path) -> None: ...
+    def _prepare_inputs(self, arguments: dict[str, Any]) -> dict[str, Any]: ...
 ```
 
 ## Control flow
