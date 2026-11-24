@@ -289,10 +289,14 @@ def test_replacing_mutable_input_lifecycle(case: BackendCase, device: torch.devi
 
 
 @pytest.mark.matrix("aot_tuning.models.mutable-inputs", "aot_tuning.models.mutable-inputs-inplace")
-@pytest.mark.parametrize("operation", ["mul_", "index_copy_", "scatter_", "zero_"])
 @with_backends(
     "base",
     marks={
+        "torch-tensorrt-aot": pytest.mark.xfail(
+            reason="Torch-TensorRT AOT produces incorrect outputs after scatter_ (aitune#190)",
+            raises=AssertionError,
+            strict=True,
+        ),
         "torch-tensorrt-jit": pytest.mark.xfail(
             reason="Torch-TensorRT JIT drops in-place input writes; related upstream fix: pytorch/TensorRT#4894",
             raises=AssertionError,
@@ -300,11 +304,15 @@ def test_replacing_mutable_input_lifecycle(case: BackendCase, device: torch.devi
         ),
     },
 )
-def test_tensor_mutation_lifecycle(case: BackendCase, device: torch.device, tmp_path, operation):
-    """Numerical input updates survive repeated calls, interleaved caches, and checkpoint reload."""
-    check_mutable_input_lifecycle(
-        case, device, tmp_path, partial(TensorMutationModel, operation=operation), returns_state=False
-    )
+def test_tensor_mutation_lifecycle(case: BackendCase, device: torch.device, tmp_path):
+    """A backend supports in-place mutations only if all operations pass the lifecycle check."""
+    for operation in ("mul_", "index_copy_", "zero_", "scatter_"):
+        checkpoint_dir = tmp_path / operation
+        checkpoint_dir.mkdir()
+        restored = check_mutable_input_lifecycle(
+            case, device, checkpoint_dir, partial(TensorMutationModel, operation=operation), returns_state=False
+        )
+        restored.deactivate()
 
 
 @pytest.mark.matrix("jit_tuning.models.mutable-inputs", "jit_tuning.models.mutable-inputs-inplace")
