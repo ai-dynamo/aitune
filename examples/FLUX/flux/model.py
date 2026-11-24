@@ -11,7 +11,14 @@ from diffusers import (
     FluxPipeline,
     FluxTransformer2DModel,
 )
-from transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer, T5Config, T5EncoderModel, T5TokenizerFast
+from transformers import (
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPTokenizer,
+    T5Config,
+    T5EncoderModel,
+    T5TokenizerFast,  # pyrefly: ignore[missing-module-attribute]
+)
 
 from flux.context_parallel import ContextParallelMode
 from flux.defaults import DEFAULT_MODEL_NAME
