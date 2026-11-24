@@ -50,6 +50,7 @@ class EncoderDecoderCacheModel(nn.Module):
             )
             cache.is_updated[0] = True
         cross_layer = cache.cross_attention_cache.layers[0]
+        assert isinstance(cross_layer, StaticLayer)
         return {
             "keys": keys,
             "values": values,
@@ -169,8 +170,10 @@ def _record_updates(model: Callable, value: torch.Tensor, cache_state: str) -> N
 
 
 def _assert_tuned_graphs(tuned: TunedModule, backend: Backend) -> None:
+    readiness_path = ("cache", "is_updated", 0)
     phase_readiness = {
-        (metadata.llm_phase, dict(metadata.other_data)[("cache", "is_updated", 0)]) for metadata in tuned.backends
+        (metadata.llm_phase, {locator.path: value for locator, value in metadata.other_data}[readiness_path])
+        for metadata in tuned.backends
     }
     assert len(tuned.backends) == 3
     assert phase_readiness == {("prefill", False), ("decode", False), ("decode", True)}
@@ -206,8 +209,11 @@ def _check_cache_updates(model: Callable, device: torch.device, tolerance: Toler
                 assert actual["cache"] is cache
                 assert cache.self_attention_cache is self_cache
                 assert cache.cross_attention_cache is cross_cache
-                assert actual["keys"] is self_cache.layers[0].keys
-                assert actual["encoder_keys"] is cross_cache.layers[0].keys
+                self_layer, cross_layer = self_cache.layers[0], cross_cache.layers[0]
+                assert isinstance(self_layer, StaticLayer)
+                assert isinstance(cross_layer, StaticLayer)
+                assert actual["keys"] is self_layer.keys
+                assert actual["encoder_keys"] is cross_layer.keys
                 assert cache.is_updated[0] is True
                 # Updating one caller must also leave the other caller's cache unchanged.
                 for current, current_expected in zip(caches, expected_caches, strict=True):

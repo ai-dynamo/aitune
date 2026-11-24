@@ -210,11 +210,15 @@ def test_static_encoder_decoder_cache_metadata_includes_both_caches_and_readines
     cache = _make_encoder_decoder_cache()
     before = SampleMetadata.from_inputs({"cache": cache}, strict=True)
 
-    assert {locator.path for locator, _ in before.tensor_data} == {
-        ("cache", name, "layers", 0, field)
-        for name in ("self_attention_cache", "cross_attention_cache")
-        for field in ("keys", "values")
-    }
+    expected_paths = set()
+    for name in ("self_attention_cache", "cross_attention_cache"):
+        layer = getattr(cache, name).layers[0]
+        prefix = ("cache", name, "layers", 0)
+        expected_paths.update({(*prefix, "keys"), (*prefix, "values")})
+        # Some Transformers versions track the cache length as a tensor.
+        if isinstance(getattr(layer, "cumulative_length", None), torch.Tensor):
+            expected_paths.add((*prefix, "cumulative_length"))
+    assert {locator.path for locator, _ in before.tensor_data} == expected_paths
     assert {locator.path: value for locator, value in before.other_data}[("cache", "is_updated", 0)] is False
 
     cache.is_updated[0] = True
@@ -330,7 +334,9 @@ def test_static_encoder_decoder_cache_recording_separates_cross_attention_initia
         "decode",
     ]
     assert cache.is_updated[0] is True
-    torch.testing.assert_close(cache.cross_attention_cache.layers[0].keys, encoder_key)
+    cross_layer = cache.cross_attention_cache.layers[0]
+    assert isinstance(cross_layer, StaticLayer)
+    torch.testing.assert_close(cross_layer.keys, encoder_key)
 
 
 @pytest.mark.parametrize("initialized", [False, True], ids=["lazy", "preallocated"])
@@ -351,8 +357,12 @@ def test_static_encoder_decoder_cache_prefill_restores_nested_state_and_aliases(
     actual = graph_spec.restore_outputs(exported(*graph_spec.input_spec.flatten_tensors(arguments)), arguments)
 
     assert actual["cache"] is runtime_cache
-    assert actual["keys"] is runtime_cache.self_attention_cache.layers[0].keys
-    assert actual["encoder_keys"] is runtime_cache.cross_attention_cache.layers[0].keys
+    self_layer = runtime_cache.self_attention_cache.layers[0]
+    cross_layer = runtime_cache.cross_attention_cache.layers[0]
+    assert isinstance(self_layer, StaticLayer)
+    assert isinstance(cross_layer, StaticLayer)
+    assert actual["keys"] is self_layer.keys
+    assert actual["encoder_keys"] is cross_layer.keys
     torch.testing.assert_close(actual["keys"], expected["keys"])
     _assert_cache_matches(runtime_cache, expected_cache)
     # Export and recording must leave the supplied reference cache unchanged.
