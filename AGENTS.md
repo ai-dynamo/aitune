@@ -42,6 +42,16 @@ the shared executor. Check required validation arguments explicitly.
 
 ## Architecture References
 
+Read the project foundations before changing tuning behavior or reviewing an architecture decision:
+
+- [Why AITune](docs/learn/why_aitune.md) explains the problems AITune solves and what the application owns.
+- [Core Concepts](docs/learn/concepts.md) defines tuning boundaries, representative inputs, graph specifications,
+  backends, strategies, and the AOT and JIT workflows.
+- [Architecture](docs/guides/advanced/architecture.md) shows how user code, inspection, recording, tuning, and
+  inference fit together in the user's Python environment.
+- [Design Decisions](docs/guides/advanced/design_decisions.md) explains why AITune tunes at module boundaries
+  and lets users provide complete backend and strategy implementations through separate interfaces.
+
 AITune wraps PyTorch `nn.Module` subgraphs and compiles them with optimized backends.
 AOT mode uses explicit inspection, wrapping, tuning, and checkpoint APIs. JIT mode
 patches modules at import time and controls tuning through JIT configuration.
@@ -49,7 +59,8 @@ patches modules at import time and controls tuning through JIT configuration.
 Use these references when the task touches the corresponding area:
 
 - **AOT APIs and configuration:** `aitune/torch/tuning.py`, `aitune/torch/inspecting/`,
-  and `aitune/torch/config.py`.
+  and `aitune/torch/config.py`. See [Tuning Workflow](docs/guides/advanced/tuning_workflow.md)
+  for sample gathering, candidate evaluation, and backend activation.
 - **JIT activation, modes, and defaults:** `aitune/torch/jit/`, especially `config.py`
   and `enable.py`.
 - **Backends and lifecycle:** `aitune/torch/backend/backend.py`, backend implementations
@@ -57,6 +68,9 @@ Use these references when the task touches the corresponding area:
 - **Strategy selection and AOT/JIT backend defaults:** `aitune/torch/tune_strategy/`.
 - **Module wrapping and state transitions:** `aitune/torch/module/` and
   `aitune/torch/module_registry.py`.
+- **Execution graphs and mutable inputs:** `aitune/torch/module/`, especially `graph_spec.py` and
+  `forward_effects_spec.py`. See [Execution Graphs](docs/guides/advanced/execution_graphs.md) for
+  graph matching, dynamic shapes, and cache updates.
 - **Checkpoint persistence:** `aitune/torch/checkpoint/`.
 - **Input normalization:** `aitune/torch/dataloader.py`.
 - **Profiling:** `aitune/torch/task/profiling/` contains internal backend profiling;

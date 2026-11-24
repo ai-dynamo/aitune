@@ -9,7 +9,8 @@ representative inputs. AITune observes those calls and uses them to tune selecte
 your code calls the same model or pipeline and the wrapped modules run their selected backends.
 
 The diagram shows the explicit AOT workflow. You can use built-in backends and strategies or provide your
-own implementations of either interface.
+own implementations of either interface. See the [AOT and JIT comparison](../../learn/concepts.md#when-to-use-aot-or-jit)
+for how each workflow starts and records calls.
 
 <img src="../../assets/aitune_architecture.svg" alt="User code calls the model in the user's Python environment. AITune inspects execution, records calls to wrapped modules, and tunes each graph. User-provided backend and strategy implementations can take part in tuning. The same user code then runs inference with the selected backends." width="840" />
 
@@ -22,14 +23,19 @@ own implementations of either interface.
    the application runs.
 2. **Record the boundary.** The wrapper runs the original forward and captures the samples and metadata needed to
    replay it independently. It groups observations by input specification and records input and output structures and
-   the supported effects needed to reconstruct behavior at the boundary.
+   effects such as supported changes to mutable inputs. See [Execution Graphs](execution_graphs.md) for graph matching,
+   shape tracking, and [mutable inputs and caches](execution_graphs.md#mutable-inputs-and-caches).
 3. **Evaluate implementations.** A strategy receives the original module, graph specification, and sample store.
    It decides which candidates to build, which checks and measurements to apply, and which implementation to
    return. A backend receives the same module-level context and owns compiler or runtime calls and resource
-   management. Your code can provide a backend, a strategy, or both.
+   management. Your code can provide a backend, a strategy, or both. See [Tuning Workflow](tuning_workflow.md)
+   for how AITune builds, checks, profiles, and activates candidates.
 4. **Run the selected backend.** The tuned wrapper uses incoming call metadata to dispatch to the selected backend
    for the matching graph. The surrounding pipeline still manages the inference request, including calls between
    modules. When AITune checks an incoming call against the tuned graph specifications, it raises an error if none match.
+
+To reuse tuned results, load an AITune checkpoint into a compatible Python model or pipeline, or serve a supported
+backend artifact directly. See [Deployment Overview](../deployment/deployment.md).
 
 ## Where to find the implementation
 

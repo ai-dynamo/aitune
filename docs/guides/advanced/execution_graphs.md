@@ -89,6 +89,19 @@ The corresponding checks live in `tests/unit/torch/module/test_sample_metadata.p
 (nested export, tensor names, and numerical comparison with ONNX Runtime).
 Conversion timings measure Python overhead only; they do not establish end-to-end backend performance.
 
+## Mutable inputs and caches
+
+For backends that support restoring changes to mutable inputs, AITune records what the original forward call
+changes and applies supported changes to the caller's objects after inference. This can include tensor updates,
+replacing a tensor in a container, or returning the same container that the caller passed in. Support depends on
+the backend and the kind of state the model changes. Keep input-dependent updates to ordinary Python counters
+or similar non-tensor values outside the compiled module.
+
+For Transformers, AITune tracks tensors and selected initialization fields in `StaticCache`. The compiled path
+must preserve updates across consecutive decode calls. `DynamicCache` is excluded from this traversal, and
+the LLM recipe uses Torch eager for that configuration. See the [LLM recipe](../../../examples/LLM/README.md)
+for cache configurations and [Known Issues](../../known_issues.md) for backend-specific limitations.
+
 ## Graph Detection in the Tuning Workflow
 
 Execution graphs are detected during the **Sample Gathering Phase** of tuning:
