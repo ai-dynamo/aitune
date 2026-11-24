@@ -41,3 +41,8 @@ sed -i -E "${latest_args[@]}" \
   -e "s#^(    - \./pages-dev/_components)\$#\1\n    - ./pages-$tag/_components#" \
   "$dst/docs.yml"
 grep -q "slug: $tag$" "$dst/docs.yml" && grep -q "pages-$tag/_components" "$dst/docs.yml"
+
+# The unversioned routes follow Latest. Keep them unchanged when publishing an older tag.
+if [ "$newest" = "$tag" ]; then
+  python3 "$(dirname "$0")/sync_redirects.py" "$src/fern/docs.yml" "$dst/docs.yml" latest
+fi

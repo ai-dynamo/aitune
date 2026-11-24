@@ -4,7 +4,8 @@
 title: "Ahead-of-Time Tuning Guide"
 ---
 
-Ahead-of-time tuning is a mode where you explicitly control which modules to tune. This method provides precise control over the tuning process and is recommended for production environments.
+Use ahead-of-time tuning to choose the modules, inputs, and strategies for a tuning run. If you are choosing
+between workflows, see the [AOT and JIT comparison table](../learn/concepts.md#when-to-use-aot-or-jit).
 
 ## Overview
 

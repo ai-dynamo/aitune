@@ -17,7 +17,8 @@ shape. Explicit dynamic shape definitions supply their declared bounds and prefe
 
 ### Set the number of samples to use for profile generation
 
-You can set the number of samples to use for profile generation by setting the `max_num_samples_stored` in the `aitune.torch.config` module. By default, it is set to 1 as samples are stored for each backend, model module, and each batch size.
+Set `max_num_samples_stored` in `aitune.torch.config` to control how many input samples AITune retains per
+graph specification. The default is one. AITune still updates the graph’s observed shape range on every call.
 
 ```python
 from aitune.torch.config import config as global_config
@@ -28,7 +29,7 @@ global_config.max_num_samples_stored = 100
 
 ### Use the `TensorRTProfileMode.SAMPLES_USED` mode
 
-`TensorRTProfileMode.SAMPLES_USED` creates an exact profile for each recorded shape. When input shapes vary, it also adds a
+`TensorRTProfileMode.SAMPLES_USED` creates an exact profile for each distinct shape among the retained samples. When input shapes vary, it also adds a
 wide fallback spanning their range, including the discovered maximum batch size when find-max-batch-size is enabled.
 
 When the module defines explicit dynamic shapes, those definitions take precedence and produce one graph-derived
@@ -43,7 +44,7 @@ backend = TensorRTBackend(TensorRTBackendConfig(profiles=TensorRTProfileMode.SAM
 
 ### Use the correct samples and the right batch sizes during tuning
 
-The fallback accepts unrecorded shapes within its bounds, while the exact profiles are preferred for recorded shapes.
+TensorRT prefers the exact profiles for retained shapes. The fallback accepts other shapes within its bounds.
 Inputs outside the fallback bounds cannot run.
 
 NOTE: As samples for a single parameter have different shapes, we are wrapping them in a `DynamicShapeDataset` to handle different shapes.
@@ -66,7 +67,7 @@ module(data1.repeat(8, 1, 1, 1))
 module(data2.repeat(8, 1, 1, 1))
 ```
 
-See `tests/functional/pytorch/027_aitune_torch_toy_model_tensorrt_backend.py` for a full example.
+See `tests/functional/pytorch/024_aitune_torch_toy_model_tensorrt_backend.py` for a full example.
 
 ## Using your own profiles
 

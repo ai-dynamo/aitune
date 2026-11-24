@@ -235,7 +235,7 @@ strategy = ait.FirstWinsStrategy([
 
 1. Try each backend in order
 2. Build the backend with the module and graph spec
-3. Validate correctness by comparing outputs
+3. Check inference behavior against recorded metadata
 4. Profile against the Torch eager baseline
 5. Return the first backend that passes the performance threshold
 
@@ -300,14 +300,11 @@ The backend's state is governed by the strategy and the user must not change it.
 
 After building a backend, the strategy tries to validate it. This is enabled by default and can be turned off with `strategy.enable_correctness_check(False)`.
 
-AITune validates correctness by running the tuned backend on sample data. These checks are required to ensure the backend is correctly built:
-
-1. Python basic types `int`, `float` must be finite.
-2. Tensors values must be finite.
-3. All nested structures are checked against points 1 and 2.
-4. Tensor shapes must match against original data i.e. static, dynamic and batch axes must match.
-
-This ensures tuning does not break the module.
+The checks run the candidate on recorded samples. They verify that outputs are finite and have the expected
+tensor shapes, and that recorded input changes match the expected tensor shapes and non-tensor values after the call.
+For graphs with detected dynamic axes, AITune also runs inference at the recorded minimum and maximum shapes and
+checks the output shapes. Compare the tuned and original pipelines on representative requests to assess numerical
+agreement and application quality.
 
 ### 6. Backend Activation
 

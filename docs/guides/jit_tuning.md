@@ -347,8 +347,8 @@ jit_config.strategy = FirstWinsStrategy(
 ```
 
 Accepts an explicit `TuneStrategy` (e.g. `MinLatencyStrategy`, `FirstWinsStrategy`, `MaxThroughputStrategy`,
-`OneBackendStrategy`) or the result of `resolve_strategy()`. Leave it as `None` to use the default dynamic
-throughput strategy. For ordinary modules, its default candidates are TensorRT (with and without dynamo),
+`OneBackendStrategy`) or the result of `resolve_strategy()`. Leave the setting unchanged to use the default dynamic throughput strategy. To restore it after an override,
+assign `resolve_strategy()`. For ordinary modules, its default candidates are TensorRT (with and without dynamo),
 TorchInductor AOT, and TorchInductor JIT. JIT disables maximum-batch-size discovery and uses the recorded input bounds.
 
 For distributed modules, the default candidates are `TorchInductorAotBackend` followed by `TorchInductorJitBackend`.
@@ -371,9 +371,11 @@ jit_config.patch_exclude = ("my_package.MyCustomLayer", "third_party.SpecialModu
 
 Just-in-time tuning writes build artifacts and logs to `jit_config.cache_dir`, but it does not reuse tuned results across runs. Each time you start a new Python interpreter, tuning starts from scratch.
 
-### 2. No Benchmarking
+### 2. Profiling uses recorded inputs
 
-Dynamic axes are detected; however, they cannot be matched against real batch sizes. This is due to missing explicit data source, and hence, AITune cannot control batch size. Without this information, it cannot extrapolate batches to any size, which is required by benchmarking functionality.
+Profiling strategies can benchmark candidates in JIT mode using recorded calls.
+JIT tuning does not extrapolate the recorded inputs to search for the maximum batch size. Use AOT tuning
+when you want to supply a dataset and control the batch sizes used for tuning.
 
 ### 3. Dynamic Shape Detection Requires Multiple Samples
 
@@ -381,21 +383,7 @@ The default `min_samples` is 1, which is enough to attempt tuning. If you need d
 
 ## Just-in-Time Tuning vs Ahead-of-Time Tuning
 
-The following table summarizes the difference between those two modes:
-
-| Feature                 | Ahead-of-time         | Just-in-time                  |
-|-------------------------|-----------------------|-------------------------------|
-| Detecting dynamic axes  | Yes                   | Yes                           |
-| Extrapolating batches   | Yes                   | No                            |
-| Benchmarking            | Yes                   | No (no extrapolating batches) |
-| Modules for tuning      | User has full control | Picked automatically          |
-| Selecting tune strategy | Global or per module  | Global                        |
-| Available strategies    | All                   | Global only                   |
-| Tune time               | Slow                  | Quick                         |
-| Saving artifacts        | Yes                   | No                            |
-| Load tuned model time   | Quick                 | Re-tuning required            |
-| Code changes required   | Yes                   | No                            |
-| Caching                 | Yes                   | Build artifacts only          |
+See the [AOT and JIT comparison table](../learn/concepts.md#when-to-use-aot-or-jit).
 
 ## Debugging Just-in-Time Tuning
 

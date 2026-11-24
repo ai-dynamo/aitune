@@ -13,6 +13,10 @@ title: "Known Issues and Limitations"
   [native compiler comparison](https://github.com/ai-dynamo/aitune/actions/runs/42835107722/job/129896715452?pr=185).
   Upstream [Torch-TensorRT PR #4894](https://github.com/pytorch/TensorRT/pull/4894) proposes preserving input
   write-back operations for a closely matching failure; its applicability to this JIT case is not yet verified.
+- **Transformers `StaticCache` with Torch-TensorRT.** In the AITune CI cache tests, Torch-TensorRT JIT does not
+  preserve consecutive cache updates. Torch-TensorRT AOT can fail when executing or serializing a graph that
+  uses the scalar `cumulative_length`. For workloads that rely on these updates, validate consecutive decode
+  steps and checkpoint reload with your selected backend.
 - **Changing Python input state with compiled backends.** Input-dependent updates to non-tensor Python values inside
   mutable inputs are not generally supported. A recorded mutation stores its resulting value: recording
   `step[0] += 1` with `step=[0]` stores `1`; reusing that graph with `step=[5]` can restore `1` instead of `6`.
@@ -33,12 +37,10 @@ title: "Known Issues and Limitations"
   enter collective build, validation, and profiling operations in the same order. AOT tuning must be invoked on every
   rank with an equivalent tuning plan. JIT tuning additionally requires every rank to reach tuning readiness on the
   same forward. Divergent execution can fail or deadlock.
-- **Distributed inspection filtering.** Unfiltered `InspectedModulesInfo.get_modules()` results preserve discovery
-  order so that symmetric models produce a stable candidate order across ranks. Passing `limit` or
-  `min_execution_ratio` ranks candidates by locally measured execution time. Timing differences between ranks can
-  therefore select or order candidates differently and cause AOT tuning-plan validation to fail. For distributed
-  tuning with either filter, select the module paths on one rank and broadcast that selection to every rank before
-  wrapping the modules.
+- **Distributed inspection requires matching module execution.** AOT inspection uses rank zero’s module order and
+  timings on every rank, including when filtering by `limit` or `min_execution_ratio`. It raises an error if ranks
+  disagree on module paths, module types, or call counts. Run representative inputs that exercise matching module
+  paths on every rank.
 - **Distributed checkpoints.** Multi-GPU tuning produces rank-local artifacts. Loading with a different world size or
   rank topology is not supported, and AITune does not currently package distributed artifacts into one portable
   checkpoint.

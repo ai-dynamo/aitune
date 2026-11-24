@@ -15,7 +15,7 @@ import { BadgeLinks } from "../_components/BadgeLinks";
     },
     {
       href: "https://www.python.org/downloads/",
-      src: "https://img.shields.io/badge/python-3.11%2B-blue",
+      src: "https://img.shields.io/badge/python-3.11--3.14-blue",
       alt: "Python",
     },
     {
@@ -67,13 +67,9 @@ AITune combines these stages into a workflow for each model or pipeline:
 
 ## Getting started
 
-- **Just-in-time (JIT): try acceleration in your existing application.** Enable tuning when launching your script;
-  AITune captures inputs and tunes eligible modules during inference. See the [JIT guide](../guides/jit_tuning.md).
-- **Ahead-of-time (AOT): prepare a reusable checkpoint.** Use the explicit flow to inspect, wrap, and tune your model,
-  then save it for reuse or deployment. See the [AOT guide](../guides/aot_tuning.md).
-
-Follow the [quick start](quick_start.md) for a Stable Diffusion example and the [installation guide](install.md)
-for environment setup.
+Follow the [installation guide](install.md) to set up your environment. Use the
+[AOT and JIT comparison table](concepts.md#when-to-use-aot-or-jit) to choose a workflow, then follow the
+[Quick Start](quick_start.md) to tune a Stable Diffusion pipeline.
 
 ## Model recipes
 

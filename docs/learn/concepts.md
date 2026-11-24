@@ -74,6 +74,16 @@ application runs. In automatic mode, tuning starts when the configured readiness
 number of calls and detection of a dynamic axis. In deferred mode, the application signals when tuning may start.
 See [JIT tuning modes](../guides/jit_tuning.md#tuning-modes).
 
+| Feature | Ahead-of-time (AOT) | Just-in-time (JIT) |
+| --- | --- | --- |
+| How tuning starts | Call `ait.tune()` explicitly. | Enable JIT and let tuning start during inference, or signal when to start in deferred mode. |
+| Module selection | You choose which modules to wrap and tune. | AITune discovers eligible modules during inference. |
+| Representative inputs | Supply a dataset or dataloader and configure batch sizes. | AITune records calls made by the application. |
+| Dynamic shapes | Record representative shapes or provide explicit bounds where supported. | Record multiple shapes before tuning to detect dynamic axes. |
+| Candidate profiling | Profiling strategies measure candidates. Supported strategies can search for the maximum batch size. | Profiling strategies measure candidates using recorded calls. Maximum batch size discovery is disabled. |
+| Strategy configuration | Assign a strategy to individual modules when needed. | Configure a shared strategy. Default backend candidates are resolved for each module. |
+| Reuse in another process | Save an AITune checkpoint and load it into a compatible model or pipeline. | Each new process tunes again. The cache stores build artifacts and logs. |
+
 The workflow determines when the application starts tuning. The backend's build mode determines how the
 implementation is prepared. An explicit AOT run can use a backend that compiles just in time.
 

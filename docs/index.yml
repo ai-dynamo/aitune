@@ -108,6 +108,9 @@ navigation:
       - page: ResNet-50
         slug: res-net
         path: ../examples/ResNet/README.md
+      - page: YOLOv10n
+        slug: yolov10n
+        path: ../examples/YOLO/README.md
       - page: FLUX.1-dev
         slug: flux
         path: ../examples/FLUX/README.md
@@ -126,6 +129,9 @@ navigation:
       - page: Parakeet RNNT 1.1B
         slug: parakeet-rnnt
         path: ../examples/ParakeetRNNT/README.md
+      - page: BERT-base-uncased
+        slug: bert
+        path: ../examples/BERT/README.md
       - page: E5 Large V2
         slug: e5-large
         path: ../examples/E5Large/README.md

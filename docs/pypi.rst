@@ -9,7 +9,7 @@ NVIDIA AITune
 
 **NVIDIA AITune automates inference tuning for PyTorch models and pipelines on NVIDIA GPUs.**
 It brings inference engines and acceleration techniques together under a single, extensible API. AITune combines
-backend evaluation, numerical validation, and performance measurement into one workflow, selecting implementations
+backend evaluation, correctness checks, and performance measurement into one workflow, selecting implementations
 for individual modules according to the configured tuning strategy.
 
 Start with a model from Hugging Face or timm, or bring your own model and checkpoint. For supported applications,
@@ -25,7 +25,7 @@ Why AITune?
   backends and tuning strategies.
 - **Evaluate options per module.** Use default candidates that account for execution needs, or configure candidates
   explicitly. Different modules in a pipeline can use different backends.
-- **Select using measurements.** Check numerical outputs and measure performance on representative inputs. Choose
+- **Select using measurements.** Check output shapes and finite values, and measure performance on representative inputs. Choose
   strategies for throughput, latency, or a latency budget to guide selection.
 - **Prepare for deployment.** Reuse tuned modules in Python, generate Triton model repositories, or serve through
   Dynamo workers, as supported by the recipe.
@@ -38,7 +38,7 @@ AITune combines these stages into a workflow for each model or pipeline:
 1. **Inspect.** Provide a PyTorch model and representative inputs. AITune finds tunable ``nn.Module`` components
    and observes their inputs and execution.
 2. **Wrap.** Customize the selected modules' tuning strategies and backend configurations.
-3. **Tune.** Evaluate configured backend candidates, check numerical outputs against the original implementation,
+3. **Tune.** Evaluate configured backend candidates, check inference behavior against recorded metadata,
    and measure performance on representative inputs. Select a backend using the configured strategy. Candidates can
    incorporate post-training quantization (PTQ), kernel selection, or CUDA graphs where supported by the backend.
 4. **Run & deploy.** Run tuned modules in Python. Use the explicit workflow to save an ``.ait`` artifact for reuse
@@ -49,8 +49,7 @@ AITune combines these stages into a workflow for each model or pipeline:
    :alt: AITune workflow: inspect, wrap, evaluate backend candidates, validate outputs, measure performance, select the best backend for the configured strategy, and run or deploy.
    :target: https://github.com/ai-dynamo/aitune/blob/main/docs/assets/aitune_workflow.svg
 
-A shared tuning workflow brings supported backends and acceleration techniques together, with selection guided by
-the configured strategy.
+Compare the tuned and original pipelines on representative requests to assess numerical agreement and application quality.
 
 Install
 -------
@@ -165,7 +164,7 @@ Notice
 
 .. |License| image:: https://img.shields.io/badge/License-Apache%202.0-blue.svg
    :target: https://github.com/ai-dynamo/aitune/blob/main/LICENSE
-.. |Python| image:: https://img.shields.io/badge/python-3.11+-blue.svg
+.. |Python| image:: https://img.shields.io/badge/python-3.11--3.14-blue.svg
    :target: https://www.python.org/downloads/
 .. |PyTorch| image:: https://img.shields.io/badge/PyTorch-2.8+-red.svg
    :target: https://pytorch.org/

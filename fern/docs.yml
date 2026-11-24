@@ -28,6 +28,7 @@ products:
         path: ../docs/index.yml
 
 redirects:
+  # BEGIN AITUNE PAGE REDIRECTS
   - source: "/aitune/guides/ahead-of-time-tuning"
     destination: "/aitune/guides/ahead-of-time/tune-pytorch"
   - source: "/aitune/guides/ahead-of-time-inspect"
@@ -56,6 +57,7 @@ redirects:
     destination: "/aitune/learn/core-concepts"
   - source: "/aitune/dev/learn/core-functionalities"
     destination: "/aitune/dev/learn/core-concepts"
+  # END AITUNE PAGE REDIRECTS
   - source: "/aitune/index.html"
     destination: "/aitune"
   - source: "/aitune/dev/index.html"

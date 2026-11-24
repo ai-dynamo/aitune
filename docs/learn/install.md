@@ -9,8 +9,8 @@ title: "Install"
 Before installing NVIDIA AITune, make sure your system meets these requirements:
 
 * **Operating System**: Linux (Ubuntu 22.04+ recommended)
-* **Python**: Version `3.11` or newer
-* **PyTorch**: Version `2.8` or newer
+* **Python**: Versions 3.11 through 3.14
+* **PyTorch**: Version 2.8 or later on Python 3.11 through 3.13. Use PyTorch 2.14 or later on Python 3.14.
 * **TensorRT**: Version `10.3` or higher (for TensorRT backend)
 * **NVIDIA GPU**: Required for GPU-accelerated tuning
 
@@ -33,6 +33,11 @@ If you need to pin AITune's dependencies (`torch`, `torch-tensorrt`, `torchao`) 
 | `torch210` | 2.10.x |
 | `torch211` | 2.11.x |
 | `torch212` | 2.12.x |
+| `torch213` | 2.13.x |
+| `torch214` | 2.14.x |
+| `torch215` | 2.15.x |
+
+On Python 3.14, choose `torch214` or `torch215`.
 
 ```bash
 pip install --extra-index-url https://pypi.nvidia.com "aitune[torch211]"
@@ -48,25 +53,24 @@ pip install --extra-index-url https://pypi.nvidia.com --extra-index-url https://
 
 ### ONNX Runtime CUDA version
 
-Select the CUDA 13 extra when installing from a source checkout with **UV**:
+In a source checkout, uv reads the CUDA-specific ONNX Runtime package feeds configured in `pyproject.toml`.
+Select one extra that matches your CUDA stack. For CUDA 13:
 
 ```bash
 uv pip install --torch-backend=cu130 ".[torch210,onnxruntime-gpu-cuda13]"
 ```
 
-Use the `onnxruntime-gpu-cuda12` extra for the CUDA 12 PyPI build:
+For CUDA 12, use `onnxruntime-gpu-cuda12` on Linux x86-64 with Python 3.11 through 3.13.
 
 ```bash
-uv pip install --no-sources --torch-backend=cu128 ".[torch29,onnxruntime-gpu-cuda12]"
+uv pip install --torch-backend=cu128 ".[torch29,onnxruntime-gpu-cuda12]"
 ```
 
-**pip** uses PyPI and therefore installs CUDA 12. Use the same extra explicitly:
+The repository lockfile currently selects ONNX Runtime 1.29.0 for CUDA 12 and 1.30.0 for CUDA 13. Install
+with `uv sync --locked` and the matching extra to reproduce the locked dependency set.
 
-```bash
-pip install --extra-index-url https://pypi.nvidia.com "aitune[torch29,onnxruntime-gpu-cuda12]"
-```
-
-CUDA 13 with pip needs an explicit ORT reinstall from the CUDA 13 feed:
+**pip** does not read the feed selection from `pyproject.toml`. For CUDA 13, install AITune first and then
+reinstall ONNX Runtime from the CUDA 13 feed. This example uses 1.26.0, the pin in the NGC compatibility CI job:
 
 ```bash
 pip install onnxruntime-gpu==1.26.0 --no-deps --force-reinstall --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/
@@ -80,7 +84,7 @@ uv pip install --torch-backend=cu130 --reinstall-package onnxruntime-gpu ".[torc
 
 ### NGC container install
 
-You can use NGC PyTorch containers, which include the required NVIDIA dependencies:
+The compatibility CI matrix includes these NVIDIA NGC PyTorch container versions:
 
 * [PyTorch NGC Container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
 
@@ -91,6 +95,12 @@ You can use NGC PyTorch containers, which include the required NVIDIA dependenci
 | `nvcr.io/nvidia/pytorch:26.01-py3` | 2.10a0 |
 | `nvcr.io/nvidia/pytorch:26.03-py3` | 2.11a0 |
 | `nvcr.io/nvidia/pytorch:26.05-py3` | 2.12a0 |
+| `nvcr.io/nvidia/pytorch:26.06-py3` | 2.13a0 |
+| `nvcr.io/nvidia/pytorch:26.08-py3` | 2.14a0 |
+| `nvcr.io/nvidia/pytorch:26.10-py3` | 2.15a0 |
+
+See the [NVIDIA PyTorch container release notes](https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/)
+for the CUDA, driver, and library requirements for each image.
 
 Inside an NGC container, use `pip` and the package name:
 
