@@ -4,6 +4,7 @@
 
 from collections import namedtuple
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 import torch
@@ -18,7 +19,7 @@ from tests.unit.torch.module.reconstruction_benchmark import record_timings
 
 @dataclass
 class Result:
-    values: object
+    values: Any
     metadata: list
 
 
@@ -140,7 +141,7 @@ def test_flat_tensor_sequence_reconstruction_preserves_container_type(container_
 
 @pytest.mark.parametrize("metadata_index", [0, 1, 2])
 def test_tuple_reconstruction_keeps_constants_and_isolates_mutable_metadata(metadata_index):
-    items = [torch.ones(2), torch.zeros(2)]
+    items: list[Any] = [torch.ones(2), torch.zeros(2)]
     items.insert(metadata_index, {"labels": []})
     value = tuple(items)
     metadata = SampleMetadata.from_outputs(value)
@@ -267,7 +268,12 @@ def test_restore_outputs_timing(mutation, alias_count, gc_enabled, record_proper
     first = check_restoration()
     first["metadata"].append("changed")
     record_timings(
-        {"restore_outputs": lambda: graph.restore_outputs(flat_outputs, runtime_arguments)}, gc_enabled, record_property
+        {
+            "restore_outputs": lambda: graph.restore_outputs(flat_outputs, runtime_arguments),
+            "locator_restore_outputs": lambda: effects.restore_outputs(flat_outputs, runtime_arguments, output_spec),
+        },
+        gc_enabled,
+        record_property,
     )
     second = check_restoration()
     assert second["metadata"] == effects.output_template["metadata"] == []

@@ -28,6 +28,7 @@ from typing import Any
 import torch
 
 from aitune.torch.module.locator import Locator
+from aitune.torch.module.output_reconstruction import OutputReconstruction
 from aitune.torch.module.sample_metadata import SampleMetadata
 
 
@@ -148,6 +149,8 @@ class ForwardEffectsSpec:
         arguments: dict[str, Any],
         output_spec: SampleMetadata,
         tensor_mutation_policies: Mapping[int, TensorMutationPolicy] | None = None,
+        *,
+        output_reconstruction: OutputReconstruction | None = None,
     ) -> Any:
         """Apply input changes and rebuild the structured module output.
 
@@ -163,6 +166,8 @@ class ForwardEffectsSpec:
             output_spec: Metadata defining user tensor output paths and order, excluding extra results.
             tensor_mutation_policies: Optional policies keyed by flat output index. Defaults to copying
                 COPY_TENSOR results into existing tensors. Backends can instead install their output buffers.
+            output_reconstruction: Optional recipe prepared by GraphSpec for its fixed output template.
+                Outputs with preserved input aliases retain the general reconstruction path.
 
         Returns:
             The structured user output with recorded input/output identities preserved.
@@ -196,6 +201,9 @@ class ForwardEffectsSpec:
                     target.copy_(value)
             else:
                 mutation.locator.set_value(arguments, value)
+
+        if output_reconstruction is not None and not self.output_input_aliases:
+            return output_reconstruction.unflatten_tensors(flat_outputs[:user_output_count])
 
         return output_spec.unflatten_tensors(
             flat_outputs[:user_output_count],

@@ -3,6 +3,7 @@
 """Unit tests for sample metadata."""
 
 from dataclasses import dataclass
+from time import perf_counter_ns
 from typing import Any
 
 import pytest
@@ -10,6 +11,7 @@ import torch
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch.module.locator import Locator, ObjectType
+from aitune.torch.module.output_reconstruction import OutputReconstruction
 from aitune.torch.module.sample_metadata import SampleMetadata, batch_tensor
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
 from tests.unit.torch.module.reconstruction_benchmark import record_timings
@@ -201,6 +203,10 @@ def test_flatten_unflatten_timing(
         preserved_containers = (value["cache"],)
         preserved_values = ((Locator((("cache", ObjectType.DICT),), is_output=True), value["cache"]),)
     template = value if tensor_template else metadata.without_tensors(value, preserved_containers)
+    preparation_start = perf_counter_ns()
+    reconstruction = None if preserved_values else OutputReconstruction.prepare(metadata, template)
+    record_property("preparation_us", (perf_counter_ns() - preparation_start) / 1000)
+    record_property("prepared_reconstruction", reconstruction is not None)
 
     restored = metadata.unflatten_tensors(tensors, template, preserved_values)
     expected_tensors = (tensors[0], *original_tensors[1:]) if preserve_cache else tensors
@@ -221,6 +227,16 @@ def test_flatten_unflatten_timing(
         "flatten": lambda: metadata.flatten_tensors(value),
         "unflatten": lambda: metadata.unflatten_tensors(tensors, template, preserved_values),
     }
+    if reconstruction is not None:
+        prepared_result = reconstruction.unflatten_tensors(tensors)
+        assert all(
+            actual is expected
+            for actual, expected in zip(metadata.flatten_tensors(prepared_result), tensors, strict=True)
+        )
+        if structure == "metadata":
+            prepared_result["metadata"][0]["tokens"].append(-1)
+            assert template["metadata"][0]["tokens"] == list(range(32))
+        operations["prepared_unflatten"] = lambda: reconstruction.unflatten_tensors(tensors)
     record_timings(operations, gc_enabled, record_property)
 
     assert all(

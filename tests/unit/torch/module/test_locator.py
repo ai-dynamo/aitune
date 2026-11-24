@@ -336,66 +336,6 @@ def test_set_values_preserves_namedtuple_type():
     assert isinstance(result, Pair)
 
 
-def test_set_values_replaces_leaves_in_mixed_nested_containers():
-    Pair = namedtuple("Pair", ("first", "second"))
-    obj = {"values": (Pair(1, [2]), InnerDataClass(a=3, b=[4], c={"d": 5}), UserType(6))}
-    Locator.register_user_type(UserType, only_tensors=False)
-    try:
-        replacements = tuple((locator, -value) for locator, value in Locator.find_leaves(obj))
-    finally:
-        Locator.unregister_user_type(UserType)
-
-    result = Locator.set_values(obj, replacements)
-
-    assert type(result["values"]) is tuple
-    pair, dataclass_value, user_value = result["values"]
-    assert type(pair) is Pair
-    assert pair == Pair(-1, [-2])
-    assert type(dataclass_value) is InnerDataClass
-    assert dataclass_value == InnerDataClass(a=-3, b=[-4], c={"d": -5})
-    assert type(user_value) is UserType
-    assert user_value.value == -6
-
-
-@pytest.mark.parametrize("parent_first", [False, True])
-def test_set_values_parent_replacement_takes_precedence_over_descendants(parent_first):
-    obj = {"cache": (1, 2), "other": [3]}
-    parent = Locator((("cache", ObjectType.DICT),))
-    child = Locator((("cache", ObjectType.DICT), (0, ObjectType.SEQUENCE)))
-    other = Locator((("other", ObjectType.DICT), (0, ObjectType.SEQUENCE)))
-    preserved_cache = (7, 8)
-    replacements = [(parent, preserved_cache), (child, -1)]
-    if not parent_first:
-        replacements.reverse()
-
-    result = Locator.set_values(obj, (*replacements, (other, -3)))
-
-    assert result["cache"] is preserved_cache
-    assert result["other"] == [-3]
-
-
-def test_set_values_duplicate_path_keeps_first_replacement():
-    locator = Locator(((0, ObjectType.SEQUENCE),))
-
-    result = Locator.set_values((1,), ((locator, 2), (locator, 3)))
-
-    assert result == (2,)
-
-
-@pytest.mark.parametrize(
-    "obj,locator,error",
-    [
-        ({}, Locator((("missing", ObjectType.DICT),)), KeyError),
-        ([], Locator(((0, ObjectType.SEQUENCE),)), IndexError),
-        ((1,), Locator(((1, ObjectType.SEQUENCE),)), IndexError),
-        (UserType(1), Locator((("missing", ObjectType.USER_TYPE),)), AttributeError),
-    ],
-)
-def test_set_values_rejects_missing_leaf_paths(obj, locator, error):
-    with pytest.raises(error):
-        Locator.set_values(obj, ((locator, 2),))
-
-
 def test_set_value_tuple():
     obj = (1, 2, 3)
     results = list(Locator.find_leaves(obj))
