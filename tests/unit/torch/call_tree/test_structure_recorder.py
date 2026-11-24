@@ -25,6 +25,10 @@ from tests.toy_models.call_tree_models import (
 from tests.unit.torch.call_tree.helpers import instrumented, invisible_to_recorder, record
 
 
+def _boom() -> None:
+    raise RuntimeError("boom")
+
+
 def test_call_recorder_is_abstract():
     assert CallRecorder.__abstractmethods__ == {"begin_call", "end_call"}
 
@@ -365,9 +369,9 @@ def test_access_mode_is_removed_after_recording_raises():
     with pytest.raises(RuntimeError):
         record_then_raise()
     # if the mode leaked, this op would be recorded
-    before = recorder.result().weight_accesses
+    before = recorder._weight_access_log.snapshot()
     model.weight.sum()
-    assert recorder.result().weight_accesses == before
+    assert recorder._weight_access_log.snapshot() == before
 
 
 def test_ops_inside_apply_are_not_recorded():
@@ -1650,8 +1654,8 @@ def test_calls_passing_skips_signatures_whose_calls_raised():
     assert node.calls_passing("output", "outputs") == [0]  # the raised call passed no result
 
 
-def test_a_raised_sample_keeps_no_sequence():
-    """An exception inside ``record_sample`` propagates and drops the sample: its sequence is not appended."""
+def test_a_raised_sample_invalidates_the_recording():
+    """A sample that raises inside ``record_sample`` propagates; ``result()`` refuses the incomplete tree."""
     model = nn.Linear(4, 4)
     x = torch.randn(4, 4)
 
@@ -1660,9 +1664,46 @@ def test_a_raised_sample_keeps_no_sequence():
         with pytest.raises(RuntimeError, match="boom"):
             with recorder.record_sample():
                 model(x)
-                raise RuntimeError("boom")
+                _boom()
 
-    assert recorder.result().sequences == []
+    with pytest.raises(RuntimeError, match="incomplete"):
+        recorder.result()
+
+
+def test_a_sample_after_a_raised_one_does_not_save_the_recording():
+    """Catching the error inside the pass and recording more samples leaves the recording invalid."""
+    model = nn.Linear(4, 4)
+    x = torch.randn(4, 4)
+
+    recorder = StructureRecorder()
+    with instrumented(recorder, model), recorder:
+        with pytest.raises(RuntimeError, match="boom"):
+            with recorder.record_sample():
+                model(x)
+                _boom()
+        with recorder.record_sample():
+            model(x)
+
+    with pytest.raises(RuntimeError, match="incomplete"):
+        recorder.result()
+
+
+def test_a_later_session_does_not_clear_a_raised_sample():
+    """A raised sample invalidates the recorder for good: later sessions cannot save it."""
+    model = nn.Linear(4, 4)
+    x = torch.randn(4, 4)
+
+    recorder = StructureRecorder()
+    with instrumented(recorder, model), recorder:
+        with pytest.raises(RuntimeError, match="boom"):
+            with recorder.record_sample():
+                model(x)
+                _boom()
+    with recorder, recorder.record_sample():
+        pass
+
+    with pytest.raises(RuntimeError, match="incomplete"):
+        recorder.result()
 
 
 def test_calls_per_sample_counts_each_samples_calls():

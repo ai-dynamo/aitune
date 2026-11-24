@@ -618,12 +618,12 @@ def test_only_calls_at_the_timed_depth_are_timed(mocker):
     assert tree.nodes[("root.forward", "root.child.forward")].total_time_ms is not None
 
 
-def test_a_raised_replay_records_no_time(mocker):
-    """An exception inside ``time_replay`` propagates and drops the replay's pending times."""
+def test_a_raised_replay_invalidates_the_pass(mocker):
+    """A replay that raises invalidates the pass: nothing is written, not even times already taken."""
     mocker.patch("aitune.torch.call_tree.recording.timing_recorder.torch.cuda.is_available", return_value=False)
     mocker.patch(
         "aitune.torch.call_tree.recording.timing_recorder.time.perf_counter",
-        side_effect=_perf_reads([1.0, 2.0]),
+        side_effect=_perf_reads([1.0, 1.0]),
     )
     a = ("a",)
     tree = _tree_of([[a]])
@@ -632,8 +632,43 @@ def test_a_raised_replay_records_no_time(mocker):
     with TimingRecorder(tree) as timer:
         with pytest.raises(RuntimeError, match="boom"):
             with timer.time_replay(1):
-                timer.begin_call("a", model, "forward", ())  # the call never ends: nothing is recorded
-                raise RuntimeError("boom")
+                timer.end_call(timer.begin_call("a", model, "forward", ()))  # a completed, already-timed call
+                _boom()
+        with timer.time_replay(1):  # a successful replay cannot save the pass
+            timer.end_call(timer.begin_call("a", model, "forward", ()))
+
+    assert tree.nodes[a].total_time_ms is None
+
+
+def test_a_raised_replay_publishes_no_cuda_times(mocker):
+    """Same on the CUDA path: event pairs resolved after a raised replay are never written."""
+
+    class FakeEvent:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def synchronize(self):
+            pass
+
+        def elapsed_time(self, end):
+            return 1.0
+
+    mocker.patch("aitune.torch.call_tree.recording.timing_recorder.torch.cuda.Event", FakeEvent)
+    mocker.patch("aitune.torch.call_tree.recording.timing_recorder._record", side_effect=lambda event, stream: None)
+    mocker.patch("aitune.torch.call_tree.recording.timing_recorder.torch.cuda.current_device", return_value=0)
+    mocker.patch.object(TimingRecorder, "_current_stream", lambda self, device: object())
+    a = ("a",)
+    tree = _tree_of([[a]])
+    model = nn.Linear(2, 2)
+
+    with TimingRecorder(tree) as timer:
+        timer._use_cuda = True
+        with pytest.raises(RuntimeError, match="boom"):
+            with timer.time_replay(1):
+                timer.end_call(timer.begin_call("a", model, "forward", ()))
+                _boom()
+        with timer.time_replay(1):  # a successful replay cannot save the pass
+            timer.end_call(timer.begin_call("a", model, "forward", ()))
 
     assert tree.nodes[a].total_time_ms is None
 
@@ -863,6 +898,7 @@ def test_a_replay_with_more_calls_keeps_their_times(mocker):
             for _ in range(3):  # the replay made three of a's two recorded calls
                 timer.end_call(timer.begin_call("a", model, "forward", ()))
 
+    assert tree.nodes[a].total_time_ms == pytest.approx(3.0)
     assert "total_time_ms only counts the calls that were timed" in _warning_text(warning)
 
 

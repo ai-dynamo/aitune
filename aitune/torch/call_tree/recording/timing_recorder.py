@@ -50,10 +50,10 @@ class TimingRecorder(CallRecorder):
       even if the call switches streams or devices. Work the call queues on another device, or on a stream that
       this stream does not wait for, is not measured, so such a call is timed too short.
 
-    Results: when the ``with`` block ends normally, the pass writes each node's measured ``total_time_ms`` into
-    the tree in place. Entering the pass resets it, so a pass replaces earlier times. ``total_time_ms`` None
-    means the node was not timed in this pass, for example a call inside a compiled part, never that it took no
-    time. To keep several timed trees, time a ``tree.copy()`` each.
+    Results: when the ``with`` block ends normally and no ``time_replay`` block raised, the pass writes each
+    node's measured ``total_time_ms`` into the tree in place. Entering the pass resets it, so a pass replaces
+    earlier times. ``total_time_ms`` None means the node was not timed in this pass, for example a call inside a
+    compiled part, never that it took no time. To keep several timed trees, time a ``tree.copy()`` each.
 
     Diagnostics: when the timing pass replays different calls than the structure pass saw, for example a
     non-deterministic inference such as sampling in ``generate``, some nodes end up timed for a different number
@@ -111,6 +111,7 @@ class TimingRecorder(CallRecorder):
         self._max_depth = max_depth
         self._use_cuda = False
         self._depth: int | None = None
+        self._failed = False
         self._stack: list[_TimedCall] = []
         self._times: dict[CallPath, list[float]] = {}
         self._events: list[tuple[CallNode, Any, Any, int]] = []
@@ -165,6 +166,8 @@ class TimingRecorder(CallRecorder):
     def time_replay(self, depth: int) -> Generator[None]:
         """Time one replay inside the ``with`` block: the calls at ``depth``.
 
+        An exception inside the block invalidates the pass: it writes no times, as when the pass itself raises.
+
         Args:
             depth: The call-path depth this replay times.
         """
@@ -172,6 +175,7 @@ class TimingRecorder(CallRecorder):
         try:
             yield
         except BaseException:
+            self._failed = True
             self._depth = None
             self._events.clear()  # drop the interrupted replay's pending event pairs
             raise
@@ -244,6 +248,7 @@ class TimingRecorder(CallRecorder):
         for node in self._tree.nodes.values():
             node.total_time_ms = None
         self._depth = None
+        self._failed = False
         self._stack.clear()
         self._times.clear()
         self._events.clear()
@@ -252,9 +257,10 @@ class TimingRecorder(CallRecorder):
         """End the timing pass, writing the measured times into the nodes and warning on a normal exit.
 
         Each node the pass timed gets ``total_time_ms``, the sum of its measured calls (``CallNode``). When the
-        block raised (``completed`` False), nothing is written: the nodes keep the None ``_start`` set.
+        block raised (``completed`` False) or a replay raised inside it, nothing is written: the nodes keep the
+        None ``_start`` set.
         """
-        if not completed:
+        if not completed or self._failed:
             return
         self._resolve_events()
         self._warn_about_diverged_replay()

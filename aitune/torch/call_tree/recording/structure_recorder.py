@@ -74,6 +74,7 @@ class StructureRecorder(CallRecorder):
         self._top_visible = _SourceIndex()
         self._sequences: list[list[CallPath]] = []
         self._current_sequence: list[CallPath] | None = None
+        self._failed = False
         self._apply_depth = 0
         self._original_apply: Callable[..., Any] | None = None
         self._weight_access_log = WeightAccessLog()
@@ -171,13 +172,15 @@ class StructureRecorder(CallRecorder):
     def record_sample(self) -> Generator[None]:
         """Record one sample (one call of the inference function) inside the ``with`` block.
 
-        An exception inside the block drops the sample it was recording: its sequence is not appended.
+        An exception inside the block invalidates the recorder: ``result()`` then raises instead of returning
+        an incomplete tree, also after later sessions; record again with a new recorder.
         """
         self._current_sequence = []
         self._top_visible = _SourceIndex()  # a new top level: nothing links across samples
         try:
             yield
         except BaseException:
+            self._failed = True
             self._current_sequence = None
             raise
         self._sequences.append(self._current_sequence)
@@ -188,7 +191,16 @@ class StructureRecorder(CallRecorder):
 
         The returned tree is a snapshot — a ``CallTree.copy()`` of the recorder's state — so later recording
         does not change it.
+
+        Raises:
+            RuntimeError: If a sample raised while it was recorded, in this or an earlier session: the tree is
+                incomplete.
         """
+        if self._failed:
+            raise RuntimeError(
+                "A sample raised while the call tree's structure was recorded, "
+                "so the recorded tree is incomplete; record it again with a new StructureRecorder."
+            )
         return CallTree(
             nodes=self._nodes,
             sequences=self._sequences,
