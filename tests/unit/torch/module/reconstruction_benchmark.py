@@ -39,7 +39,7 @@ def record_timings(operations, gc_enabled, record_property):
         )
     environment = {
         "python": platform.python_version(),
-        "pytorch": torch.__version__,
+        "pytorch": str(torch.__version__),
         "platform": platform.platform(),
         "machine": platform.machine(),
         "processor": processor,
