@@ -42,3 +42,7 @@ include = ["yolo", "yolo.*"]
 docker_image = "nvcr.io/nvidia/pytorch:26.05-py3"
 timeout = "1h"
 workflows = [{ name = "triton", install_script = "install.sh" }]
+arguments = [
+    { variant = "fp32" },
+    { variant = "fp16" },
+]
