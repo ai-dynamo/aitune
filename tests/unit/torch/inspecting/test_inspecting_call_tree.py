@@ -59,7 +59,7 @@ def test_call_tree_leaves_legacy_output_unchanged(dataset):
 
     assert _legacy(with_graph) == _legacy(without)
     tree = _tree(with_graph)
-    assert tree.iterations == ITERATIONS
+    assert tree.number_of_samples == ITERATIONS
     assert tree.nodes[("root.forward",)].calls == ITERATIONS
     assert tree.nodes[("root.forward", "root.dit_forward")].calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes
@@ -91,8 +91,8 @@ def test_call_tree_adds_one_broadcast(mocker, dataset):
     # warmup, per-module and structure passes run number_of_iterations; the timing pass one inference per planned depth
     assert barrier.call_count == 2 * (2 + 3 + 3 + sum(map(len, TimingRecorder(_tree(info)).depths_per_sample())))
     assert broadcast.call_count == 2
-    iterations, records = broadcast.call_args_list[1].args[0]
-    assert iterations == 3
+    number_of_samples, records = broadcast.call_args_list[1].args[0]
+    assert number_of_samples == 3
     assert {path for path, *_ in records} == set(_tree(info).nodes)
 
 
@@ -188,9 +188,9 @@ def test_every_timeable_node_is_timed(mocker, dataset):
 
 
 def test_the_timing_pass_runs_each_sample_once_per_its_depths(mocker, dataset):
-    """``begin_iteration`` is called once per depth of ``TimingRecorder.depths_per_sample()``, in order."""
+    """``time_replay`` is entered once per depth of ``TimingRecorder.depths_per_sample()``, in order."""
     model, fn = _vla()
-    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    begin = mocker.spy(TimingRecorder, "time_replay")
 
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
@@ -248,7 +248,7 @@ def test_calls_that_only_some_samples_make_are_timed(mocker):
     deep = (*branch, "root.sometimes.lin.forward")
     assert branch in tree.sequences[0] and branch in tree.sequences[2]
     assert branch not in tree.sequences[1] and branch not in tree.sequences[3]
-    # only the branch reaches depth 3, so only samples 0 and 2 get an iteration at that depth
+    # only the branch reaches depth 3, so only samples 0 and 2 get a replay at that depth
     assert TimingRecorder(tree).depths_per_sample() == [[1, 2, 3], [1, 2], [1, 2, 3], [1, 2]]
     assert tree.nodes[branch].total_time_ms is not None
     assert tree.nodes[deep].total_time_ms is not None
@@ -646,11 +646,11 @@ def test_a_torch_compiled_child_that_recurses_records_the_nested_call(mocker, da
 
 def test_timing_pass_ends_every_run(mocker, dataset):
     model, fn = _vla()
-    spy = mocker.spy(TimingRecorder, "end_iteration")
+    spy = mocker.spy(TimingRecorder, "_resolve_events")
 
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
 
-    # once per timing iteration, plus one when the timing pass ends
+    # once per timing replay, plus one when the timing pass ends
     assert spy.call_count == sum(map(len, TimingRecorder(_tree(info)).depths_per_sample())) + 1
 
 
@@ -685,27 +685,27 @@ def test_forward_is_not_recorded_while_compiling(mocker, dataset):
     assert _legacy(info) == _legacy(without)
 
 
-def test_end_iteration_failure_is_raised_through_the_rank_failure_context(mocker, dataset):
+def test_event_resolution_failure_is_raised_through_the_rank_failure_context(mocker, dataset):
     model, fn = _vla()
     spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
 
     def fail_in_the_timing_pass(self):
         raise RuntimeError("bad events")
 
-    mocker.patch.object(TimingRecorder, "end_iteration", new=fail_in_the_timing_pass)
+    mocker.patch.object(TimingRecorder, "_resolve_events", new=fail_in_the_timing_pass)
     original_apply = nn.Module._apply
 
     with pytest.raises(RuntimeError, match="bad events"):
         inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
-    spy.assert_any_call("Resolving call tree timings")
+    spy.assert_any_call("Timing a call tree replay")
     assert nn.Module._apply is original_apply
 
 
 def test_timing_pass_entry_failure_goes_through_the_rank_failure_context(mocker, dataset):
     model, fn = _vla()
     spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
-    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    begin = mocker.spy(TimingRecorder, "time_replay")
     mocker.patch.object(TimingRecorder, "_start", side_effect=RuntimeError("bad start"))
     original_apply = nn.Module._apply
 
@@ -720,7 +720,7 @@ def test_timing_pass_entry_failure_goes_through_the_rank_failure_context(mocker,
 def test_timing_pass_entry_peer_failure_exits_the_recorder(mocker, dataset):
     model, fn = _vla()
     real_guard = coordinator.raise_if_any_rank_fails
-    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    begin = mocker.spy(TimingRecorder, "time_replay")
     stop = mocker.spy(TimingRecorder, "_stop")
     original_apply = nn.Module._apply
 

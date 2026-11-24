@@ -17,10 +17,10 @@ def _object_path(call_path):
     return call_path.rpartition(" > ")[2].rpartition(".")[0]
 
 
-def _vla_tree(iterations=2):
+def _vla_tree(num_samples=2):
     model = VlaToy(steps=2)
     tokens, image = vla_inputs()
-    return record(model, lambda: model(tokens, image), iterations=iterations)
+    return record(model, lambda: model(tokens, image), num_samples=num_samples)
 
 
 def test_to_dict_exports_the_whole_tree():
@@ -29,8 +29,8 @@ def test_to_dict_exports_the_whole_tree():
     d = tree.to_dict()
 
     assert d["schema_version"] == 1
-    assert set(d) == {"schema_version", "iterations", "total_time_ms", "nodes", "modules", "weights"}
-    assert d["iterations"] == tree.iterations
+    assert set(d) == {"schema_version", "number_of_samples", "total_time_ms", "nodes", "modules", "weights"}
+    assert d["number_of_samples"] == tree.number_of_samples
     assert d["total_time_ms"] == tree.total_time_ms
     nodes = d["nodes"]
     assert len(nodes) == len(tree.nodes)
@@ -58,7 +58,7 @@ def test_to_dict_exports_the_whole_tree():
             "total_bytes_in",
             "total_bytes_out",
             "signatures",
-            "calls_per_iteration",
+            "calls_per_sample",
         }
         parent = exported["call_path"].rpartition(" > ")[0]
         assert not parent or parent in paths
@@ -93,7 +93,7 @@ def test_parameter_bytes_count_each_tensor_object_once_across_parameters_and_buf
     model.copy = torch.nn.Parameter(model.weight.data)  # another object over the same storage: counted
     x = torch.randn(1, 2)
 
-    tree = record(model, lambda: model(x), iterations=1)
+    tree = record(model, lambda: model(x), num_samples=1)
 
     assert tree.to_dict()["modules"][""]["parameter_bytes"] == 2 * 16
 
@@ -112,7 +112,7 @@ def test_to_dict_modules_parameters_list_own_parameters_and_buffers():
     model = Parent()
     x = torch.randn(1, 4)
 
-    tree = record(model, lambda: model(x), iterations=1)
+    tree = record(model, lambda: model(x), num_samples=1)
 
     modules = tree.to_dict()["modules"]
     assert modules[""]["parameters"] == {
@@ -129,7 +129,7 @@ def test_to_dict_modules_parameters_skip_a_missing_bias():
     model = torch.nn.Linear(4, 2, bias=False)
     x = torch.randn(1, 4)
 
-    tree = record(model, lambda: model(x), iterations=1)
+    tree = record(model, lambda: model(x), num_samples=1)
 
     assert tree.to_dict()["modules"][""]["parameters"] == {"weight": {"dtype": "torch.float32", "shape": [2, 4]}}
 
@@ -163,7 +163,7 @@ def test_to_dict_keeps_two_callers_of_one_module_apart():
     model = TwoRoleToy()
     x = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(x), iterations=1)
+    tree = record(model, lambda: model(x), num_samples=1)
 
     nodes = tree.to_dict()["nodes"]
     llm_nodes = [n for n in nodes if _object_path(n["call_path"]) == "llm"]
@@ -182,7 +182,7 @@ def test_to_dict_exports_signatures_with_exact_shapes():
     model = Model()
     a, b, c = torch.randn(1, 4, 8), torch.randn(1, 5, 8), torch.randn(8)
 
-    tree = record(model, lambda: (model(a, extra=c), model(b, extra=c)), iterations=1)
+    tree = record(model, lambda: (model(a, extra=c), model(b, extra=c)), num_samples=1)
 
     d = tree.to_dict()
     node = next(n for n in d["nodes"] if n["call_path"] == "forward")
@@ -210,7 +210,7 @@ def test_to_dict_exports_object_entries_as_type_only_and_stays_strict_json():
             model(torch.randn(2), flag=True, cache=object()),
             model(torch.randn(2), flag=False, cache=object()),
         ),
-        iterations=1,
+        num_samples=1,
     )
 
     signatures = next(n for n in tree.to_dict()["nodes"] if n["call_path"] == "forward")["signatures"]
@@ -221,7 +221,7 @@ def test_to_dict_exports_object_entries_as_type_only_and_stays_strict_json():
     json.dumps(tree.to_dict(), allow_nan=False)
 
 
-def test_to_dict_exports_signatures_and_calls_per_iteration():
+def test_to_dict_exports_signatures_and_calls_per_sample():
     class Model(torch.nn.Module):
         def forward(self, x):
             if x.ndim > 2:
@@ -232,15 +232,14 @@ def test_to_dict_exports_signatures_and_calls_per_iteration():
 
     recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
-        model(torch.randn(4, 8))
-        model(torch.randn(2, 8))
-        with pytest.raises(ValueError):
-            model(torch.randn(1, 4, 8))
-        recorder.end_iteration()
+        with recorder.record_sample():
+            model(torch.randn(4, 8))
+            model(torch.randn(2, 8))
+            with pytest.raises(ValueError):
+                model(torch.randn(1, 4, 8))
 
     node = next(n for n in recorder.result().to_dict()["nodes"] if n["call_path"] == "forward")
-    assert node["calls_per_iteration"] == [3]
+    assert node["calls_per_sample"] == [3]
     signatures = node["signatures"]
     assert [sig["call_indices"] for sig in signatures] == [[0], [1], [2]]
     assert signatures[0]["inputs"]["x"] == {
@@ -260,7 +259,7 @@ def test_to_dict_copies_call_indices():
 
     model = Model()
 
-    tree = record(model, lambda: model(torch.randn(2, 3)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(2, 3)), num_samples=1)
 
     tree.to_dict()["nodes"][0]["signatures"][0]["call_indices"].append(99)
     assert tree.nodes[("root.forward",)].signatures[0].call_indices == [0]
@@ -278,7 +277,7 @@ def test_to_dict_modules_parameters_list_a_tied_parameter_under_each_name():
 
     model = Tied()
 
-    tree = record(model, lambda: model(torch.randn(1, 2)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(1, 2)), num_samples=1)
 
     parameters = tree.to_dict()["modules"][""]["parameters"]
     assert set(parameters) == {"weight", "alias"}

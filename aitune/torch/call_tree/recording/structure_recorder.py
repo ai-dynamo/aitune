@@ -23,7 +23,7 @@ import enum
 import functools
 import weakref
 from collections import UserDict
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -53,12 +53,11 @@ class StructureRecorder(CallRecorder):
     Example:
         >>> recorder = StructureRecorder()
         >>> with recorder:
-        ...     recorder.begin_iteration()
-        ...     outer = recorder.begin_call("root.forward", object(), "forward", ())
-        ...     inner = recorder.begin_call("root.head.forward", object(), "forward", ())
-        ...     recorder.end_call(inner)
-        ...     recorder.end_call(outer)
-        ...     recorder.end_iteration()
+        ...     with recorder.record_sample():
+        ...         outer = recorder.begin_call("root.forward", object(), "forward", ())
+        ...         inner = recorder.begin_call("root.head.forward", object(), "forward", ())
+        ...         recorder.end_call(inner)
+        ...         recorder.end_call(outer)
         >>> sorted(recorder.result().nodes)
         [('root.forward',), ('root.forward', 'root.head.forward')]
     """
@@ -71,7 +70,7 @@ class StructureRecorder(CallRecorder):
         # per node: raw signature key -> its CallSignature, the same object as in the node's ``signatures``
         self._signatures: dict[CallPath, dict[_SignatureKey, CallSignature]] = {}
         self._stack: list[_Frame] = []
-        # what the outermost calls of the current iteration returned; inside a call, its frame's ``visible``
+        # what the outermost calls of the current sample returned; inside a call, its frame's ``visible``
         self._top_visible = _SourceIndex()
         self._sequences: list[list[CallPath]] = []
         self._current_sequence: list[CallPath] | None = None
@@ -168,15 +167,20 @@ class StructureRecorder(CallRecorder):
             frame.node.signatures.append(signature)
         signature.call_indices.append(frame.call_index)
 
-    def begin_iteration(self) -> None:
-        """Mark the start of the iteration that records the next sample (one call of the inference function)."""
-        self._current_sequence = []
-        self._top_visible = _SourceIndex()  # a new top level: nothing links across iterations
+    @contextlib.contextmanager
+    def record_sample(self) -> Generator[None]:
+        """Record one sample (one call of the inference function) inside the ``with`` block.
 
-    def end_iteration(self) -> None:
-        """Mark the end of the current iteration."""
-        if self._current_sequence is not None:
-            self._sequences.append(self._current_sequence)
+        An exception inside the block drops the sample it was recording: its sequence is not appended.
+        """
+        self._current_sequence = []
+        self._top_visible = _SourceIndex()  # a new top level: nothing links across samples
+        try:
+            yield
+        except BaseException:
+            self._current_sequence = None
+            raise
+        self._sequences.append(self._current_sequence)
         self._current_sequence = None
 
     def result(self) -> CallTree:
@@ -478,7 +482,7 @@ def _leaves_and_bytes(leaves: list[tuple[str, Any]]) -> tuple[list[tuple[Any, Le
 
 
 class _SourceIndex:
-    """An index of the values visible inside one call, or at the top level of an iteration: where each was last seen.
+    """An index of the values visible inside one call, or at the top level of a sample: where each was last seen.
 
     Values are matched by identity. An entry is keyed by the object's ``id`` and holds a weak reference to it: the
     reference confirms that the id still belongs to the same object, because CPython gives a freed object's id to

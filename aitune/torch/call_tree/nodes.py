@@ -101,8 +101,8 @@ class CallSignature:
         inputs: The signature's argument leaves by ``Leaf.name``.
         outputs: The signature's result leaves by ``Leaf.name``, or None when the calls raised.
         call_indices: The indices (0-based) of the node's calls with exactly this signature. Indices count the node's
-            calls in the order they started, across all iterations — the order ``CallTree.sequences`` records —
-            not reset per iteration.
+            calls in the order they started, across all samples — the order ``CallTree.sequences`` records —
+            not reset per sample.
 
     Example:
         >>> import torch
@@ -158,13 +158,13 @@ class CallNode:
         owner_class: Class name of the object the method belongs to.
         method: Name of the called method (``forward`` for module calls).
         module: Module the method belongs to, or None for methods of plain objects.
-        calls: Number of calls over all recorded iterations.
-        total_time_ms: Total time of the node's calls in milliseconds over all calls and recorded iterations;
+        calls: Number of calls over all recorded samples.
+        total_time_ms: Total time of the node's calls in milliseconds over all calls and recorded samples;
             None when the node was never timed (inside a compiled part or deeper than ``max_timing_depth``).
             Time per call: ``total_time_ms / calls``.
-        total_bytes_in: Total tensor bytes in the arguments over all calls and recorded iterations. Bytes per call:
+        total_bytes_in: Total tensor bytes in the arguments over all calls and recorded samples. Bytes per call:
             ``total_bytes_in / calls``.
-        total_bytes_out: Total tensor bytes in the results over all calls and recorded iterations.
+        total_bytes_out: Total tensor bytes in the results over all calls and recorded samples.
         signatures: The distinct ``CallSignature``s of the node's calls, in first-seen order; each records the
             start-order indices of the calls that had it, so ``sum(len(s.call_indices)) == calls`` and every index
             appears exactly once. A signature whose calls raised has ``outputs`` None.

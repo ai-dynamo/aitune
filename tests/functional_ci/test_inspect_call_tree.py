@@ -34,13 +34,13 @@ def _inspect(model, fn, dataset, call_tree: bool):
 
 @pytest.mark.matrix("inspecting.call-tree/aot")
 def test_call_tree_records_the_calls_and_their_cuda_times(device: torch.device):
-    """The tree has the model's calls with per-iteration counts, and every recorded call has a CUDA time."""
+    """The tree has the model's calls with per-sample counts, and every recorded call has a CUDA time."""
     model, fn, dataset = _vla(device)
 
     tree = _inspect(model, fn, dataset, call_tree=True).call_tree
 
     assert tree is not None
-    assert tree.iterations == ITERATIONS
+    assert tree.number_of_samples == ITERATIONS
     assert tree.nodes[("root.forward",)].calls == ITERATIONS
     assert tree.nodes[("root.forward", "root.dit_forward")].calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes
@@ -82,11 +82,11 @@ def test_call_tree_records_the_signatures_at_the_llm_to_dit_cut(device: torch.de
         "x": TensorLeaf("x", "torch.Tensor", torch.float32, (2, HIDDEN)),
         "t": TensorLeaf("t", "torch.Tensor", torch.float32, (2, 1)),
     }
-    assert tree.calls_per_iteration()[dit_key] == [5] * ITERATIONS
+    assert tree.calls_per_sample()[dit_key] == [5] * ITERATIONS
 
     exported = tree.to_dict()
     [dit] = [node for node in exported["nodes"] if node["call_path"] == "forward > dit_forward"]
-    assert dit["calls_per_iteration"] == [5] * ITERATIONS
+    assert dit["calls_per_sample"] == [5] * ITERATIONS
     assert dit["signatures"][0]["inputs"]["t"] == {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [2, 1]}
     tied = {"weight": {"dtype": "torch.float32", "shape": [16, HIDDEN]}}
     assert exported["modules"]["lm_head"]["parameters"] == tied

@@ -271,7 +271,7 @@ What is recorded:
    runs in Python and would distort times, so the structure pass records none.
 2. **The timing pass** replays the same samples in the same order, with all tracking off and compiled parts
    compiled. Each sample is replayed once per call-path depth its calls reach, so every call is timed exactly once
-   on the sample the structure pass recorded it on, and no timed call runs inside another. The number of iterations —
+   on the sample the structure pass recorded it on, and no timed call runs inside another. The number of replays —
    at most `number_of_iterations` times the number of call-path depths — is logged before the pass starts.
 
 Some nodes get no time (`total_time_ms` is `null`):
@@ -282,7 +282,7 @@ Some nodes get no time (`total_time_ms` is `null`):
   `max_timing_depth=0` skips the timing pass entirely — a structure pass only (calls, bytes, signatures, sources,
   weights), saving its `number_of_iterations` × depths inferences.
 
-`max_timing_depth` bounds the timing cost: fewer depths per sample means fewer iterations. It counts call-path depths,
+`max_timing_depth` bounds the timing cost: fewer depths per sample means fewer replays. It counts call-path depths,
 with the root call at depth 1, not the attribute depths that `max_depth` counts. The deep leaf levels (linear
 layers, norms) are rarely worth timing, and their calls and weight accesses are still recorded.
 
@@ -317,7 +317,7 @@ The exported data has this structure:
 ```json
 {
   "schema_version": 1,
-  "iterations": 2,
+  "number_of_samples": 2,
   "total_time_ms": 30.0,
   "nodes": [
     {"call_path": "forward", "owner_class": "Vla", "calls": 2, "total_time_ms": 30.0, ...},
@@ -339,7 +339,7 @@ The exported data has this structure:
                      "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
           "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
                                  "shape": [1, 1, 4096]}}}],
-     "calls_per_iteration": [5, 5]}
+     "calls_per_sample": [5, 5]}
   ],
   "modules": {"dit": {"class": "my_pkg.Dit",
                       "parameters": {"weight": {"dtype": "torch.float32", "shape": [4, 4]}},
@@ -348,8 +348,8 @@ The exported data has this structure:
 }
 ```
 
-`iterations` is the number of recorded iterations; `total_time_ms`, `total_bytes_in` and `total_bytes_out` are
-totals over all calls and iterations; divide by `calls` for per-call values and by `iterations` for per-iteration
+`number_of_samples` is the number of recorded samples; `total_time_ms`, `total_bytes_in` and `total_bytes_out` are
+totals over all calls and samples; divide by `calls` for per-call values and by `number_of_samples` for per-sample
 values. `total_time_ms` is `null` when the timing pass never timed the node.
 `inside_compiled_part` is true for calls inside a compiled part: they run inside the compiled code in the timing
 pass, so their `total_time_ms` is `null`; the compiled part's own call is timed.
@@ -360,7 +360,7 @@ Every leaf has `type`, tensors also `dtype` and exact `shape`; `outputs` is null
 A leaf with a `source` names where its object was last seen: `call_path`, `side` and the leaf `name` there, which can
 be in any of that node's signatures. In the example, `dit.forward` received `hidden_states` as `dit_forward`'s own
 argument of that name.
-`calls_per_iteration` gives how many of the node's calls each iteration made; they add up to `calls`.
+`calls_per_sample` gives how many of the node's calls each sample made; they add up to `calls`.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:
 
