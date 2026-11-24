@@ -3,8 +3,12 @@
 name: Create AITune containers for nightly testing
 
 on:
-  schedule:
-    - cron: "0 0 * * 1,2,3,4,5"
+  push:
+    branches: [main]
+    paths:
+      - ".github/docker/Dockerfile"
+      - ".github/docker/*.Dockerfile"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -20,6 +24,7 @@ env:
   UV_EXTRA_INDEX_URL: https://pypi.nvidia.com
   UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: &python_version "3.12"
+  TORCH_CI_IMAGE: &torch_ci_image ghcr.io/ai-dynamo/aitune/nvcr-torch-26.10-py3:latest
 
 defaults:
   run:
@@ -177,7 +182,7 @@ jobs:
         runner: [prod-aitune-tester-rtx-pro-4500-v1]
     # Pull the freshly pushed PR CI image onto the GPU node so the first PR job of the day starts warm.
     container:
-      image: ${{ vars.TORCH_CI_IMAGE }}
+      image: *torch_ci_image
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

@@ -491,6 +491,7 @@ def _map_data_collator(features: list) -> dict:
     Transformers are Apache 2.0 licensed.
 
     Copy has been made to add string support and avoid dependency on transformers.
+    See NOTICE.md at the repository root for attribution under the shared Apache 2.0 LICENSE.
     """
     first = features[0]
     batch: dict[str, Any] = {}

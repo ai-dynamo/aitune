@@ -41,7 +41,7 @@ env:
   UV_VERSION: ${{ vars.UV_VERSION }}
   UV_PYTHON: &python_version "3.11"
   NODE_VERSION: &node_version "25"
-  TORCH_CI_IMAGE: ${{ vars.TORCH_CI_IMAGE }}
+  TORCH_CI_IMAGE: ghcr.io/ai-dynamo/aitune/nvcr-torch-26.10-py3:latest
   PYTORCH_CI_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
 defaults:
@@ -85,6 +85,7 @@ jobs:
           $LICENSE_HEADER_TOOL --files "*.py"
           $LICENSE_HEADER_TOOL --files "*.sh"
           $LICENSE_HEADER_TOOL --files "*.md"
+          $LICENSE_HEADER_TOOL --files "*.ipynb" --comment-style "<!--|| -->"
           $LICENSE_HEADER_TOOL --files "*.yaml"
           $LICENSE_HEADER_TOOL --files "*.yml"
           $LICENSE_HEADER_TOOL --files "*.toml"
@@ -93,6 +94,8 @@ jobs:
           $LICENSE_HEADER_TOOL --files "*.ini"
           $LICENSE_HEADER_TOOL --files "*.pbtxt"
           $LICENSE_HEADER_TOOL --files "Makefile"
+          $LICENSE_HEADER_TOOL --files "Dockerfile"
+          $LICENSE_HEADER_TOOL --files "*.Dockerfile"
           $LICENSE_HEADER_TOOL --files ".gitignore"
           $LICENSE_HEADER_TOOL --files ".flake8"
           $LICENSE_HEADER_TOOL --files ".dockerignore"
