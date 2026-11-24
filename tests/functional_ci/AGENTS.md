@@ -142,6 +142,7 @@ formatting is checked.
 | `strategies` | `one-backend`, `first-wins`, `max-throughput`, `min-latency`, `latency-budget`, `validation-diagnostic`, `find-max-batch-size`, `dry-run` | `aot-tune`, `jit-tune`, `selection-checked` |
 | `topology` | backend id or `kernel-selector` | `single-gpu` |
 | `other` | `autocast-fp16`, `onnx-int8`, `modelopt-int8`, `modelopt-fp8`, `modelopt-nvfp4`, `cuda-graphs-fp32` | `functional-ci` |
+| `other` | `input-float16`, `input-float32`, `input-bfloat16`, `input-int32`, `input-int64` | backend id |
 | `inspecting` | `call-tree`, `call-tree-signatures` | `aot` (later `jit`) |
 
 Examples:

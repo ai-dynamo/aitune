@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Reduced-precision, quantized, and CUDA-graph TensorRT lifecycles, gated on GPU capability."""
+"""Cross-backend input dtypes and TensorRT precision and CUDA-graph lifecycles."""
 
 from functools import partial
 
@@ -9,9 +9,9 @@ import torch
 from packaging.version import Version
 
 from aitune.torch.backend import ONNXAutoCastConfig, ONNXQuantizationConfig, TorchQuantizationConfig
-from tests.functional_ci.backends import tensorrt_backend
+from tests.functional_ci.backends import BackendCase, tensorrt_backend, with_backends
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance, assert_matches_eager, run_lifecycle
-from tests.functional_ci.models import make_input, make_mlp
+from tests.functional_ci.models import make_input, make_mlp, seeded
 
 FP16 = Tolerance(rtol=1e-2, atol=1e-2)
 QUANTIZED = Tolerance(rtol=1e-1, atol=1e-1)
@@ -34,6 +34,36 @@ MODELOPT_TORCH_EXPORT_XFAIL = pytest.mark.xfail(
     raises=AssertionError,
     strict=True,
 )
+
+
+@pytest.mark.matrix("other.input-{precision}")
+@with_backends("base")
+@pytest.mark.parametrize("precision", ["float16", "bfloat16"])
+def test_reduced_precision_inputs(case: BackendCase, precision: str, device: torch.device, tmp_path):
+    """Keep the MLP weights and inputs in the requested dtype through tuning and checkpoint reload."""
+    dtype = getattr(torch, precision)
+
+    def model_factory(seed=0):
+        return make_mlp(device, seed=seed).to(dtype)
+
+    value = make_input(device).to(dtype)
+    epsilon = torch.finfo(dtype).eps
+    tolerance = Tolerance(rtol=max(case.tolerance.rtol, epsilon), atol=max(case.tolerance.atol, epsilon))
+    run_lifecycle(case.factory(), model_factory, value, tmp_path / "model.ait", tolerance)
+
+
+@pytest.mark.matrix("other.input-{precision}")
+@with_backends("base")
+@pytest.mark.parametrize("precision", ["int32", "int64"])
+def test_token_id_inputs(case: BackendCase, precision: str, device: torch.device, tmp_path):
+    """Exercise integer inputs as embedding indices, not as floating-point MLP activations."""
+
+    def model_factory(seed=0):
+        with seeded(device, seed):
+            return torch.nn.Sequential(torch.nn.Embedding(32, 128), torch.nn.Linear(128, 64)).to(device).eval()
+
+    token_ids = torch.arange(8, device=device, dtype=getattr(torch, precision)).reshape(2, 4)
+    run_lifecycle(case.factory(), model_factory, token_ids, tmp_path / "model.ait", case.tolerance)
 
 
 @pytest.mark.matrix("other.{case_id}/functional-ci")

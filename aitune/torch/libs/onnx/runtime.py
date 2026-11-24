@@ -9,24 +9,25 @@ structured Python output reconstruction and recorded input mutations belong to t
 
 from logging import getLogger
 
-import numpy as np
 import onnxruntime
 import torch
+from onnx import TensorProto
 
 from aitune.torch.libs.cuda.memory import memcpy_to_torch
 
 logger = getLogger(__name__)
 
-_TORCH_DTYPE_TO_NUMPY: dict[torch.dtype, type] = {
-    torch.float16: np.float16,
-    torch.float32: np.float32,
-    torch.float64: np.float64,
-    torch.int8: np.int8,
-    torch.int16: np.int16,
-    torch.int32: np.int32,
-    torch.int64: np.int64,
-    torch.uint8: np.uint8,
-    torch.bool: np.bool_,
+_TORCH_DTYPE_TO_ONNX: dict[torch.dtype, int] = {
+    torch.bfloat16: TensorProto.BFLOAT16,
+    torch.float16: TensorProto.FLOAT16,
+    torch.float32: TensorProto.FLOAT,
+    torch.float64: TensorProto.DOUBLE,
+    torch.int8: TensorProto.INT8,
+    torch.int16: TensorProto.INT16,
+    torch.int32: TensorProto.INT32,
+    torch.int64: TensorProto.INT64,
+    torch.uint8: TensorProto.UINT8,
+    torch.bool: TensorProto.BOOL,
 }
 
 
@@ -61,14 +62,14 @@ def _bind_inputs(io_binding: onnxruntime.IOBinding, inputs: dict[str, torch.Tens
     """Bind contiguous CPU or CUDA tensors directly by their memory pointers."""
     for name, value in inputs.items():
         logger.debug("Binding input %s: device=%s shape=%s dtype=%s", name, value.device, value.shape, value.dtype)
-        np_dtype = _TORCH_DTYPE_TO_NUMPY.get(value.dtype)
-        if np_dtype is None:
+        element_type = _TORCH_DTYPE_TO_ONNX.get(value.dtype)
+        if element_type is None:
             raise ValueError(f"Unsupported tensor dtype for ONNX Runtime IOBinding: {value.dtype}")
         io_binding.bind_input(
             name=name,
             device_type=value.device.type,
             device_id=value.device.index or 0,
-            element_type=np_dtype,
+            element_type=element_type,
             shape=list(value.shape),
             buffer_ptr=value.data_ptr(),
         )
