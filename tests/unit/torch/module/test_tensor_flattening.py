@@ -12,6 +12,43 @@ import torch
 from aitune.torch.module.sample_metadata import SampleMetadata
 
 
+@pytest.mark.parametrize("shape", [(), (2,), (2, 3)])
+@pytest.mark.parametrize("restore_metadata", [False, True])
+def test_flatten_root_tensor_returns_current_tensor_by_identity(shape, restore_metadata):
+    original = torch.ones(shape)
+    metadata = SampleMetadata.from_outputs(original)
+    assert metadata.flatten_tensors(original)[0] is original
+    if restore_metadata:
+        metadata = SampleMetadata.from_dict(metadata.to_dict())
+    current = torch.zeros(shape)
+
+    result = metadata.flatten_tensors(current)
+
+    assert type(result) is tuple
+    assert len(result) == 1
+    assert result[0] is current
+    torch.testing.assert_close(original, torch.ones(shape))
+
+
+@pytest.mark.parametrize("value", [None, 1, [], {}, (torch.ones(2),)])
+def test_flatten_root_tensor_rejects_non_tensor_values_with_recorded_path(value):
+    metadata = SampleMetadata.from_outputs(torch.ones(2))
+    with pytest.raises(
+        TypeError, match=f"Recorded tensor path output resolved to {type(value).__name__}, not a tensor"
+    ):
+        metadata.flatten_tensors(value)
+
+
+def test_flatten_single_tensor_container_does_not_return_the_root_tensor():
+    metadata = SampleMetadata.from_outputs((torch.ones(2),))
+    runtime = torch.zeros(1, 2)
+
+    (result,) = metadata.flatten_tensors(runtime)
+
+    assert result is not runtime
+    torch.testing.assert_close(result, runtime[0])
+
+
 @pytest.mark.parametrize("tensor_count", [1, 16, 256])
 @pytest.mark.parametrize("container_type", [tuple, list])
 @pytest.mark.parametrize("restore_metadata", [False, True])
