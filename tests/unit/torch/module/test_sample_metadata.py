@@ -3,8 +3,6 @@
 """Unit tests for sample metadata."""
 
 from dataclasses import dataclass
-from statistics import median
-from timeit import repeat
 from typing import Any
 
 import pytest
@@ -14,6 +12,7 @@ from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.module.sample_metadata import SampleMetadata, batch_tensor
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
+from tests.unit.torch.module.reconstruction_benchmark import record_timings
 
 
 def make_timing_sample(structure, tensor_count, tensor_elements):
@@ -168,6 +167,8 @@ def test_tensor_free_template_does_not_copy_tensor_subclasses():
     assert result["metadata"] is not value["metadata"]
 
 
+@pytest.mark.parametrize("gc_enabled", [False, True], ids=["gc-off", "gc-on"])
+@pytest.mark.parametrize("tensor_template", [False, True], ids=["tensor-free-template", "tensor-template"])
 @pytest.mark.parametrize("tensor_elements", [1, 4096], ids=["scalar-sized", "4096-elements"])
 @pytest.mark.parametrize(
     "structure,tensor_count,preserve_cache",
@@ -184,13 +185,15 @@ def test_tensor_free_template_does_not_copy_tensor_subclasses():
         pytest.param("metadata", 8, False, id="dict-with-mutable-metadata"),
     ],
 )
-def test_flatten_unflatten_timing(structure, tensor_count, preserve_cache, tensor_elements, record_property):
+def test_flatten_unflatten_timing(
+    structure, tensor_count, preserve_cache, tensor_elements, tensor_template, gc_enabled, record_property
+):
     """Report CPU microseconds per call, without machine-dependent performance assertions.
 
     Run with ``pytest -s -k test_flatten_unflatten_timing`` on the same idle machine for comparisons.
     Setup, allocation, metadata discovery, and correctness checks are outside the timed regions.
-    Like timeit's default, cyclic garbage collection is disabled during timing. These measurements
-    exclude model execution and GPU scheduling, so they do not establish end-to-end inference impact.
+    Exercise both cyclic GC settings and both template forms. These measurements exclude model
+    execution and GPU scheduling, so they do not establish end-to-end inference impact.
     """
     value = make_timing_sample(structure, tensor_count, tensor_elements)
     metadata = SampleMetadata.from_outputs(value)
@@ -201,7 +204,7 @@ def test_flatten_unflatten_timing(structure, tensor_count, preserve_cache, tenso
     if preserve_cache:
         preserved_containers = (value["cache"],)
         preserved_values = ((Locator((("cache", ObjectType.DICT),), is_output=True), value["cache"]),)
-    template = metadata.without_tensors(value, preserved_containers)
+    template = value if tensor_template else metadata.without_tensors(value, preserved_containers)
 
     restored = metadata.unflatten_tensors(tensors, template, preserved_values)
     expected_tensors = (tensors[0], *original_tensors[1:]) if preserve_cache else tensors
@@ -218,38 +221,17 @@ def test_flatten_unflatten_timing(structure, tensor_count, preserve_cache, tenso
         assert template["metadata"][0]["tokens"] == list(range(32))
         assert value["metadata"][0]["tokens"] == list(range(32))
 
-    timing_globals = {
-        "metadata": metadata,
-        "value": value,
-        "tensors": tensors,
-        "template": template,
-        "preserved_values": preserved_values,
-    }
     operations = {
-        "flatten": "metadata.flatten_tensors(value)",
-        "unflatten": "metadata.unflatten_tensors(tensors, template, preserved_values)",
+        "flatten": lambda: metadata.flatten_tensors(value),
+        "unflatten": lambda: metadata.unflatten_tensors(tensors, template, preserved_values),
     }
-    iterations = 100
-    repeats = 5
-    for operation, statement in operations.items():
-        # Warm each path before collecting repeated batches of independent calls.
-        repeat(statement, globals=timing_globals, number=20, repeat=1)
-        samples_us = [
-            elapsed * 1e6 / iterations
-            for elapsed in repeat(statement, globals=timing_globals, number=iterations, repeat=repeats)
-        ]
-        record_property(f"{operation}_median_us", median(samples_us))
-        record_property(f"{operation}_samples_us", samples_us)
-        print(
-            f"{structure}, tensors={tensor_count}, elements={tensor_elements}, preserved_cache={preserve_cache}: "
-            f"{operation} median={median(samples_us):.3f} us/call, min={min(samples_us):.3f}, "
-            f"max={max(samples_us):.3f} ({repeats} batches of {iterations})"
-        )
+    record_timings(operations, gc_enabled, record_property)
 
     assert all(
         actual is original for actual, original in zip(metadata.flatten_tensors(value), original_tensors, strict=True)
     )
-    assert template == metadata.without_tensors(value, preserved_containers)
+    if not tensor_template:
+        assert template == metadata.without_tensors(value, preserved_containers)
 
 
 def test_make_batch():
