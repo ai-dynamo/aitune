@@ -6,6 +6,7 @@ import copy
 import pickle
 from collections.abc import Mapping
 from functools import cached_property
+from operator import itemgetter
 from typing import Any, Literal, cast
 
 import torch
@@ -231,10 +232,16 @@ class SampleMetadata:
         Export and inference must use the same recorded paths, rather than rediscovering leaves from
         each runtime value. Otherwise a tensor can be passed to the wrong compiled input or shape rule.
 
-        Each call walks the recorded paths in Python without copying tensor data. Inference overhead
-        therefore depends on the number and depth of tensor paths, rather than tensor size.
+        Top-level indexed paths use a prepared itemgetter; nested and attribute paths retain locator
+        traversal. Neither path copies tensor data, so cost depends on path count and depth, not tensor size.
         """
-        tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
+        getter = self._tensor_itemgetter
+        if getter is None:
+            tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
+        elif len(self._tensor_data) == 1:
+            tensors = (getter(value),)
+        else:
+            tensors = getter(value)
         for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
             if not isinstance(tensor, torch.Tensor):
                 raise TypeError(f"Recorded tensor path {locator} resolved to {type(tensor).__name__}, not a tensor.")
@@ -486,6 +493,20 @@ class SampleMetadata:
     def has_batch_axis(self) -> bool:
         """Check if metadata has batch axis."""
         return all(tensor_spec.has_batch_axis() for tensor_spec in self.tensor_specs)
+
+    @cached_property
+    def _tensor_itemgetter(self) -> itemgetter | None:
+        """Prepare top-level indexed reads in recorded order, independent of runtime key order.
+
+        Attribute access and nested paths retain locator traversal. Store only accessors, so the
+        getter keeps no sample values and can be recreated from metadata restored from checkpoints.
+        """
+        if not self._tensor_data or any(
+            locator.depth != 1 or next(locator.path_iter())[1] not in (ObjectType.SEQUENCE, ObjectType.DICT)
+            for locator, _ in self._tensor_data
+        ):
+            return None
+        return itemgetter(*(locator.accessor_at(0) for locator, _ in self._tensor_data))
 
     @cached_property
     def _is_flat_tensor_sequence(self) -> bool:
