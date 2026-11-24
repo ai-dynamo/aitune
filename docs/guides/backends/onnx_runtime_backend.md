@@ -140,7 +140,7 @@ outputs = source(**{"input.1": input_tensor})
 
 Only `ONNXRuntimeBackend` and `TensorRTBackend` support tuning `OnnxModule`. Dynamic strategy resolution selects these
 backends automatically; pass an explicit compatible backend list to restrict the candidates further. See
-[ONNX Model Tuning](../onnx_tuning.md) for a complete example.
+[Tune an existing ONNX model](../onnx_tuning.md) for a complete example.
 
 `ONNXRuntimeBackend` and `TensorRTBackend`
 use the source file directly instead of exporting it again. Recording derives min/max shapes and batch

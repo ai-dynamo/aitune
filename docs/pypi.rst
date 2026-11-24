@@ -101,7 +101,7 @@ Enable AITune when launching the script:
 The example saves an image to ``landscape.png``. Use representative prompts for your workload.
 Eligible modules use the selected implementations in the running application.
 A new process starts tuning again; use the explicit workflow below for saved artifacts.
-See the `JIT guide <https://docs.nvidia.com/aitune/guides/just-in-time-tuning/>`_ for configuration and deferred tuning
+See the `JIT guide <https://docs.nvidia.com/aitune/guides/just-in-time/tune/>`_ for configuration and deferred tuning
 for pipelines.
 
 Ahead-of-time (AOT): prepare a reusable tuning artifact
@@ -136,7 +136,7 @@ Provide your model and representative inputs:
 
 This produces an image and a ``tuned_pipe.ait`` artifact that can be loaded into a compatible pipeline.
 Use representative prompts or data for your workload. See the
-`AOT guide <https://docs.nvidia.com/aitune/guides/ahead-of-time-tuning/>`_ for tuning
+`AOT guide <https://docs.nvidia.com/aitune/guides/ahead-of-time/tune-pytorch/>`_ for tuning
 configuration and the `checkpoint guide <https://docs.nvidia.com/aitune/guides/deployment/save-and-load-checkpoints/>`_
 for saving and loading.
 
@@ -151,7 +151,7 @@ Learn more
 ----------
 
 - `Documentation <https://docs.nvidia.com/aitune/>`_
-- `Supported backends <https://docs.nvidia.com/aitune/learn/backends/>`_
+- `Supported backends <https://docs.nvidia.com/aitune/guides/backends/overview/>`_
 - `Multi-GPU tuning <https://docs.nvidia.com/aitune/guides/multi-gpu-integration/>`_
 - `Profiling and hardware metrics <https://docs.nvidia.com/aitune/guides/advanced/profiling-and-hardware-metrics/>`_
 - `Deployment overview <https://docs.nvidia.com/aitune/guides/deployment/overview/>`_

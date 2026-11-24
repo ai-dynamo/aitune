@@ -14,39 +14,9 @@ NVTX and hardware metrics are disabled by default to avoid overhead in productio
 
 ## Tuning Telemetry
 
-AITune records structured tuning telemetry during every run. The report captures backend build results, selected backends, and failure details. When performance validation is enabled, it also captures graph-level baseline throughput and backend throughput.
-
-By default, the report is written to:
-
-```text
-~/.cache/aitune/tuning_data/report.json
-```
-
-Set a fixed output path with `AITUNE_TUNING_DATA_PATH`:
-
-```bash
-export AITUNE_TUNING_DATA_PATH=/tmp/aitune-report.json
-python your_script.py
-```
-
-or configure it in Python:
-
-```python
-import aitune.torch as ait
-
-ait.config.tuning_data_output_path = "/tmp/aitune-report.json"
-```
-
-In distributed runs, AITune adds the rank to its default report filename. Explicit paths are used exactly as provided,
-so assign a distinct path on each rank.
-
-For long-running processes, snapshot the current report without waiting for process exit:
-
-```python
-from aitune.torch import snapshot_tuning_data
-
-snapshot_tuning_data()
-```
+Use tuning telemetry to see why a backend was selected or rejected. The
+[Observability guide](../../learn/observability.md#tuning-telemetry) covers the report location, path overrides,
+per-rank filenames, and how to snapshot reports during a run.
 
 ## NVTX Profiling
 

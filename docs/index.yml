@@ -6,32 +6,46 @@ navigation:
     contents:
       - page: Overview
         path: ../docs/learn/overview.md
+      - page: Why AITune
+        path: ../docs/learn/why_aitune.md
+      - page: Core Concepts
+        path: ../docs/learn/concepts.md
       - page: Install
         path: ../docs/learn/install.md
       - page: Quick Start
         path: ../docs/learn/quick_start.md
-      - page: Core Functionalities
-        path: ../docs/learn/core_functionalities.md
-      - page: Backends
-        path: ../docs/learn/backends.md
       - page: Observability
         path: ../docs/learn/observability.md
   - section: Guides
     contents:
-      - page: Ahead-of-time Tuning
-        path: ../docs/guides/aot_tuning.md
-      - page: ONNX Model Tuning
-        path: ../docs/guides/onnx_tuning.md
-      - page: Ahead-of-time Inspect
-        path: ../docs/guides/aot_inspect.md
-      - page: Just-in-time Tuning
-        path: ../docs/guides/jit_tuning.md
-      - page: Just-in-time Inspect
-        path: ../docs/guides/jit_inspect.md
+      - section: Ahead-of-time Tuning
+        slug: ahead-of-time
+        contents:
+          - page: Tune a PyTorch model or pipeline
+            slug: tune-pytorch
+            path: ../docs/guides/aot_tuning.md
+          - page: Inspect a PyTorch model or pipeline
+            slug: inspect-pytorch
+            path: ../docs/guides/aot_inspect.md
+          - page: Tune an existing ONNX model
+            slug: tune-onnx
+            path: ../docs/guides/onnx_tuning.md
+      - section: Just-in-time Tuning
+        slug: just-in-time
+        contents:
+          - page: Tune during inference
+            slug: tune
+            path: ../docs/guides/jit_tuning.md
+          - page: Inspect during inference
+            slug: inspect
+            path: ../docs/guides/jit_inspect.md
       - page: Multi-GPU Integration
         path: ../docs/guides/multi_gpu.md
       - section: Backends
         contents:
+          - page: Backend Catalog
+            slug: overview
+            path: ../docs/guides/backends/overview.md
           - page: TensorRT Backend
             path: ../docs/guides/backends/tensorrt_backend.md
           - page: TensorRT Optimization Profiles
@@ -64,6 +78,12 @@ navigation:
             path: ../docs/guides/deployment/checkpoints.md
       - section: Advanced
         contents:
+          - page: Architecture
+            path: ../docs/guides/advanced/architecture.md
+          - page: Design Decisions
+            path: ../docs/guides/advanced/design_decisions.md
+          - page: Extending AITune
+            path: ../docs/guides/advanced/extending_aitune.md
           - page: Tuning Workflow
             path: ../docs/guides/advanced/tuning_workflow.md
           - page: Execution Graphs

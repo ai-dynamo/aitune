@@ -62,7 +62,7 @@ AITune provides five built-in strategies:
 
 For `OnnxModule`, dynamic resolution selects only candidates tagged for ONNX input: `ONNXRuntimeBackend` and
 `TensorRTBackend`. Explicit strategies must likewise contain only ONNX-compatible backends. See
-[ONNX Model Tuning](../onnx_tuning.md) for a complete example.
+[Tune an existing ONNX model](../onnx_tuning.md) for a complete example.
 
 ## Why Backends Can Fail
 

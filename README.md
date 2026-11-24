@@ -97,7 +97,7 @@ AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning python your_script.py
 The example saves an image to `landscape.png`. Use representative prompts for your workload.
 Eligible modules use the selected implementations in the running application.
 A new process starts tuning again; use the explicit workflow below for saved artifacts.
-See the [JIT guide](https://docs.nvidia.com/aitune/guides/just-in-time-tuning/) for configuration and deferred tuning
+See the [JIT guide](https://docs.nvidia.com/aitune/guides/just-in-time/tune/) for configuration and deferred tuning
 for pipelines.
 
 ### Ahead-of-time (AOT): prepare a reusable tuning artifact
@@ -133,7 +133,7 @@ ait.save(pipe, "tuned_pipe.ait")
 
 This produces an image and a `tuned_pipe.ait` artifact that can be loaded into a compatible pipeline.
 Use representative prompts or data for your workload. See the
-[AOT guide](https://docs.nvidia.com/aitune/guides/ahead-of-time-tuning/) for tuning
+[AOT guide](https://docs.nvidia.com/aitune/guides/ahead-of-time/tune-pytorch/) for tuning
 configuration and the [checkpoint guide](https://docs.nvidia.com/aitune/guides/deployment/save-and-load-checkpoints/)
 for saving and loading.
 
@@ -150,7 +150,7 @@ with your own compatible checkpoint and data.
 ## Learn more
 
 - [Documentation](https://docs.nvidia.com/aitune/)
-- [Supported backends](https://docs.nvidia.com/aitune/learn/backends/)
+- [Supported backends](https://docs.nvidia.com/aitune/guides/backends/overview/)
 - [Multi-GPU tuning](https://docs.nvidia.com/aitune/guides/multi-gpu-integration/)
 - [Profiling and hardware metrics](https://docs.nvidia.com/aitune/guides/advanced/profiling-and-hardware-metrics/)
 - [Deployment overview](https://docs.nvidia.com/aitune/guides/deployment/overview/)

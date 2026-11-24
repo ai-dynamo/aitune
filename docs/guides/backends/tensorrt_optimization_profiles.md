@@ -4,11 +4,14 @@
 title: "TensorRT Optimization Profiles"
 ---
 
-## Introduction
+A TensorRT optimization profile defines the minimum and maximum input shapes an engine accepts and the preferred
+shape TensorRT optimizes for. Set the profile mode or supply profiles directly through `TensorRTBackendConfig.profiles`.
 
-TensorRT optimization profiles optimize the performance of a TensorRT engine. They are used to profile the performance of a model at different input shapes and batch sizes.
+## Use one profile for a shape range
 
-By default, a single profile is generated from the graph spec that supports the minimum and maximum shapes of the input tensors.
+The default, `TensorRTProfileMode.SINGLE`, creates one profile per graph specification. For inputs without
+explicit shape definitions, it uses the recorded minimum and maximum shapes and uses the maximum as the preferred
+shape. Explicit dynamic shape definitions supply their declared bounds and preferred sizes.
 
 ## Using samples for profile generation
 
@@ -33,7 +36,7 @@ profile instead of sample profiles.
 
 ```python
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
-from aitune.torch.backend.tensorrt import TensorRTProfile, TensorRTProfileMode
+from aitune.torch.backend.tensorrt import TensorRTProfileMode
 
 backend = TensorRTBackend(TensorRTBackendConfig(profiles=TensorRTProfileMode.SAMPLES_USED))
 ```
@@ -67,21 +70,29 @@ See `tests/functional/pytorch/027_aitune_torch_toy_model_tensorrt_backend.py` fo
 
 ## Using your own profiles
 
-You can use your own profiles by setting the `profiles` argument in the `TensorRTBackendConfig` class.
-These profiles assume the module defines `forward(input)`, so `input` is the path of its top-level tensor parameter:
+Supply a list of profiles when you know the shape ranges in advance. This example assumes a module with
+`forward(input)` that serves two image resolutions and batches from 1 to 8:
 
 ```python
-backend = TensorRTBackend(TensorRTBackendConfig(profiles=[
-    TensorRTProfile().add_input_shape("input", (3, 224, 224), (3, 224, 224), (3, 224, 224)),
-    TensorRTProfile().add_input_shape("input", (3, 448, 448), (3, 448, 448), (3, 448, 448)),
-]))
+from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig
+from aitune.torch.backend.tensorrt import TensorRTProfile
+
+profiles = [
+    TensorRTProfile().add_input_shape("input", (1, 3, 224, 224), (4, 3, 224, 224), (8, 3, 224, 224)),
+    TensorRTProfile().add_input_shape("input", (1, 3, 512, 512), (4, 3, 512, 512), (8, 3, 512, 512)),
+]
+backend = TensorRTBackend(TensorRTBackendConfig(profiles=profiles))
 ```
+
+For each dimension, set the minimum at or below the preferred size and the preferred size at or below the maximum.
+Pick a preferred shape you expect to serve often. Use multiple profiles for distinct shape ranges and test that
+the profiles cover your production inputs.
 
 ### Getting the input paths
 
-Profile keys are Python-like tensor paths rooted at their real `forward` parameter names. For `forward(input)`,
-the key is `"input"`. A nested dictionary path uses a key such as `inputs["tokens"]`. You can get
-the exact keys from the `Path` column in tuning logs for the default single-profile mode.
+Profile keys use the semantic path rooted at the real `forward` parameter name. For `forward(input)`,
+pass `"input"`. For a tensor accessed as `inputs["tokens"]`, pass the tuple `("inputs", "tokens")`.
+Look for the `Semantic Path` column in the tuning logs.
 
 ```text
 INFO - 🎯 Tuning module: `toy-model` (all graphs)
