@@ -176,10 +176,9 @@ Do not enable automatic constructor interception in that worker. The returned re
 provides live inspection reports, state counts, and an `all_tuned` snapshot. See
 [Registering Existing Modules](../guides/jit_tuning.md#registering-existing-modules) for the complete contract.
 
-This example uses the provider-independent instance registration API. For FlexTensor-managed offload units, the
-optional [FlexTensor Integration](../guides/flextensor.md) adapter registers the original public offload units after
-native FlexTensor discovery and profiling, preserving provider-owned source placement. Preparation and profile loading
-use public FlexTensor APIs directly, followed by explicit registration and optional strategy replanning.
+For FlexTensor-managed offload units, use the [retained-profile workflow](../guides/flextensor.md#retain-the-initial-offload-profile):
+prepare through public FT APIs, finish discovery/profiling, register the original units, then record, tune and warm before
+serving. FlexTensor keeps placement ownership; explicit replanning is an advanced alternative described in that guide.
 
 ### Configuring just-in-time tuning
 

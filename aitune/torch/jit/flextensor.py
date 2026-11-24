@@ -278,10 +278,8 @@ def replan_flextensor(manager: Any, registration: JITRegistration, run_forward: 
         raise RuntimeError("FlexTensor did not complete and apply strategy replanning; use a fresh worker")
     _check_residency_boundary(boundary, _manager_units(manager), registration)
     if any(
-        any(
-            actual is not expected
-            for actual, expected in zip(_tuned_forward_signature(patched), signature, strict=True)
-        )
-        for patched, signature in forwards
+        current is not original
+        for patched, expected in forwards
+        for current, original in zip(_tuned_forward_signature(patched), expected, strict=True)
     ):
         raise RuntimeError("FlexTensor strategy replanning replaced an installed AITune forward; use a fresh worker")

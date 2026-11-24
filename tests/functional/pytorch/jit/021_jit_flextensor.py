@@ -210,7 +210,7 @@ def run(mode, performance, finalization, cache_dir):
         live_model = manager.model
         root_forward = live_model.forward
         resident_forwards = tuple(module.forward for _, module in resident_units)
-        usage = assert_offloading(manager, weight_bytes, managed_limit_bytes, resident_head_bytes)
+        assert_offloading(manager, weight_bytes, managed_limit_bytes, resident_head_bytes)
         completed_roots = 0
 
         def run_forward(value):

@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import statistics
+import tempfile
 import threading
 import time
 import urllib.request
@@ -114,8 +115,15 @@ def prepare_source(args: argparse.Namespace) -> None:
         request = urllib.request.Request(
             SOURCE_URL, headers={"User-Agent": "AITune-example/1.0 (https://github.com/ai-dynamo/aitune)"}
         )
-        with urllib.request.urlopen(request, timeout=60) as response, source.open("wb") as destination:
-            shutil.copyfileobj(response, destination)
+        with urllib.request.urlopen(request, timeout=60) as response:
+            destination = tempfile.NamedTemporaryFile(dir=source.parent, prefix=f".{source.name}.", delete=False)
+            temporary_source = Path(destination.name)
+            try:
+                with destination:
+                    shutil.copyfileobj(response, destination)
+                temporary_source.replace(source)
+            finally:
+                temporary_source.unlink(missing_ok=True)
     frames = sample_source(source, args)
     if len(frames) != FRAMES:
         raise ValueError(f"source yielded only {len(frames)} frames; need {FRAMES}")
@@ -589,12 +597,15 @@ def setup_aitune(
         representative["kwargs"] = tree_copy(kwargs, "cpu")
 
     # Warm every observed stage route, including lazy compilation, before readiness
-    # evidence or any optional replan. Capture only ONE last (stage-2) root-forward input.
-    handle = pipe.transformer.register_forward_pre_hook(capture, with_kwargs=True)
+    # evidence or any optional replan. Only replanning needs the last (stage-2) input.
+    handle = None
+    if args.finalization == "replan":
+        handle = pipe.transformer.register_forward_pre_hook(capture, with_kwargs=True)
     try:
         generate(pipe, upsample_pipe, hooks, reference, conditioning, args)
     finally:
-        handle.remove()
+        if handle is not None:
+            handle.remove()
     finalization_started = time.perf_counter()
     if args.finalization == "replan":
         inputs = tree_copy(representative["inputs"], "cuda:0")

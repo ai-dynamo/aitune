@@ -191,7 +191,7 @@ def run(cache_dir):
         assert compute._forward_hooks[hook.id] is adjust_output, "Native fallback lost an original compute hook"
         assert ModelExecutionTimeMeasuringStrategy.counter > measurements_before, "No real baseline profiling ran"
         failure = assert_failed_compile(registration, cache_dir)
-        usage = assert_offloading(manager, weight_bytes, managed_limit_bytes, resident_head_bytes)
+        assert_offloading(manager, weight_bytes, managed_limit_bytes, resident_head_bytes)
 
         replan_calls = 0
 

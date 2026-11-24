@@ -22,10 +22,9 @@ and required to be even for H.264. For example, `--width 768 --height 480` prepa
 1536x960 output. Use those arguments consistently for source preparation and every run, with a separate `--work-dir`
 and profile so existing mini measurements are preserved. Model weights, all 48 blocks, schedules and guidance are unchanged.
 
-The lower resolution, duration and explicit guidance settings are this benchmark's workload choices, not claims of
-equivalence to the older 45-second experiment. Both stages retain their pinned distilled sigma schedules. Modality
-guidance is explicitly 1, CFG is 1, and STG/rescale are 0 in every arm; the LoRA remains active during refinement, without
-a second stage-2 reference condition. Settings and source/prompt hashes are recorded for comparison.
+Both stages use their pinned distilled sigma schedules. Modality guidance and CFG are 1, and STG/rescale are 0 in every
+arm; the LoRA remains active during refinement, without a second stage-2 reference condition. Settings and source/prompt
+hashes are recorded for comparison.
 
 ## Runtime and memory
 
@@ -36,7 +35,8 @@ ghcr.io/ai-dynamo/aitune/nvcr-torch-26.01-py3@sha256:bd4b0ca692cec0d04dcfab89cb8
 ```
 
 Use its CUDA forward-compatibility shell initialization where required by the host driver. The example's
-`pyproject.toml` lists dependencies; Diffusers comes from commit `9159a587b1f148a2cc911deb72b6d755508ef38b`.
+[`pyproject.toml`](pyproject.toml) lists dependencies, including `flextensor>=0.5.0`; Diffusers comes from commit
+`9159a587b1f148a2cc911deb72b6d755508ef38b`.
 Actual package/device versions are recorded in each result. PyAV supplies decoding and H.264 encoding; no system
 FFmpeg executable is required.
 
@@ -85,8 +85,8 @@ uv run --project examples/LTX23OutpaintAITuneFlexTensor python examples/LTX23Out
 Defaults put caches, JSON, logs and media under `tuning/ltx23_outpaint/`, which is ignored by Git. Override `--work-dir`
 and `--model-cache` together when using another location. Do not run the modes concurrently on the same GPU or reuse
 one process's JIT/provider state for another mode. The manual staged benchmark is excluded from the shared export/
-deployment-project runner. The JIT021 functional variants cover native eager/deferred tuning, the enabled performance
-gate and retained-profile finalization. JIT022 checks native eager fallback after a genuine fullgraph compiler failure.
+deployment-project runner. For adapter and GPU functional commands, see the
+[integration validation record](../../docs/guides/flextensor.md#validation-and-runnable-checks).
 
 For a matched profile-loading control, preserve the profile-building baseline's results and rerun baseline with
 `--reuse-profile` in another fresh process, using the same warmups/runs. This gives both FT arms the same startup path.
@@ -108,36 +108,17 @@ FlexTensor selects the 48 original transformer blocks directly. AITune registers
 instances after discovery and profiling finish. FlexTensor's native compiled-unit and replay support manages transfers
 for AITune's repeated warmup, correctness and profiling calls. Original module attributes and parameter paths remain intact.
 
-With `pipe` constructed and `cfg` holding the example's FT configuration, fresh retained-profile setup is:
-
-```python
-import flextensor as ft
-from aitune.torch.jit.flextensor import register_flextensor_units
-
-pipe.transformer = ft.offload(
-    pipe.transformer,
-    config=cfg,
-    name="ltx23-outpaint-mini",
-    compile_fn=lambda module: module,
-)
-manager = ft.get_offload_manager("ltx23-outpaint-mini")
-# Run the normal pipeline until manager.phase.value == "inference".
-registration = register_flextensor_units([manager])
-```
-
-Assign the exact returned proxy to `pipe.transformer`. Explicit profile loading uses public `ft.offload_from_profile`
-instead of `ft.offload`, with the same native configuration and identity callback. Selectors address the original
-transformer tree; no selector translation or additional module layer is required. Direct-root parameter/buffer
-placement remains an application step before FT setup. See the [native integration guide](../../docs/guides/flextensor.md).
-
-The example finishes FT startup, registers the original blocks in one batch, records both stages, enables deferred
-tuning, and warms all serving routes before retaining or replanning the strategy.
+The [retained-profile API flow](../../docs/guides/flextensor.md#retain-the-initial-offload-profile) shows the complete
+setup sequence. This example assigns the exact FT-returned proxy to `pipe.transformer`, finishes FT startup, registers
+all original blocks in one batch, records both stages, then tunes and warms all serving routes. Profile reuse calls
+public `ft.offload_from_profile` with the same configuration and identity callback. Direct-root parameter/buffer
+placement remains an application step before FT setup.
 
 The default `--finalization retain-profile` uses the provider's identity `compile_fn` plus view-profile mode in both
 FlexTensor arms. It preserves the pre-AITune profile/strategy and does not claim compiled-timing replanning.
-`--finalization replan` is a distinct experiment: after tuning, its callback executes exactly one complete transformer
-forward per provider-requested iteration, using a captured representative stage-2 input. It never passes a whole
-multi-step generation to the replan helper. Compare only matching finalization and memory policies.
+The advanced `--finalization replan` experiment instead measures a new strategy after tuning. Its callback executes one
+complete transformer forward per provider-requested iteration, using a captured representative stage-2 input. It never
+passes a whole multi-step generation to the replan helper. Compare only matching finalization and memory policies.
 
 ## Measurements and manual review
 
@@ -152,9 +133,12 @@ checks, absolute/relative differences, RMSE, cosine and explicit allclose diagno
 perceptual-quality judgments and do not alter AITune's built-in checks. Inspect motion, source preservation, black-mask
 boundaries and consistency yourself. A visual pass is not a claim of numerical equivalence.
 
+Compiled LTX has an outstanding [strict numerical mismatch](../../docs/guides/flextensor.md#validation-and-runnable-checks)
+with resident eager. Treat measured latency gains separately from numerical or perceptual acceptance.
+
 Native reference conditioning guides generation; it does not hard-copy the source pixels into the output. Review
 source details in the resident-eager result too, and do not attribute a change to tuning merely because it is visible
-in the combined video. The no-reference second stage with the outpaint LoRA still active is an explicit historical
+in the combined video. The no-reference second stage with the outpaint LoRA still active is an explicit
 workload choice, not a claim that every outpaint recipe uses identical conditioning.
 
 The main review artifacts are:
@@ -165,11 +149,6 @@ The main review artifacts are:
 - `combined/heldout_outpaint.mp4`: independent-seed visual check.
 - `comparison.json` and each mode's `results.json`: actual measurements and diagnostics.
 
-Do not infer completion or gains from these expected filenames. Inspect the results from the current run. Historical
-profiles and checkpoints from the former wrapper layout are not automatically remapped to the native model tree.
-There is no standalone checkpoint export, reset or rollback machinery for this integration.
-
-Historical validation machine settings, native/CPU commands and benchmark arguments are recorded in
-[`validation_commands.md`](../../work_logs/flextensor/validation_commands.md). Reconstructed commands and missing
-fresh-base bootstrap history are explicitly distinguished from commands/outcomes retained from actual execution.
-Those records predate this migration and do not establish native verification results.
+Do not infer completion or gains from these expected filenames. Inspect the results from the current run. Profiles
+must match the native model, workload and provider policy; incompatible checkpoint layouts are not automatically
+remapped. There is no standalone checkpoint export, reset or rollback machinery for this integration.
