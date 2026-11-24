@@ -88,8 +88,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", "3.13"]
-        torch: [torch29, torch210, torch211, torch212]
+        python_version: ["3.12"]
+        torch: [torch29, torch210, torch211, torch212, torch213]
         cuda:
           - &cu128
             uv_torch_backend: cu128
@@ -107,10 +107,21 @@ jobs:
             cuda: *cu128
           - torch: torch212
             cuda: *cu128
+          # no torch-tensorrt==2.13+cu12 in pypi/torch
+          - torch: torch213
+            cuda: *cu128
         include:
           - python_version: "3.14"
             torch: torch214
             cuda: *cu130
+          - python_version: "3.14"
+            torch: torch215
+            cuda:
+              uv_torch_backend: cu132
+              cuda_image: 13.0.3-devel-ubuntu24.04
+              cuda_major: 13
+              uv_extra_args: ""
+
     container:
       image: ghcr.io/ai-dynamo/aitune/cuda-${{ matrix.cuda.cuda_image }}:latest
     steps:
