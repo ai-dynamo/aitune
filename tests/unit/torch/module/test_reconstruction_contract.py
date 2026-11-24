@@ -69,20 +69,25 @@ def test_preserved_parent_takes_precedence_over_child_and_tensor_replacements(pa
 
 
 @pytest.mark.parametrize("preserve_root", [False, True])
-def test_root_tensor_reconstruction_respects_preserved_identity(preserve_root):
+@pytest.mark.parametrize("tensor_template", [False, True])
+@pytest.mark.parametrize("result_container", [None, tuple, list], ids=["tensor", "tuple", "list"])
+def test_root_tensor_reconstruction_respects_preserved_identity(preserve_root, tensor_template, result_container):
     original, replacement, preserved = torch.ones(2), torch.zeros(2), torch.full((2,), 3.0)
     metadata = SampleMetadata.from_outputs(original)
     aliases = ((Locator((), is_output=True), preserved),) if preserve_root else ()
 
-    result = metadata.unflatten_tensors(replacement, None, aliases)
+    flat_result = replacement if result_container is None else result_container((replacement,))
+    result = metadata.unflatten_tensors(flat_result, original if tensor_template else None, aliases)
 
     assert result is (preserved if preserve_root else replacement)
+    torch.testing.assert_close(original, torch.ones(2))
 
 
 @pytest.mark.parametrize(
     "replacements,error,message",
     [
         ((), ValueError, "Expected 1 tensors, got 0"),
+        ((torch.ones(2), torch.ones(2)), ValueError, "Expected 1 tensors, got 2"),
         ((None,), TypeError, "received NoneType, not a tensor"),
     ],
 )

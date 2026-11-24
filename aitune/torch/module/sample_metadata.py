@@ -266,6 +266,11 @@ class SampleMetadata:
             if not isinstance(tensor, torch.Tensor):
                 raise TypeError(f"Recorded tensor path {locator} received {type(tensor).__name__}, not a tensor.")
 
+        # A root tensor has no containers or non-tensor metadata to copy. Keep validation above
+        # this shortcut, and use the general path when preserved values can override the result.
+        if len(self._tensor_data) == 1 and self._tensor_data[0][0].depth == 0 and not preserved_values:
+            return tensors[0]
+
         tensor_memo = {}
         for locator, _ in self._tensor_data:
             if any(alias_locator.is_prefix_of(locator) for alias_locator, _ in preserved_values):
