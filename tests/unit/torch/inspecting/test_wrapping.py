@@ -6,12 +6,18 @@ import torch
 import torch.nn as nn
 
 from aitune.torch.backend import TensorRTBackend, TorchInductorJitBackend
+from aitune.torch.checkpoint.local_torch_storage import LocalTorchStorage
+from aitune.torch.checkpoint.torch_checkpoint import TorchCheckpoint
+from aitune.torch.inspecting import inspect
 from aitune.torch.inspecting.module_info import ModuleInfo
 from aitune.torch.inspecting.module_inspector import DictOfModulesInfo, ListOfModulesInfo
 from aitune.torch.inspecting.wrapping import wrap
 from aitune.torch.module.forward_signature import ForwardSignature
-from aitune.torch.module.wrapper_module import Module
+from aitune.torch.module.wrapper_module import Module, ModuleState
+from aitune.torch.module_registry import MODULE_REGISTRY
 from aitune.torch.tune_strategy import FirstWinsStrategy, OneBackendStrategy
+from aitune.torch.tuning import tune
+from tests.toy_backends import SleepBackend
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import make_input_metadata
 
@@ -200,7 +206,7 @@ def test_wrap_module_state_preservation(simple_model):
     wrapped_model = wrap(simple_model, [ModuleInfo(module=simple_model)])
 
     # Then the state should be preserved
-    assert torch.allclose(wrapped_model[0].weight, original_weight)  # pytype: disable=unsupported-operands
+    assert torch.allclose(wrapped_model[0].weight, original_weight)
 
 
 def test_wrap_custom_object():
@@ -397,3 +403,402 @@ def test_wrap_nested_diffrent_types():
     assert isinstance(wrapped_model.linear, Module)
     assert isinstance(wrapped_model.dict["linear"], Module)
     assert isinstance(wrapped_model.list[0], Module)
+
+
+def test_wrap_with_call_tree_keeps_weights_used_outside_the_module():
+    from aitune.torch.inspecting import inspect
+    from aitune.torch.utils.module import is_kept_on_device
+    from tests.toy_models.call_tree_models import VlaToy, vla_inputs
+
+    model = VlaToy().eval()
+    tokens, image = vla_inputs()
+    with torch.no_grad():
+        info = inspect(
+            model,
+            [(tokens, image)],
+            inference_function=lambda t, i: model(t, i),
+            number_of_iterations=1,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+            call_tree=True,
+        )
+    head = [m for m in info.get_modules() if m.module is model.lm_head]
+    dit = [m for m in info.get_modules() if m.module is model.dit]
+    assert head and dit
+    embedding, dit_weight = model.llm.embed.weight, next(model.dit.parameters())
+
+    wrap(model, head + dit)
+
+    assert is_kept_on_device(embedding)
+    assert not is_kept_on_device(dit_weight)
+
+
+def test_wrap_with_call_tree_logs_the_kept_weights(caplog):
+    """Wrapping ``lm_head`` logs one line naming its one kept weight and the outside call reading it."""
+    import logging
+
+    from aitune.torch.inspecting import inspect
+    from tests.toy_models.call_tree_models import VlaToy, vla_inputs
+
+    model = VlaToy().eval()
+    tokens, image = vla_inputs()
+    with torch.no_grad():
+        info = inspect(
+            model,
+            [(tokens, image)],
+            inference_function=lambda t, i: model(t, i),
+            number_of_iterations=1,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+            call_tree=True,
+        )
+    head = [m for m in info.get_modules() if m.module is model.lm_head]
+    dit = [m for m in info.get_modules() if m.module is model.dit]
+    assert head and dit
+
+    # ``wrap`` reconfigures the root logger, which would drop caplog's handler; attach it to the wrapping logger.
+    logging.getLogger("aitune.torch.inspecting.wrapping").addHandler(caplog.handler)
+    with caplog.at_level(logging.INFO, logger="aitune.torch.inspecting.wrapping"):
+        wrap(model, head + dit)
+
+    keeping = [r for r in caplog.records if "Keeping" in r.message and r.levelno == logging.INFO]
+    assert [r.message for r in keeping] == [
+        "Keeping 1 weight (0.0 MB) of lm_head on the device after tuning: read by forward > llm.embed.forward"
+    ]
+
+
+def _wrap_vla_head():
+    from aitune.torch.inspecting import inspect
+    from tests.toy_models.call_tree_models import VlaToy, vla_inputs
+
+    model = VlaToy().eval()
+    tokens, image = vla_inputs()
+    with torch.no_grad():
+        info = inspect(
+            model,
+            [(tokens, image)],
+            inference_function=lambda t, i: model(t, i),
+            number_of_iterations=1,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+            call_tree=True,
+        )
+    wrap(model, [m for m in info.get_modules() if m.module is model.lm_head])
+    return model
+
+
+def test_a_later_wrap_keeps_the_kept_weights_of_an_earlier_one():
+    from aitune.torch.utils.module import is_kept_on_device, offload
+
+    first = _wrap_vla_head()
+    second = _wrap_vla_head()
+
+    assert is_kept_on_device(first.llm.embed.weight)
+    assert is_kept_on_device(second.llm.embed.weight)
+
+    offload(first.llm, "meta")  # what tuning the first model does to a module that holds the tied weight
+    assert first.llm.embed.weight.device.type == "cpu"
+    assert all(p.device.type == "meta" for n, p in first.llm.named_parameters() if n != "embed.weight")
+
+
+def test_wrapping_a_module_again_replaces_what_it_kept():
+    from aitune.torch.utils.module import is_kept_on_device
+
+    model = _wrap_vla_head()
+    other = _wrap_vla_head()
+
+    head = ModuleInfo(name="lm_head", module=model.lm_head, parent=ModuleInfo(name="", module=model))
+    wrap(model, [head])  # without a call tree: lm_head now keeps nothing
+
+    assert not is_kept_on_device(model.llm.embed.weight)
+    assert is_kept_on_device(other.llm.embed.weight)
+
+
+def test_a_tensor_kept_by_one_wrapped_module_stays_kept_when_another_holder_is_wrapped():
+    """Two pipelines share one model: wrapping its embedding for the second keeps the first's tied weight."""
+    from aitune.torch.inspecting import inspect
+    from aitune.torch.utils.module import is_kept_on_device
+
+    class Tied(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.embed = torch.nn.Embedding(16, 8)
+            self.head = torch.nn.Linear(8, 16, bias=False)
+            self.head.weight = self.embed.weight
+
+        def forward(self, ids):
+            return self.head(self.embed(ids))
+
+    shared = Tied()
+    ids = torch.randint(0, 16, (2, 4))
+    with torch.no_grad():
+        first = inspect(
+            shared, [ids], inference_function=shared, number_of_iterations=1, warmup_iterations=1, call_tree=True
+        )
+        second = inspect(
+            shared, [ids], inference_function=shared.embed, number_of_iterations=1, warmup_iterations=1, call_tree=True
+        )
+
+    wrap(
+        shared,
+        [ModuleInfo(name="head", module=shared.head, parent=ModuleInfo(name="", module=shared), inspection=first)],
+    )
+    wrap(
+        shared,
+        [ModuleInfo(name="embed", module=shared.embed, parent=ModuleInfo(name="", module=shared), inspection=second)],
+    )
+
+    assert is_kept_on_device(shared.embed.weight)
+
+
+def test_a_later_wrap_with_a_shared_pipeline_call_tree_keeps_the_earlier_models_weights():
+    from aitune.torch.inspecting import inspect
+    from aitune.torch.utils.module import is_kept_on_device
+
+    class Tied(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.embed = torch.nn.Embedding(16, 8)
+            self.head = torch.nn.Linear(8, 16, bias=False)
+            self.head.weight = self.embed.weight
+
+        def forward(self, ids):
+            return self.head(self.embed(ids))
+
+    class Pipeline:
+        def __init__(self):
+            self.a, self.b = Tied(), Tied()
+
+        def __call__(self, ids):
+            return self.a(ids) + self.b(ids)
+
+    pipe = Pipeline()
+    ids = torch.randint(0, 16, (2, 4))
+    with torch.no_grad():
+        info = inspect(
+            pipe, [ids], inference_function=pipe, number_of_iterations=1, warmup_iterations=1, call_tree=True
+        )
+
+    for name, model in (("a", pipe.a), ("b", pipe.b)):
+        head = ModuleInfo(name="head", module=model.head, parent=ModuleInfo(name=name, module=model), inspection=info)
+        wrap(pipe, [head])
+
+    assert is_kept_on_device(pipe.a.embed.weight)
+    assert is_kept_on_device(pipe.b.embed.weight)
+
+
+def test_wrap_without_call_tree_keeps_nothing(nested_model):
+    from aitune.torch.utils.module import is_kept_on_device
+
+    module_info = ModuleInfo(name="linear", module=nested_model.linear, parent=ModuleInfo(name="", module=nested_model))
+    wrap(nested_model, [module_info])
+
+    assert not any(is_kept_on_device(p) for p in nested_model.parameters())
+
+
+def test_wrap_with_call_tree_keeps_buffers_of_a_module_moved_from_outside():
+    from aitune.torch.inspecting import inspect
+    from aitune.torch.utils.module import is_kept_on_device
+    from tests.toy_models.call_tree_models import SequentialSubclassToy
+
+    model = SequentialSubclassToy().eval()
+    x = torch.randn(2, 8)
+    with torch.no_grad():
+        info = inspect(
+            model,
+            x,
+            inference_function=model.encode,
+            number_of_iterations=1,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+            call_tree=True,
+        )
+    selected = [m for m in info.get_modules() if m.module is model[0]]
+    assert selected
+
+    wrap(model, selected)
+
+    assert all(is_kept_on_device(b) for b in model[0].buffers())
+    assert all(is_kept_on_device(p) for p in model[0].parameters())
+
+
+def test_wrap_with_call_tree_checks_a_module_whose_forward_takes_a_callable(caplog):
+    from aitune.torch.inspecting import inspect
+
+    class Act(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(4, 4)
+
+        def forward(self, x, act=torch.tanh):
+            return act(self.helper(x))
+
+        def helper(self, x):
+            return self.lin(x)
+
+    class Root(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.act = Act()
+
+        def forward(self, x):
+            return self.act(x, act=torch.tanh)
+
+    model = Root()
+    with torch.no_grad():
+        info = inspect(
+            model, torch.randn(2, 4), number_of_iterations=1, warmup_iterations=1, min_depth=1, call_tree=True
+        )
+    selected = [m for m in info.get_modules() if m.module is model.act]
+    assert selected
+
+    wrap(model, selected)  # does not raise; nothing is shared
+
+    assert isinstance(model.act, Module)
+
+
+def test_inspect_links_modules_to_their_inspection():
+    from aitune.torch.inspecting import inspect
+    from tests.toy_models.call_tree_models import VlaToy, vla_inputs
+
+    model = VlaToy().eval()
+    tokens, image = vla_inputs()
+    with torch.no_grad():
+        info = inspect(
+            model,
+            [(tokens, image)],
+            inference_function=lambda t, i: model(t, i),
+            number_of_iterations=1,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+        )
+
+    modules = info.get_modules()
+    assert modules
+    assert all(m.inspection is info for m in modules)
+
+
+def test_wrap_after_inspect_without_call_tree_keeps_nothing():
+    from aitune.torch.inspecting import inspect
+    from aitune.torch.utils.module import is_kept_on_device
+    from tests.toy_models.call_tree_models import VlaToy, vla_inputs
+
+    model = VlaToy().eval()
+    tokens, image = vla_inputs()
+    with torch.no_grad():
+        info = inspect(
+            model,
+            [(tokens, image)],
+            inference_function=lambda t, i: model(t, i),
+            number_of_iterations=1,
+            warmup_iterations=1,
+            min_depth=1,
+            max_depth=8,
+        )
+    head = [m for m in info.get_modules() if m.module is model.lm_head]
+    assert head
+
+    wrap(model, head)
+
+    assert not is_kept_on_device(model.llm.embed.weight)
+
+
+class _Block(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.attn = torch.nn.Linear(8, 8)
+
+    def forward(self, x):
+        return self.attn(x)
+
+
+class _TwoBlocksModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.blocks = torch.nn.ModuleList([_Block(), _Block()])
+
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        return x
+
+
+def _inspect_two_attn_modules():
+    model = _TwoBlocksModel()
+    info = inspect(
+        model,
+        torch.randn(4, 8),
+        number_of_iterations=1,
+        warmup_iterations=0,
+        min_depth=3,
+        call_tree=True,
+    )
+    module_infos = [mi for mi in info.get_modules() if mi.object_path and mi.object_path.endswith("attn")]
+    assert len(module_infos) == 2
+    return model, info, module_infos
+
+
+def test_wrap_uses_object_path_names():
+    """Wrapped non-root modules are named by their object path."""
+    model, info, module_infos = _inspect_two_attn_modules()
+    original_modules = [mi.module for mi in module_infos]
+
+    wrap(model, module_infos, strategy=OneBackendStrategy(backend=SleepBackend()))
+
+    assert set(MODULE_REGISTRY.modules) == {"blocks.0.attn", "blocks.1.attn"}
+    wrapped = [model.blocks[i].attn for i in range(2)]
+    assert all(isinstance(w, Module) for w in wrapped)
+    wrapped_modules = [w for w in wrapped if isinstance(w, Module)]
+    assert wrapped_modules[0].cache_dir != wrapped_modules[1].cache_dir
+
+    # The wrapped name matches the object path of each module's call-tree nodes.
+    tree = info.call_tree
+    assert tree is not None
+    for original, wrapped_module in zip(original_modules, wrapped_modules, strict=True):
+        nodes = tree.nodes_of(original)
+        assert nodes
+        assert wrapped_module.name == nodes[0].path_str.rpartition(" > ")[2].rpartition(".")[0]
+
+
+def test_wrap_tunes_all_same_short_name_modules():
+    """Modules that used to share the name ``attn`` are tuned independently."""
+    model, _, module_infos = _inspect_two_attn_modules()
+    wrap(model, module_infos, strategy=OneBackendStrategy(backend=SleepBackend()))
+
+    tune(model, torch.randn(4, 8), batch_sizes=[1], device="cpu")
+
+    wrapped = [model.blocks[i].attn for i in range(2)]
+    assert all(isinstance(w, Module) and w.state == ModuleState.TUNED for w in wrapped)
+
+
+def test_wrap_root_keeps_class_name():
+    """The root module is still named after its class."""
+    model = _TwoBlocksModel()
+    wrapped = wrap(
+        model,
+        [ModuleInfo(name=model.__class__.__name__, module=model)],
+        strategy=OneBackendStrategy(backend=SleepBackend()),
+    )
+    assert isinstance(wrapped, Module)
+    assert wrapped.name == "_TwoBlocksModel"
+
+
+def test_wrap_save_load_keeps_object_path_names(tmp_path):
+    """Loaded wrappers keep their object-path names after save/load."""
+    model, _, module_infos = _inspect_two_attn_modules()
+    wrap(model, module_infos, strategy=OneBackendStrategy(backend=SleepBackend()))
+    tune(model, torch.randn(4, 8), batch_sizes=[1], device="cpu")
+
+    checkpoint = TorchCheckpoint(LocalTorchStorage(tmp_path))
+    checkpoint.save(model, tmp_path)
+
+    fresh_model = _TwoBlocksModel()
+    checkpoint.load(fresh_model, tmp_path, device_map={})
+
+    loaded = [w for w in (fresh_model.blocks[i].attn for i in range(2)) if isinstance(w, Module)]
+    assert [w.name for w in loaded] == ["blocks.0.attn", "blocks.1.attn"]

@@ -31,6 +31,38 @@ class TestNet(torch.nn.Module):
         return x
 
 
+def test_jit_inspect_existing_module_preserves_hooks_after_preparation():
+    config.mode = JITMode.INSPECT
+
+    with prepare_for_jit_tuning():
+        module = torch.nn.Linear(2, 2)
+
+    hooks_history = []
+    module.register_forward_pre_hook(lambda module, args: hooks_history.append("pre_hook"))
+    module.register_forward_hook(lambda module, args, output: hooks_history.append("forward_hook"))
+
+    module(torch.randn(1, 2))
+    assert hooks_history == ["pre_hook", "forward_hook"]
+
+
+def test_jit_inspect_skipped_module_runs_hooks_once():
+    config.mode = JITMode.INSPECT
+    config.skip_modules = ["Linear"]
+
+    with prepare_for_jit_tuning():
+        module = torch.nn.Linear(2, 2)
+
+    hooks_history = []
+    module.register_forward_pre_hook(lambda module, args: hooks_history.append("pre_hook"))
+    module.register_forward_hook(lambda module, args, output: hooks_history.append("forward_hook"))
+
+    module(torch.randn(1, 2))
+    assert hooks_history == ["pre_hook", "forward_hook"]
+    hooks_history.clear()
+    module(torch.randn(1, 2))
+    assert hooks_history == ["pre_hook", "forward_hook"]
+
+
 @requires_cuda
 def test_jit_inspect_module_hooks(torch_device):
     config.mode = JITMode.INSPECT

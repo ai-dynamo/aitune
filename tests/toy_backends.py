@@ -4,7 +4,7 @@
 
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 from aitune.torch.backend.backend import Backend, BuildMode, ExecutionMode
 from aitune.torch.module.sample_store import SampleStore
@@ -26,7 +26,7 @@ class SleepBackend(Backend):
     def describe(self) -> str:
         return "SleepBackend - test only"
 
-    def _build(self, module: Any, graph_spec: Any, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: Any, graph_spec: Any, samples: SampleStore, cache_dir: Path) -> Self:
         self._activate()
         self._module = module
         return self
@@ -70,5 +70,5 @@ class BuildFailsBackend(SleepBackend):
         super().__init__()
         self.exception_class = exception_class
 
-    def _build(self, module: Any, graph_spec: Any, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: Any, graph_spec: Any, samples: SampleStore, cache_dir: Path) -> Self:
         raise self.exception_class("Build failed")

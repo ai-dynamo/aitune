@@ -1,20 +1,19 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-import json
-
 import datasets
 import numpy as np
 import pytest
 import torch
-from transformers import GPT2TokenizerFast
+from tokenizers.pre_tokenizers import ByteLevel
+from transformers import GPT2Tokenizer
 from transformers.data.data_collator import DataCollatorWithPadding
-from transformers.models.gpt2.tokenization_gpt2 import bytes_to_unicode
 
 from aitune.torch.dataloader import (
     DataLoaderFactory,
     DatasetLike,
     InputConfig,
     MinMaxRandomDataset,
+    _map_data_collator,
     ensure_enough_samples,
     samples_generator,
 )
@@ -244,13 +243,10 @@ def test_dynamic_shapes_fails():
         )
 
 
-def test_llm_padding_collator(tmp_path):
-    vocab = {token: index for index, token in enumerate(bytes_to_unicode().values())}
+def test_llm_padding_collator():
+    vocab = {token: index for index, token in enumerate(ByteLevel.alphabet())}
     vocab["<|endoftext|>"] = len(vocab)
-    vocab_file, merges_file = tmp_path / "vocab.json", tmp_path / "merges.txt"
-    vocab_file.write_text(json.dumps(vocab))
-    merges_file.write_text("#version: 0.2\n")
-    tokenizer = GPT2TokenizerFast(vocab_file=str(vocab_file), merges_file=str(merges_file))
+    tokenizer = GPT2Tokenizer(vocab=vocab, merges=[])
 
     # Add padding token (fix for gpt2)
     tokenizer.pad_token = tokenizer.eos_token
@@ -492,6 +488,30 @@ def test_ensure_enough_samples_dataloader_factory():
     assert all("labels" in s for s in dataset)
 
 
+def test_ensure_enough_samples_min_max_random_dataset():
+    dataset = MinMaxRandomDataset(3, [InputConfig((2,), (4,), kwarg_name="input")])
+
+    samples = ensure_enough_samples(dataset, 10)
+
+    assert isinstance(samples, list)
+    assert len(samples) == 10
+    assert [sample["input"].shape for sample in samples[:3]] == [(2,), (4,), dataset[2]["input"].shape]
+    assert samples[3] is dataset[0]
+
+
+def test_ensure_enough_samples_keeps_dataloader_factory_dataset():
+    dataset = MinMaxRandomDataset(3, [InputConfig((2,), (4,), kwarg_name="input")])
+    dataloader = DataLoaderFactory(dataset)
+
+    limited = ensure_enough_samples(dataloader, 10)
+
+    assert isinstance(limited, DataLoaderFactory)
+    assert len(limited.dataset) == 10
+    assert dataloader.dataset is dataset
+    batches = [kwargs["input"].shape for _, _, kwargs in samples_generator(dataloader, [2])]
+    assert batches == [(2, 2), (2, 4), (2, *dataset[2]["input"].shape)]
+
+
 def test_ensure_enough_samples_empty_dataset():
     dataset = []
 
@@ -500,3 +520,20 @@ def test_ensure_enough_samples_empty_dataset():
     assert len(dataset) == 0
 
     assert dataset == []
+
+
+@pytest.mark.parametrize(
+    ("label", "expected_dtype"),
+    [
+        (1, torch.long),
+        (1.5, torch.float),
+        (torch.tensor(1), torch.long),
+        (torch.tensor(True), torch.long),
+        (torch.tensor(1.5), torch.float),
+    ],
+)
+def test_map_data_collator_label_dtype(label, expected_dtype):
+    batch = _map_data_collator([{"label": label, "x": torch.ones(2)}, {"label": label, "x": torch.ones(2)}])
+
+    assert batch["labels"].dtype == expected_dtype
+    assert batch["labels"].shape == (2,)

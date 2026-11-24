@@ -24,11 +24,10 @@ def _format_duration(seconds: float) -> str:
     """
     if seconds < 1.0:
         return f"{seconds * 1000:.2f}ms"
-    elif seconds < 60.0:
+    if seconds < 60.0:
         return f"{seconds:.2f}s"
-    else:
-        minutes = seconds / 60.0
-        return f"{minutes:.2f}min"
+    minutes = seconds / 60.0
+    return f"{minutes:.2f}min"
 
 
 class Timer:

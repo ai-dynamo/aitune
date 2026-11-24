@@ -2,13 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """ONNX Runtime backend."""
 
-import copy
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Self, cast
 
 import nvtx
 import onnx
@@ -21,8 +20,9 @@ from aitune.records import DeploymentArtifact, DType, ModelFiles, RuntimeConfig,
 from aitune.torch.artifact import artifact_input_sample, bounded_tensor_specs
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode, ModuleFormat
 from aitune.torch.checkpoint.artifact import ArtifactPath
-from aitune.torch.libs.onnx.onnx_exporter import ONNXExporter
+from aitune.torch.libs.exporting import ONNXExporter
 from aitune.torch.libs.onnx.runtime import run_onnx
+from aitune.torch.module.forward_effects_spec import TensorMutationPolicy
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import Sample, SampleStore
@@ -122,7 +122,7 @@ class ONNXRuntimeBackendConfig(BackendConfig):
         return cls(**data)
 
 
-class ONNXRuntimeBackend(Backend):
+class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
     """Backend that runs Torch or existing ONNX models with ONNX Runtime.
 
     Uses the source path and shapes directly for ``OnnxModule``. Torch modules
@@ -148,7 +148,6 @@ class ONNXRuntimeBackend(Backend):
     STATE_ONNX_DATA_PATH = "onnx_data_path"
     STATE_DEVICE = "device"
     STATE_CONFIG = "config"
-    STATE_OUTPUT_OBJECT = "output_object"
     STATE_GRAPH_SPEC = "graph_spec"
     STATE_SAMPLES = "samples"
     STATE_EXTERNAL_DATA_PATHS = "external_data_paths"
@@ -161,12 +160,10 @@ class ONNXRuntimeBackend(Backend):
         Args:
             config: Configuration for ONNX export and runtime.
         """
-        super().__init__()
-        self._config = config or ONNXRuntimeBackendConfig()
+        super().__init__(config or ONNXRuntimeBackendConfig())
         self._onnx_model_artifact: ArtifactPath | None = None
         self._onnx_data_artifact: ArtifactPath | None = None
         self._session: onnxruntime.InferenceSession | None = None
-        self._output_object = None
         self._external_data_artifacts: list[ArtifactPath] = []
         self._graph_spec: GraphSpec | None = None
         self._samples: SampleStore | None = None
@@ -188,12 +185,48 @@ class ONNXRuntimeBackend(Backend):
         except (OSError, RuntimeError, ValueError) as error:
             raise RuntimeError(f"ONNX artifact is not available: {error}") from error
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def to_dict(self) -> dict:
+        """Returns the state_dict of the backend."""
+        if self._onnx_model_artifact is None:
+            raise RuntimeError("Backend has not been built yet. Please call build() first.")
+        state = {
+            self.STATE_TYPE: self.__class__.__name__,
+            self.STATE_EXTERNAL_DATA_PATHS: self._external_data_artifacts,
+            self.STATE_CONFIG: self._config.to_dict(),
+            self.STATE_ONNX_MODEL_PATH: self._onnx_model_artifact,
+            self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
+            self.STATE_DEVICE: self._device,
+            self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
+        }
+        if self._onnx_data_artifact is not None:
+            state[self.STATE_ONNX_DATA_PATH] = self._onnx_data_artifact
+        return state
+
+    @classmethod
+    def from_dict(cls, module: nn.Module | None, state_dict: dict) -> "ONNXRuntimeBackend":
+        """Creates a backend from a state_dict."""
+        if state_dict.get(cls.STATE_TYPE) != cls.__name__:
+            raise ValueError(f"Invalid state_dict type: {state_dict.get(cls.STATE_TYPE)}")
+
+        config = ONNXRuntimeBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
+
+        backend = cls(config=config)
+        backend._external_data_artifacts = state_dict.get(cls.STATE_EXTERNAL_DATA_PATHS, [])
+        backend._onnx_model_artifact = state_dict[cls.STATE_ONNX_MODEL_PATH]
+        backend._onnx_data_artifact = state_dict.get(cls.STATE_ONNX_DATA_PATH)
+        backend._device = state_dict[cls.STATE_DEVICE]
+        backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
+        samples_state = state_dict.get(cls.STATE_SAMPLES)
+        backend._samples = SampleStore.from_dict(samples_state) if samples_state is not None else None
+        backend.state = BackendState.CHECKPOINT_LOADED
+        return backend
+
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Use an existing ONNX file or export Torch, then load the session."""
         self._graph_spec = graph_spec
 
         if isinstance(module, OnnxModule):
-            self._use_existing_onnx(module, graph_spec)
+            self._use_existing_onnx(module)
         else:
             self._export_onnx(module, graph_spec, samples, cache_dir)
             data_file = Path(str(self._onnx_model_artifact.path) + ".data")
@@ -206,9 +239,47 @@ class ONNXRuntimeBackend(Backend):
 
         return self
 
-    def _use_existing_onnx(self, module: OnnxModule, graph_spec: GraphSpec) -> None:
-        """Prepare artifacts and output structure from an existing ONNX model."""
-        self._output_object = {spec.name: None for _, spec in graph_spec.output_spec.tensor_data}
+    # ------------------------------------------------------------------
+    # Session lifecycle
+    # ------------------------------------------------------------------
+
+    def _activate(self):
+        """Load the ONNX Runtime session from disk."""
+        model_artifact = cast(ArtifactPath, self._onnx_model_artifact)
+        logger.debug("Loading ONNX Runtime session from %s.", model_artifact)
+        providers = self._get_execution_providers()
+        self._session = onnxruntime.InferenceSession(str(model_artifact.path), providers=providers)
+        if self._samples is not None:
+            try:
+                self._warmup(self._samples.iter_samples(self.device))
+            except Exception:
+                self._deactivate()
+                raise
+        # Keep the finalized interface when the session is released; validate it only on artifact().
+        self._input_nodes = self._session.get_inputs()
+        self._output_nodes = self._session.get_outputs()
+
+    def _deactivate(self):
+        """Deactivate backend."""
+        self._session = None
+
+    def _deploy(self):
+        """Deploy backend."""
+        self._activate()
+
+    @nvtx.annotate(message="ONNXRuntimeBackend.infer", domain="AITune", color="green")
+    def _infer(self, *args: Any, **kwargs: Any) -> Any:
+        """Run the ONNX session and restore recorded output and input state."""
+        # Internal lifecycle invariant: activation loads the session before inference.
+        assert self._session is not None, "ONNX session is not loaded. Call build() or deploy() first."  # noqa: S101
+        graph_spec = cast(GraphSpec, self._graph_spec)
+        arguments = graph_spec.forward_signature.normalize(args, kwargs).arguments
+        inputs = self._prepare_inputs(arguments)
+        outputs = run_onnx(self._session, inputs, self.device)
+        return self._prepare_outputs(outputs, arguments)
+
+    def _use_existing_onnx(self, module: OnnxModule) -> None:
+        """Track an existing ONNX graph and its external weights."""
         self._onnx_model_artifact = ArtifactPath.from_existing(module.path, root=module.path.parent)
         # Release the baseline session before allocating the backend's configured session.
         module.deactivate()
@@ -226,20 +297,20 @@ class ONNXRuntimeBackend(Backend):
         ]
 
     def _export_onnx(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> None:
-        """Export a Torch module and preserve its output structure."""
-        self._output_object = self._get_output_object(module=module, sample=samples[0])
-        module = module.eval().to(self._device)
+        """Export a Torch module through the recorded flat tensor contract."""
+        module = module.eval().to(self.device)
         self._onnx_model_artifact = ArtifactPath(cache_dir, "model_raw.onnx")
         onnx_exporter = ONNXExporter(
             output_path=self._onnx_model_artifact.path,
             use_dynamo=self._config.use_dynamo,
             opset_version=self._config.opset_version,
         )
-        onnx_exporter.export(module=module, sample=samples[0], graph_spec=graph_spec)
-
-    # ------------------------------------------------------------------
-    # Session lifecycle
-    # ------------------------------------------------------------------
+        onnx_exporter.export(
+            module=module,
+            sample=samples[0],
+            graph_spec=graph_spec,
+            device=self._device,
+        )
 
     def _get_execution_providers(self) -> list[str | tuple]:
         """Return execution providers based on config (no automatic CPU fallback).
@@ -249,26 +320,65 @@ class ONNXRuntimeBackend(Backend):
           ("CUDAExecutionProvider", {"device_id": ...})]``
         """
         ep = self._config.execution_provider or ONNXExecutionProvider.CUDA
-        cuda_ep = ("CUDAExecutionProvider", {"device_id": self._device.index})
+        cuda_ep = ("CUDAExecutionProvider", {"device_id": self.device.index})
         if ep == ONNXExecutionProvider.TENSORRT:
             return ["TensorrtExecutionProvider", cuda_ep]
         return [cuda_ep]
 
-    def _activate(self):
-        """Load the ONNX Runtime session from disk."""
-        model_artifact = cast(ArtifactPath, self._onnx_model_artifact)
-        logger.debug("Loading ONNX Runtime session from %s.", model_artifact)
-        providers = self._get_execution_providers()
-        self._session = onnxruntime.InferenceSession(str(model_artifact.path), providers=providers)
-        if self._samples is not None:
-            try:
-                self._warmup(self._samples.iter_samples(self._device))
-            except Exception:
-                self._deactivate()
-                raise
-        # Keep the finalized interface when the session is released; validate it only on artifact().
-        self._input_nodes = self._session.get_inputs()
-        self._output_nodes = self._session.get_outputs()
+    def _warmup(self, samples: Iterable[Sample]) -> None:
+        """Run representative samples to initialize the execution provider.
+
+        Some execution providers defer work until inference. In particular, the TensorRT
+        execution provider compiles the ONNX graph when it first runs. Exercising a small
+        number of recorded samples makes those failures part of the backend build instead
+        of deferring them until profiling or application inference.
+
+        Args:
+            samples: Recorded input samples for the backend build.
+        """
+        logger.info("Warming up ONNX Runtime execution provider.")
+        for args, kwargs in samples:
+            self._infer(*args, **kwargs)
+
+    def _prepare_inputs(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Select recorded tensors that remain ONNX session inputs.
+
+        ONNX may remove unused inputs during export. The shared executor binds
+        tensors on their current device.
+        """
+        session_input_names = {inp.name for inp in self._session.get_inputs()}
+        inputs: dict[str, Any] = {}
+        for locator, tensor_spec in self._graph_spec.input_spec.tensor_data:
+            name = GraphSpec.tensor_name(locator, tensor_spec, "input")
+            if name not in session_input_names:
+                logger.debug("Input: %s not found in session inputs", name)
+                continue
+            inputs[name] = locator.get_value(arguments)
+        return inputs
+
+    def _prepare_outputs(self, outputs: dict[str, torch.Tensor], arguments: dict[str, Any]) -> Any:
+        """Rebuild user outputs and apply input changes returned by ONNX Runtime.
+
+        Order named results as user outputs followed by internal state outputs. REPLACE_INPUT makes
+        the returned ORT buffers the current state, avoiding a separate copy-back into old tensor leaves,
+        including for recorded in-place writes. This is a restoration choice, not a requirement imposed
+        by ORT owning the buffers. Returned input containers retain their identity, but external references
+        to old tensor leaves may not observe updates. Assignment to a top-level normalized argument does
+        not rebind the caller's variable.
+        """
+        graph_spec = cast(GraphSpec, self._graph_spec)
+        user_output_names = tuple(
+            GraphSpec.tensor_name(locator, spec, "output") for locator, spec in graph_spec.output_spec.tensor_data
+        )
+        state_output_names = graph_spec.output_names()[len(user_output_names) :]
+        flat_outputs = tuple(outputs[name] for name in user_output_names + state_output_names)
+        # Adopt returned state buffers rather than copy back; see the tensor identity tradeoff above.
+        mutation_policies = {
+            mutation.output_index: TensorMutationPolicy.REPLACE_INPUT
+            for mutation in graph_spec.forward_effects_spec.input_mutations
+            if mutation.output_index is not None
+        }
+        return graph_spec.restore_outputs(flat_outputs, arguments, tensor_mutation_policies=mutation_policies)
 
     def _create_artifact(self) -> DeploymentArtifact:
         """Create an artifact from the saved interface and recorded shape bounds."""
@@ -329,117 +439,3 @@ class ONNXRuntimeBackend(Backend):
             artifacts.append(self._onnx_data_artifact)
         relative_paths = (artifact.path.relative_to(model_path.parent) for artifact in artifacts)
         return tuple(dict.fromkeys(relative_paths))
-
-    def _warmup(self, samples: Iterable[Sample]) -> None:
-        """Run representative samples to initialize the execution provider.
-
-        Some execution providers defer work until inference. In particular, the TensorRT
-        execution provider compiles the ONNX graph when it first runs. Exercising a small
-        number of recorded samples makes those failures part of the backend build instead
-        of deferring them until profiling or application inference.
-
-        Args:
-            samples: Recorded input samples for the backend build.
-        """
-        logger.info("Warming up ONNX Runtime execution provider.")
-        for args, kwargs in samples:
-            self._infer(*args, **kwargs)
-
-    def _prepare_inputs(self, args: tuple, kwargs: dict) -> dict[str, Any]:
-        """Map args/kwargs to session input names using graph_spec locators.
-
-        Tensors are returned as-is (preserving their device); I/O binding happens
-        in the shared ``run_onnx`` executor.
-        """
-        session_input_names = {inp.name for inp in self._session.get_inputs()}
-        inputs: dict[str, Any] = {}
-        forward_inputs = self._graph_spec.forward_signature.normalize(args, kwargs)
-        for locator, tensor_spec in self._graph_spec.input_spec.tensor_data:
-            name = GraphSpec.tensor_name(locator, tensor_spec, "input")
-            if name not in session_input_names:
-                logger.debug("Input: %s not found in session inputs", name)
-                continue
-            inputs[name] = locator.get_value(forward_inputs.arguments)
-        return inputs
-
-    def _prepare_outputs(self, outputs: dict[str, torch.Tensor]) -> Any:
-        """Reconstruct original output structure from session output tensors."""
-        result = copy.deepcopy(self._output_object)
-        for locator, tensor_spec in self._graph_spec.output_spec.tensor_data:
-            name = GraphSpec.tensor_name(locator, tensor_spec, "output")
-            if name in outputs:
-                result = locator.set_value(result, outputs[name])
-            else:
-                logger.debug("Output: %s not found in session outputs", name)
-        return result
-
-    @nvtx.annotate(message="ONNXRuntimeBackend.infer", domain="AITune", color="green")
-    def _infer(self, *args: Any, **kwargs: Any) -> Any:
-        """Run inference through the shared ONNX Runtime I/O binding executor."""
-        inputs = self._prepare_inputs(args, kwargs)
-        return self._prepare_outputs(run_onnx(self._session, inputs, self._device))
-
-    def _get_output_object(self, module: nn.Module, sample: Sample) -> Any:
-        """Get the output object from the module and sample.
-
-        Args:
-            module: PyTorch module
-            sample: Sample input to use for model inference.
-
-        Returns:
-            The output object from the module.
-
-        Note: to avoid case where a module returns a reference to the input argument, we make a deep copy of
-        the output object.
-        """
-        module.to(self._device)
-        args, kwargs = sample
-        with torch.no_grad():
-            output_object = module(*args, **kwargs)
-        return copy.deepcopy(output_object)
-
-    def _deactivate(self):
-        """Deactivate backend."""
-        self._session = None
-
-    def _deploy(self):
-        """Deploy backend."""
-        self._activate()
-
-    def to_dict(self) -> dict:
-        """Returns the state_dict of the backend."""
-        if self._onnx_model_artifact is None:
-            raise RuntimeError("Backend has not been built yet. Please call build() first.")
-        state = {
-            self.STATE_TYPE: self.__class__.__name__,
-            self.STATE_EXTERNAL_DATA_PATHS: self._external_data_artifacts,
-            self.STATE_CONFIG: self._config.to_dict(),
-            self.STATE_ONNX_MODEL_PATH: self._onnx_model_artifact,
-            self.STATE_OUTPUT_OBJECT: self._output_object,
-            self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
-            self.STATE_DEVICE: self._device,
-            self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
-        }
-        if self._onnx_data_artifact is not None:
-            state[self.STATE_ONNX_DATA_PATH] = self._onnx_data_artifact
-        return state
-
-    @classmethod
-    def from_dict(cls, module: nn.Module | None, state_dict: dict) -> "ONNXRuntimeBackend":
-        """Creates a backend from a state_dict."""
-        if state_dict.get(cls.STATE_TYPE) != cls.__name__:
-            raise ValueError(f"Invalid state_dict type: {state_dict.get(cls.STATE_TYPE)}")
-
-        config = ONNXRuntimeBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
-
-        backend = cls(config=config)
-        backend._external_data_artifacts = state_dict.get(cls.STATE_EXTERNAL_DATA_PATHS, [])
-        backend._onnx_model_artifact = state_dict[cls.STATE_ONNX_MODEL_PATH]
-        backend._onnx_data_artifact = state_dict.get(cls.STATE_ONNX_DATA_PATH)
-        backend._device = state_dict[cls.STATE_DEVICE]
-        backend._graph_spec = GraphSpec.from_dict(state_dict[cls.STATE_GRAPH_SPEC])
-        backend._output_object = state_dict[cls.STATE_OUTPUT_OBJECT]
-        samples_state = state_dict.get(cls.STATE_SAMPLES)
-        backend._samples = SampleStore.from_dict(samples_state) if samples_state is not None else None
-        backend.state = BackendState.CHECKPOINT_LOADED
-        return backend

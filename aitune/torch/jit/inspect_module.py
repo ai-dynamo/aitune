@@ -97,7 +97,7 @@ class InspectModule:
         self._name += f" 📊{params}"
         if self._should_be_skipped():
             self._unpatch()
-            return self.__wrapped__(*args, **kwargs)
+            return self._original_forward(*args, **kwargs)
 
         if InspectModule.stack:
             parent = InspectModule.stack[-1]
@@ -109,7 +109,7 @@ class InspectModule:
             else:
                 # too deep, skip the module
                 self._unpatch()
-                return self.__wrapped__(*args, **kwargs)
+                return self._original_forward(*args, **kwargs)
         else:
             self._parent = None
             self._level = 0
@@ -205,6 +205,8 @@ class InspectModule:
         Removes it also from Patcher object registry.
         """
         self._restore_original_forward()
+        self.__wrapped__._forward_pre_hooks = self._original_forward_pre_hooks
+        self.__wrapped__._forward_hooks = self._original_forward_hooks
 
         from aitune.torch.jit.patcher import Patcher  # avoid circular deps
 
@@ -272,8 +274,7 @@ class InspectModule:
             model_name: The name of the model to display in the HTML subtitle.
         """
         html_content = HTMLGenerator.generate_html_content(InspectModule, model_name)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(html_content)
+        Path(path).write_text(html_content, encoding="utf-8")
 
         InspectModule.report_saved = True
 

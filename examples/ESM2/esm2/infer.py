@@ -4,9 +4,10 @@
 
 import logging
 import os
+from typing import cast
 
 import torch
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 import aitune.torch as ait
 from esm2.tune import DEFAULT_MODEL_PATH, DEVICE, LOG_LEVEL, MODEL_NAME, SAMPLE_SEQUENCE, get_model
@@ -25,7 +26,7 @@ def infer(model_path: str = DEFAULT_MODEL_PATH):
         pipe = ait.load(model, model_path)
 
         logger.info("Preparing input data...")
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+        tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True))
         input_data = tokenizer([sample_sequence], return_tensors="pt")
 
         input_data = {

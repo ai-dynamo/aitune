@@ -9,7 +9,6 @@
 .gitignore
 .ruff/
 .tox/
-.pytype/
 .mypy_cache/
 *.egg-info/
 build/

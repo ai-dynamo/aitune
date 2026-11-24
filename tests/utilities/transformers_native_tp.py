@@ -13,15 +13,17 @@ import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import torch
 import torch.distributed as dist
 from huggingface_hub import snapshot_download
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerBase
 from transformers.distributed import DistributedConfig
 
 from aitune.torch import OneBackendStrategy
 from aitune.torch.backend.backend import Backend
+from aitune.torch.module.tuned_module import TunedModule
 
 # Qwen3.5-4B has four KV heads, so its native TP plan supports four ranks.
 MODEL_ID = "Qwen/Qwen3.5-4B"
@@ -68,7 +70,9 @@ def run_aot_native_tp_test(backend_class: type[Backend], module_name: str, scrip
         )
 
         assert tuned_module.state == ModuleState.TUNED
-        selected_backends = {type(backend).__name__ for backend in tuned_module.module.backends.values()}
+        selected_backends = {
+            type(backend).__name__ for backend in cast(TunedModule, tuned_module.module).backends.values()
+        }
         assert selected_backends == {backend_class.__name__}
         with torch.no_grad():
             outputs = tuned_module(**inputs)
@@ -94,7 +98,6 @@ def run_jit_native_tp_test(backend_class: type[Backend], script_path: str | Path
     from aitune.torch.jit.patched_module import PatchedModule
     from aitune.torch.jit.patcher import prepare_for_jit_tuning
     from aitune.torch.jit.tune import deferred as tune_deferred
-    from aitune.torch.module.tuned_module import TunedModule
 
     def test(device: torch.device) -> None:
         """Execute the deferred-JIT workflow in one torchrun worker."""
@@ -138,7 +141,7 @@ def _strategy(backend: Backend) -> OneBackendStrategy:
 def _load_tensor_parallel_model_and_inputs(device: torch.device) -> tuple[torch.nn.Module, dict[str, torch.Tensor]]:
     """Load rank-local inputs and the native-TP model shard for the active process group."""
     model_path = os.environ[MODEL_PATH_ENV]
-    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+    tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(model_path, local_files_only=True))
     inputs = tokenizer("AITune native tensor parallel inference", return_tensors="pt")
     inputs = {name: tensor.to(device) for name, tensor in inputs.items()}
     model = AutoModelForCausalLM.from_pretrained(

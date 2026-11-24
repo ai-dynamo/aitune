@@ -18,6 +18,8 @@ from aitune.torch.jit.patcher import (
     patch_for_jit_tuning,
     prepare_for_jit_tuning,
 )
+from aitune.torch.jit.tune import deferred
+from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.tune_data.reporting import has_active_report
 from aitune.torch.tune_strategy.one_backend_strategy import OneBackendStrategy
 
@@ -37,6 +39,21 @@ def test_activation_module_doctest_in_fresh_worker(module_name, tmp_path, monkey
     assert result.attempted > 0
     if module_name == "enable_inspection":
         assert (tmp_path / "linear_net.html").exists()
+
+
+def test_unpatch_torch_preserves_registered_forwards_and_tuned_devices():
+    Patcher.patch_torch()
+    modules = [torch.nn.Linear(2, 2) for _ in range(3)]
+    forwards = [module.forward for module in modules]
+    for module in modules:
+        PatchedModule.tuned_devices[module] = torch.device("cpu")
+
+    Patcher.unpatch_torch()
+
+    assert not Patcher._torch_patched
+    assert [wrapper.__wrapped__ for wrapper in Patcher._patched_modules] == modules
+    assert all(module.forward is forward for module, forward in zip(modules, forwards, strict=True))
+    assert PatchedModule.tuned_devices == dict.fromkeys(modules, torch.device("cpu"))
 
 
 def test_eager_jit_tunes_when_ready(mocker):
@@ -110,6 +127,56 @@ def test_constructor_interception_rejects_mode_change_after_registering_module()
     assert [wrapper.__wrapped__ for wrapper in Patcher._patched_modules] == [registered]
 
 
+@pytest.mark.parametrize("mode", [JITMode.TUNE_EAGER, JITMode.TUNE_DEFERRED], ids=lambda mode: mode.value)
+@pytest.mark.parametrize(
+    ("parameter_count", "minimum", "eligible"),
+    [
+        pytest.param(0, 0, True, id="zero-at-default"),
+        pytest.param(0, 1, False, id="zero-below-positive-minimum"),
+        pytest.param(2, 3, False, id="below-minimum"),
+        pytest.param(3, 3, True, id="at-minimum"),
+        pytest.param(4, 3, True, id="above-minimum"),
+    ],
+)
+def test_jit_parameter_threshold_is_inclusive(mocker, mode, parameter_count, minimum, eligible):
+    """The parameter minimum controls eligibility in both JIT tuning workflows."""
+
+    class ThresholdModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.register_buffer("offset", torch.tensor(1.0))
+            self.weight = torch.nn.Parameter(torch.ones(parameter_count)) if parameter_count else None
+
+        def forward(self, x):
+            return x + self.offset if self.weight is None else x + self.offset + self.weight.sum()
+
+    jit_config.mode = mode
+    jit_config.device = torch.device("cpu")
+    jit_config.min_parameters = minimum
+    jit_config.min_samples = 1
+    jit_config.batch_axis_required = False
+    tune = mocker.patch.object(PatchedModule, "tune")
+    with prepare_for_jit_tuning():
+        model = ThresholdModel()
+
+    value = torch.ones(2)
+    with torch.no_grad():
+        output = model(value)
+        if mode == JITMode.TUNE_DEFERRED:
+            tune.assert_not_called()
+            deferred()
+            output = model(value)
+
+    torch.testing.assert_close(output, value + parameter_count + 1)
+    if eligible:
+        (head,) = PatchedModule.heads
+        assert head.__wrapped__ is model
+        tune.assert_called_once_with()
+    else:
+        assert not PatchedModule.heads
+        tune.assert_not_called()
+
+
 def test_prepare_for_tuning():
     """Test prepare_for_tuning context manager."""
     pre_module = torch.nn.Linear(10, 5)  # noqa: F841
@@ -160,6 +227,25 @@ def test_is_allowed_to_tune():
     """Test is_allowed_to_tune function."""
     assert Patcher._is_allowed_to_tune(torch.nn.Linear(10, 5))
     assert not Patcher._is_allowed_to_tune(Mock(spec=torch._dynamo.eval_frame.OptimizedModule))
+
+
+@pytest.mark.parametrize(
+    ("mode", "exclusions", "expected"),
+    [
+        (JITMode.INSPECT, (), True),
+        (JITMode.TUNE_EAGER, (), False),
+        (JITMode.TUNE_DEFERRED, (), False),
+        (JITMode.INSPECT, ("aitune",), False),
+        (JITMode.INSPECT, ("aitune.torch.module.onnx_module.OnnxModule",), False),
+    ],
+)
+def test_onnx_module_inspection_respects_mode_and_user_exclusions(monkeypatch, tmp_path, mode, exclusions, expected):
+    monkeypatch.setattr(jit_config, "mode", mode)
+    monkeypatch.setattr(jit_config, "patch_exclude", exclusions)
+    module = OnnxModule(tmp_path / "unused.onnx")
+
+    assert Patcher._is_allowed_to_tune(module) is expected
+    assert not Patcher._is_allowed_to_tune(_module_with_module_name("aitune.torch.libs.exporting"))
 
 
 def test_is_allowed_to_tune_excludes_submodule_classes():

@@ -77,8 +77,6 @@ _emoji_state = {
 class GraphBreakException(Exception):
     """Exception raised when graph break is detected."""
 
-    pass
-
 
 class PatchedModule:
     """Patched module.
@@ -102,6 +100,8 @@ class PatchedModule:
     attempted_tuning: ClassVar[bool] = False
     deferred_tuning_enabled: ClassVar[bool] = False
     module_counter: ClassVar[int] = 0
+    # execution devices of tuned modules, whose original weights may be offloaded
+    tuned_devices: ClassVar[dict[torch.nn.Module, torch.device]] = {}
 
     def __init__(self, module: torch.nn.Module, *, explicit_head: bool = False):
         """Initialize the patched module."""
@@ -130,6 +130,7 @@ class PatchedModule:
             ModuleState.RECORDING: self._forward_recording,
             ModuleState.TUNED: self._forward_tuned,
         }
+        self._wrapper: RecordingModule | TunedModule | PassthroughModule
         self._extra_state_info: str = ""  # for tracking purposes
         self._update_state(ModuleState.INIT)
 
@@ -174,7 +175,7 @@ class PatchedModule:
         if self._should_report_inspection():
             report_inspection_details(self.inspection_subtree_reports(), replace=False)
 
-        todo = [self]
+        todo: list[PatchedModule] = [self]
         while todo:
             current = todo.pop()
             coordinator.verify_equal(current.fq_name, "JIT module order")
@@ -240,6 +241,7 @@ class PatchedModule:
                     current._handle_backend_added_hooks()
                     current._update_state(ModuleState.TUNED)
                     current._patch_device_attribute(device)
+                    PatchedModule.tuned_devices[current.__wrapped__] = device
                     current._unpatch_hierarchy(include_self=False)
                     _to_hist(f"Model tuned: {str(current)}")
                     offload_after_tuning(
@@ -268,7 +270,7 @@ class PatchedModule:
     def inspection_subtree_reports(self) -> list[ModuleInspectionReport]:
         """Build report snapshots for this module and observed child modules."""
         reports: list[ModuleInspectionReport] = []
-        todo = [self]
+        todo: list[PatchedModule] = [self]
         while todo:
             current = todo.pop()
             reports.append(current.inspection_report())
@@ -373,7 +375,7 @@ class PatchedModule:
         It initializes the module and sets the state to RECORDING.
         """
         params = count_parameters(self.__wrapped__)
-        if int(params) <= config.min_parameters:
+        if int(params) < config.min_parameters:
             if self._explicit_head:
                 self._parent = None
                 self._level = 0
@@ -517,7 +519,7 @@ class PatchedModule:
 
         Assumption: given name (actual class name + number of parameters) + id is unique enough to be used as a hash
         """
-        todo = [self]
+        todo: list[PatchedModule] = [self]
         hierarchy_names = ""
         while todo:
             current = todo.pop()
@@ -542,14 +544,14 @@ class PatchedModule:
         """Patch the device attribute of the module and its parents.
 
         HF pipelines have `device` attribute which checks `next(module.parameters()).device`.
-        Since JIT tuning moves the original module to a cpu device, this attribute returns cpu device.
-        This causes misplacement issues where some modules are on cuda and other modules or tensors are moved according
-        to the device attribute to cpu. To fix this, the method patches dynamically device attribute but only at instance
-        (object) level i.e. does not touch class object. This has to be applied not only to the current module but to
-        its parents in case parents objects do not have it's own parameters but include child module which has been
-        tuned and move to a cpu device.
+        Since JIT tuning offloads the original module (to the meta device by default), this attribute returns the
+        offload device. This causes misplacement issues where some modules are on cuda and other modules or tensors are
+        moved according to the device attribute to the offload device. To fix this, the method patches dynamically
+        device attribute but only at instance (object) level i.e. does not touch class object. This has to be applied
+        not only to the current module but to its parents in case parents objects do not have it's own parameters but
+        include child module which has been tuned and offloaded.
         """
-        todo = [self]
+        todo: list[PatchedModule] = [self]
         while todo:
             current = todo.pop()
             name = current._name
@@ -665,10 +667,9 @@ class PatchedModule:
         """Check if the module should be tuned, dispatching based on the active JIT mode."""
         if config.mode == JITMode.TUNE_DEFERRED:
             return self._should_be_tuned_deferred()
-        elif config.mode == JITMode.TUNE_EAGER:
+        if config.mode == JITMode.TUNE_EAGER:
             return self._should_be_tuned_eager()
-        else:
-            raise ValueError(f"Unsupported mode: {config.mode}")
+        raise ValueError(f"Unsupported mode: {config.mode}")
 
     def _should_be_tuned_eager(self) -> bool:
         """Check if the module should be tuned in eager mode.
@@ -723,8 +724,7 @@ class PatchedModule:
             message = f"Graph break detected in {module._name} in {duration:.2f}s"
             _to_hist(message)
             raise GraphBreakException(message)
-        else:
-            _to_hist(f"No graph breaks in {module._name}. Checking took {duration:.2f}s")
+        _to_hist(f"No graph breaks in {module._name}. Checking took {duration:.2f}s")
 
     def _unpatch(self):
         """Restore normal forwarding for a skipped, eager or detached module."""
@@ -737,6 +737,7 @@ class PatchedModule:
         finally:
             self.__wrapped__._forward_hooks = self._current_forward_hooks
             self.__wrapped__._forward_pre_hooks = self._current_forward_pre_hooks
+        PatchedModule.tuned_devices.pop(self.__wrapped__, None)
         Patcher.unpatch_module(self)
 
     def _unpatch_hierarchy(self, include_self=False):

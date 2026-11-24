@@ -39,7 +39,7 @@ class ModelAnalyzerConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
     latency_budget_ms: int | None = Field(default=None, ge=1, strict=True)
-    latency_percentile: Literal[90, 95, 99] = Field(default=95)  # pytype: disable=invalid-annotation
+    latency_percentile: Literal[90, 95, 99] = Field(default=95)
 
 
 class _ModelAnalyzerYamlConfig(BaseModel):
@@ -97,7 +97,7 @@ def _profiling_inputs(
     shapes = {tensor.name: tensor.min_shape for tensor in artifact.inputs}
     flags = []
     for name, shape in shapes.items():
-        dimensions = shape[1:] if config.max_batch_size else shape
+        dimensions = (shape[1:] if config.max_batch_size else shape) or (1,)
         flags.append(f"{name}:{','.join(str(dimension) for dimension in dimensions)}")
     input_data = _input_data(artifact, shapes, batched=config.max_batch_size > 0)
     return {"shape": tuple(flags)}, input_data
@@ -123,6 +123,8 @@ def _input_data(
             source_values = source_values[: prod(source_shape)]
             target_shape = target_shape[1:]
 
+        # Triton exposes backend scalars as dims [1] with reshape shape [].
+        target_shape = target_shape or (1,)
         target_size = prod(target_shape)
         if not source_values:
             raise ValueError(f"Representative input {sample.name!r} has no values")

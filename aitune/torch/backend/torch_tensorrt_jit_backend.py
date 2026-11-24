@@ -5,7 +5,7 @@
 from dataclasses import asdict, dataclass, field
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 import torch
 import torch.nn as nn
@@ -14,13 +14,13 @@ from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
 from aitune.torch.distributed import distributed_output_path
-from aitune.torch.libs.torch_compile import resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
+from aitune.torch.utils.torch_compile import resolve_compile_dynamic
 
 try:
     import torch_tensorrt
@@ -33,14 +33,17 @@ except (ImportError, RuntimeError, OSError):
         """Fallback settings matching upstream defaults when torch_tensorrt is unavailable.
 
         Attributes:
-            enabled_precisions: Enabled TensorRT precisions. Defaults to None.
-            use_explicit_typing: Whether to use explicit typing. Defaults to True.
             workspace_size: TensorRT workspace size. Defaults to 0.
+            min_block_size: Minimum number of operators in a TensorRT block. Defaults to 5.
+            disable_tf32: Whether to disable TF32 in TensorRT layers. Defaults to False.
+            require_full_compilation: Whether to require one TensorRT engine for the whole graph.
+                Defaults to False.
         """
 
-        enabled_precisions: set[torch.dtype] | None = None
-        use_explicit_typing: bool = True
         workspace_size: int = 0
+        min_block_size: int = 5
+        disable_tf32: bool = False
+        require_full_compilation: bool = False
 
 
 logger = getLogger(__name__)
@@ -66,9 +69,7 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         autocast_dtype: Autocast dtype to use when autocast is enabled. Defaults to None.
     """
 
-    compile_config: TorchTensorRTConfig = field(  # pytype: disable=invalid-annotation
-        default_factory=TorchTensorRTConfig
-    )
+    compile_config: TorchTensorRTConfig = field(default_factory=TorchTensorRTConfig)
     fullgraph: bool = False
     dynamic: bool | None = None
     autocast_enabled: bool = False
@@ -81,7 +82,6 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
             self.compile_config,
             other.compile_config,
             exclude=["device"],
-            include=["enabled_precisions"],
         )
         parts = [f"compile_config=TorchTensorRTConfig({','.join(compile_config_parts)})"]
 
@@ -113,10 +113,11 @@ class TorchTensorRTJitBackendConfig(BackendConfig):
         return cls(**data)
 
 
-class TorchTensorRTJitBackend(Backend):
+class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
     """Torch TensorRT thought torch.compile(backend="torch_tensorrt").
 
     Backend does not use intermediate formats, and compiled model is not stored.
+    Input mutations use native torch.compile behavior, without AITune contract replay.
     """
 
     _build_mode = BuildMode.JUST_IN_TIME
@@ -126,7 +127,6 @@ class TorchTensorRTJitBackend(Backend):
     STATE_TYPE = "type"
     STATE_CONFIG = "config"
     STATE_ORIG_MODULE = "orig_module"
-    STATE_DATA = "data"
     STATE_SAMPLES = "samples"
     STATE_DEVICE = "device"
     STATE_COMPILE_DYNAMIC = "compile_dynamic"
@@ -143,19 +143,14 @@ class TorchTensorRTJitBackend(Backend):
         Args:
             config: Configuration for torch compile with torch_tensorrt
         """
-        super().__init__()
         assert_cuda_is_available()
         assert_torch_tensorrt()
-
-        # initialize variables
-        self._config = config or TorchTensorRTJitBackendConfig()
+        super().__init__(config or TorchTensorRTJitBackendConfig())
 
         # build variables
         self._compiled_module = None
         self._orig_module = None
         self._samples: SampleStore | None = None
-        # Kept only for loading checkpoints written before samples became disk-backed.
-        self._data = None
         self._compile_dynamic = self._config.dynamic
         self._infer_impl = self._infer_no_autocast
 
@@ -181,7 +176,7 @@ class TorchTensorRTJitBackend(Backend):
         settings["timing_cache_path"] = resolved_path.as_posix()
         return settings
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Build the model with Torch compile."""
         self._compile_dynamic = resolve_compile_dynamic(self._config.dynamic, graph_spec)
         module = module.eval()
@@ -199,14 +194,15 @@ class TorchTensorRTJitBackend(Backend):
 
     def _compile(self):
         """Compile module with Torch compile."""
+        if self._samples is None or self._orig_module is None:
+            raise RuntimeError("Backend has no warmup samples. Please call build() first.")
         logger.info("Start compiling torch module with torch.compile(backend='torch_tensorrt').")
         torch._dynamo.reset()
 
-        move_module_to_device(self._orig_module, self._device)
-
+        move_module_to_device(self._orig_module, self.device)
         compile_options = self._compile_settings()
-        if self._device.type == "cuda":
-            compile_options["device"] = get_cuda_device(self._device)
+        if self.device.type == "cuda":
+            compile_options["device"] = get_cuda_device(self.device)
         else:
             compile_options.pop("device", None)
 
@@ -220,7 +216,7 @@ class TorchTensorRTJitBackend(Backend):
             )
 
             self._select_infer_impl()
-            for args, kwargs in self._iter_samples():
+            for args, kwargs in self._samples.iter_samples(self.device):
                 self._infer_impl(*args, **kwargs)
         logger.info("Module has been compiled.")
 
@@ -228,7 +224,7 @@ class TorchTensorRTJitBackend(Backend):
         """Run inference with autocast enabled."""
         with torch.no_grad():
             with torch.autocast(
-                device_type=str(self._device.type),
+                device_type=self.device.type,
                 dtype=self._config.autocast_dtype,
                 enabled=True,
             ):
@@ -268,17 +264,7 @@ class TorchTensorRTJitBackend(Backend):
     def _deploy(self):
         """Deploys the backend."""
         self._activate()
-        self._samples = None
-        self._data = None
         gc_collect()
-
-    def _iter_samples(self):
-        """Iterate persisted samples, with support for legacy inline checkpoint data."""
-        if self._samples is not None:
-            return self._samples.iter_samples(self._device)
-        if self._data is not None:
-            return iter(self._data)
-        raise RuntimeError("Backend has no warmup data. Please call build() first.")
 
     def to_dict(self):
         """Returns the state_dict of the backend."""
@@ -305,9 +291,7 @@ class TorchTensorRTJitBackend(Backend):
         config = TorchTensorRTJitBackendConfig.from_dict(state_dict[cls.STATE_CONFIG])
 
         backend = cls(config=config)
-        samples_state = state_dict.get(cls.STATE_SAMPLES)
-        backend._samples = SampleStore.from_dict(samples_state) if samples_state is not None else None
-        backend._data = state_dict.get(cls.STATE_DATA)
+        backend._samples = SampleStore.from_dict(state_dict[cls.STATE_SAMPLES])
         backend._device = state_dict[cls.STATE_DEVICE]
         backend._compile_dynamic = state_dict.get(cls.STATE_COMPILE_DYNAMIC, config.dynamic)
         backend._orig_module = module

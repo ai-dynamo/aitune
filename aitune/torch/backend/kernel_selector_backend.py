@@ -4,7 +4,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import torch.nn as nn
 from torch.nn.attention import SDPBackend
@@ -129,7 +129,7 @@ class KernelSelectorBackendConfig(BackendConfig):
         )
 
     @classmethod
-    def from_dict(cls, _data: dict) -> "KernelSelectorBackendConfig":
+    def from_dict(cls, data: dict) -> "KernelSelectorBackendConfig":
         """Reject deserialization of one-way kernel source metadata."""
         raise NotImplementedError(f"{cls.__name__} supports one-way serialization only")
 
@@ -151,7 +151,7 @@ class KernelSelectorBackendConfig(BackendConfig):
         }
 
 
-class KernelSelectorBackend(Backend):
+class KernelSelectorBackend(Backend[KernelSelectorBackendConfig | None]):
     """Select kernel providers and apply their plan while building a delegate backend.
 
     The backend adopts the delegate's build mode and supported execution modes. A JIT delegate keeps the selected
@@ -183,8 +183,7 @@ class KernelSelectorBackend(Backend):
             delegate_backend: Backend that compiles or executes the module after provider selection. Defaults to
                 :class:`TorchInductorJitBackend`.
         """
-        super().__init__()
-        self._config = config if config is not None else KernelSelectorBackendConfig()
+        super().__init__(config if config is not None else KernelSelectorBackendConfig())
         self._delegate_backend = delegate_backend if delegate_backend is not None else TorchInductorJitBackend()
         self._runtime: KernelProviderRuntime | None = None
         self._adopt_delegate_modes()
@@ -211,9 +210,9 @@ class KernelSelectorBackend(Backend):
         graph_spec: GraphSpec,
         samples: SampleStore,
         cache_dir: Path,
-    ) -> Backend:
+    ) -> Self:
         """Select providers and build the delegate while the plan is applied."""
-        move_module_to_device(module, self._device)
+        move_module_to_device(module, self.device)
 
         optimizer = self._create_optimizer()
         plan = optimizer.make_plan(module, samples, module=module)
@@ -225,7 +224,7 @@ class KernelSelectorBackend(Backend):
 
         with runtime.applied():
             self._delegate_backend = self._delegate_backend.build(
-                module, graph_spec, samples, self._device, delegate_cache_dir
+                module, graph_spec, samples, self.device, delegate_cache_dir
             )
 
         if self._build_mode is BuildMode.JUST_IN_TIME:
@@ -270,6 +269,8 @@ class KernelSelectorBackend(Backend):
 
     def _create_optimizer(self) -> KernelOptimizer:
         """Create the kernel optimizer from backend configuration."""
+        if self._config is None:
+            raise RuntimeError("Kernel selector configuration is required to create the optimizer")
         return KernelOptimizer(
             kernel_providers=self._config.kernel_providers,
             kernel_generators=self._config.kernel_generators,
@@ -305,7 +306,7 @@ class KernelSelectorBackend(Backend):
         if self._runtime is not None:
             self._runtime.activate()
         try:
-            self._delegate_backend.deploy(self._device)
+            self._delegate_backend.deploy(self.device)
         except Exception:
             if self._runtime is not None:
                 self._runtime.deactivate()

@@ -382,11 +382,16 @@ jit_config.max_depth_level = 2  # Default: 1
 
 #### min_parameters
 
-Minimum number of parameters for a module to be considered for tuning.
+Inclusive minimum number of parameters for a module to be considered for tuning.
+The default of `0` allows modules with no parameters, including modules that operate on buffers or caller-owned caches.
+Set this to `1` to exclude zero-parameter modules.
 
 ```python
 jit_config.min_parameters = 1000  # Default: 0
 ```
+
+Modules with exactly 1,000 parameters are eligible in this example; modules with fewer parameters are skipped.
+Previously, modules exactly at the threshold were also skipped, including zero-parameter modules at the default of `0`.
 
 **Why it matters**: Small modules may not benefit from tuning and can be skipped to save time.
 

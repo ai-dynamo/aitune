@@ -77,7 +77,7 @@ def do_test_backend(backend, dtype, model, sample_data, tmp_path):
     # Test serialization and deployment
     state_dict = backend.to_dict()
     loaded_backend = TorchEagerBackend.from_dict(model, state_dict)
-    loaded_backend.deploy("cuda")
+    loaded_backend.deploy(torch.device("cuda"))
     loaded_output = loaded_backend.infer(*args, **kwargs)
     assert output.dtype == loaded_output.dtype
 

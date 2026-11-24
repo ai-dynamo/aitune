@@ -15,9 +15,36 @@ cd examples/YOLO
 ./prepare_triton.sh
 ```
 
-The model uses fixed batch 1. Deterministic generated input verifies numerical agreement between the source,
-tuned checkpoint, and Triton deployment; it does not measure detection accuracy. The flow prints the selected
-configuration, request batch size, concurrency, instance group, throughput, and p95 and p99 latency.
+FP16 is the default. The recipe downloads a supplied ONNX export at a pinned revision; it does not cast weights
+or apply additional quantization. Select another export with `--variant`:
+
+```bash
+./prepare_triton.sh --variant fp32
+```
+
+| Variant | Supplied ONNX file |
+| --- | --- |
+| `fp32` | `model.onnx` |
+| `fp16` (default) | `model_fp16.onnx` |
+
+The recipe reads the image dtype from the graph rather than inferring it from the variant name.
+Only FP32 and FP16 exports are supported. The INT8 export is excluded because TensorRT rejects its
+`DynamicQuantizeLinear` and `ConvInteger` operators, and its ONNX Runtime deployment failed Triton output parity.
+
+Each variant has a separate CI job covering tuning, checkpoint restoration, Model Analyzer, and Triton inference.
+Python validation checks the restored checkpoint's input dtype against the selected source graph and verifies
+detection output shape and finite values. Triton validation generates one image sample in the checkpoint's input
+dtype, runs the Python checkpoint, and sends the exact same image values to Triton. It compares the outputs
+using `rtol=1e-2, atol=1e-2`. Backend build or validation
+failures are logged; the workflow requires at least one deployment-capable backend to succeed.
+
+When running commands individually, pass the same `--variant` to `yolo-tune`, `yolo-python-inference`, and
+`run_triton.sh`. The model-store and Triton client commands read precision from the checkpoint.
+Move aside previous checkpoints, model repositories, and Model Analyzer outputs when switching variants.
+
+The model uses fixed batch 1. Deterministic generated input checks checkpoint execution and numerical agreement
+with its Triton deployment; it does not measure detection accuracy. The flow prints the selected configuration,
+request batch size, concurrency, instance group, throughput, and p95 and p99 latency.
 
 The flow saves `checkpoints/yolov10n.ait` and publishes a Triton model named `yolov10n` under
 `model_repository/`. Each YOLO command accepts `--tuned-model-path` to use another checkpoint path. The publication

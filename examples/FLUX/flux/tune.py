@@ -10,6 +10,7 @@ from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 
 import aitune.torch as ait
 from aitune.torch.backend import (
+    Backend,
     TorchAOBackend,
     TorchAOBackendConfig,
     TorchInductorJitBackend,
@@ -40,13 +41,13 @@ def filter_fn(mod, fqn):
 
     if not isinstance(mod, torch.nn.Linear):
         return False
-    elif "embed" in fqn:
+    if "embed" in fqn:
         return False
-    elif fqn == "norm_out.linear":
+    if fqn == "norm_out.linear":
         return False
-    elif fqn == "proj_out":
+    if fqn == "proj_out":
         return False
-    elif mod.in_features < 1024 or mod.out_features < 1024:
+    if mod.in_features < 1024 or mod.out_features < 1024:
         return False
     return True
 
@@ -57,24 +58,24 @@ def _transformer_strategy(
     quantization=False,
 ):
     dynamic = len(sizes) > 1
-    backends = []
+    backends: list[Backend] = []
     if quantization:
         backends = [
             TorchAOBackend(config=TorchAOBackendConfig(quantization="nvfp4dq", filter_fn=filter_fn)),
             TorchAOBackend(config=TorchAOBackendConfig(quantization="fp8dq", filter_fn=filter_fn)),
         ]
 
-    backends += [
-        TorchTensorRTJitBackend(
-            config=TorchTensorRTJitBackendConfig(
-                dynamic=dynamic,
-                compile_config=TorchTensorRTConfig(
-                    use_distributed_mode_trace=multi_gpu, min_block_size=50, truncate_double=True
-                ),
+    # Torch-TensorRT compilation on every context-parallel rank exceeds the CI pod memory limit.
+    if not multi_gpu:
+        backends.append(
+            TorchTensorRTJitBackend(
+                config=TorchTensorRTJitBackendConfig(
+                    dynamic=dynamic,
+                    compile_config=TorchTensorRTConfig(min_block_size=50, truncate_double=True),
+                )
             )
-        ),
-        TorchInductorJitBackend(config=TorchInductorJitBackendConfig(dynamic=dynamic)),
-    ]
+        )
+    backends.append(TorchInductorJitBackend(config=TorchInductorJitBackendConfig(dynamic=dynamic)))
 
     strategy = ait.MaxThroughputStrategy(backends=backends)
     return strategy

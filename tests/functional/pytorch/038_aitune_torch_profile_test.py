@@ -7,9 +7,10 @@
 # ///
 
 import json
+from typing import cast
 
 import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, PreTrainedTokenizerBase
 
 from aitune.torch import profile
 
@@ -17,7 +18,7 @@ MODEL_ID = "hf-internal-testing/tiny-random-distilbert"
 
 
 def test_profile_transformers_kwargs(tmp_path):
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(MODEL_ID))
     model = AutoModelForSequenceClassification.from_pretrained(MODEL_ID)
     model.eval()
 

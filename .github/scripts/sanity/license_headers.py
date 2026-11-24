@@ -8,6 +8,7 @@
 
 import argparse
 import collections
+import json
 import logging
 import sys
 from pathlib import Path
@@ -35,7 +36,7 @@ LicenseInfo = collections.namedtuple(
     ],
 )
 
-EXCLUDE_DIRECTORIES = ["tools", ".pytype", ".cache"]
+EXCLUDE_DIRECTORIES = ["tools", ".cache"]
 DEFAULT_LICENSE_TEMPLATE = str(Path(__file__).parent / "license_header.template")
 
 
@@ -162,13 +163,31 @@ def _process_files(args, failed_files, license_info):
             continue
 
         LOGGER.info("Processing file: %s", src_filepath)
-        with src_filepath.open("r") as src_file:
-            src_file_content = src_file.readlines()
+        src_file_content = _read_source_lines(src_filepath)
 
         if not _contains_license_header(src_file_content, src_filepath, license_info, args):
             failed_files.append(src_filepath)
 
     return failed_files
+
+
+def _read_source_lines(src_filepath):
+    """Read text lines, or the first notebook cell where the file header belongs."""
+    with src_filepath.open("r", encoding="utf-8") as src_file:
+        if src_filepath.suffix != ".ipynb":
+            return src_file.readlines()
+
+        try:
+            notebook = json.load(src_file)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Cannot check license header in notebook {src_filepath}: {error}") from error
+
+    # Check cell source only: metadata, outputs, and later cells are not file headers.
+    cells = notebook.get("cells", [])
+    if not cells:
+        return []
+    source = cells[0].get("source", [])
+    return (source if isinstance(source, str) else "".join(source)).splitlines(keepends=True)
 
 
 def _contains_license_header(src_file_content, src_filepath, license_info, args):

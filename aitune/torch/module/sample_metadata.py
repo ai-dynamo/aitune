@@ -5,7 +5,7 @@
 import copy
 import pickle
 from collections.abc import Mapping
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import torch
 from tabulate import tabulate
@@ -179,17 +179,15 @@ class SampleMetadata:
             return dict(self._tensor_data) == dict(__value._tensor_data) and dict(self._other_data) == dict(
                 __value._other_data
             )
-        else:
-            # LLM integration: check only LLM phase
-            return self._llm_phase == __value._llm_phase
+        # LLM integration: check only LLM phase
+        return self._llm_phase == __value._llm_phase
 
     def __hash__(self) -> int:
         """Compute hash of sample metadata."""
         if self._llm_phase is None:
             return hash(frozenset(self._tensor_data)) ^ self._hash_other_data()
-        else:
-            # LLM integration: hash only LLM phase
-            return hash(self._llm_phase)
+        # LLM integration: hash only LLM phase
+        return hash(self._llm_phase)
 
     def _hash_other_data(self) -> int:
         """Compute an order-independent hash for non-tensor data."""
@@ -217,7 +215,7 @@ class SampleMetadata:
         return self._strict
 
     @property
-    def tensor_data(self) -> tuple[tuple[Locator, TensorSpec]]:
+    def tensor_data(self) -> tuple[tuple[Locator, TensorSpec], ...]:
         """Get list of tensor data."""
         return self._tensor_data
 
@@ -226,17 +224,85 @@ class SampleMetadata:
         """Get list of tensor specs."""
         return [ts for _, ts in self._tensor_data]
 
+    def flatten_tensors(self, value: Any) -> tuple[torch.Tensor, ...]:
+        """Read tensor references in the stable order recorded by this metadata.
+
+        Export and inference must use the same recorded paths, rather than rediscovering leaves from
+        each runtime value. Otherwise a tensor can be passed to the wrong compiled input or shape rule.
+
+        Each call walks the recorded paths in Python without copying tensor data. Inference overhead
+        therefore depends on the number and depth of tensor paths, rather than tensor size.
+        """
+        tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
+        for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
+            if not isinstance(tensor, torch.Tensor):
+                raise TypeError(f"Recorded tensor path {locator} resolved to {type(tensor).__name__}, not a tensor.")
+        return cast(tuple[torch.Tensor, ...], tensors)
+
+    def unflatten_tensors(
+        self,
+        tensors: Any,
+        template: Any,
+        preserved_values: tuple[tuple[Locator, Any], ...] = (),
+    ) -> Any:
+        """Rebuild the structure, preserving explicitly supplied values by identity.
+
+        Flat backend results do not describe Python containers or input/output object identity.
+        The template supplies the structure. Preserved values let later mutation handling return a
+        caller-owned cache object instead of a copy; the caller must apply its state changes first.
+        Preserved paths take precedence over tensor replacements beneath them.
+        Containers and non-tensor data are deep-copied to isolate calls; tensor data is not copied.
+        This adds Python work on each output restoration, including ordinary tensor outputs.
+        The cost depends on the template structure and the number of replacements and preserved paths.
+        """
+        if len(self._tensor_data) == 1 and isinstance(tensors, torch.Tensor):
+            tensors = (tensors,)
+        else:
+            tensors = tuple(tensors)
+        if len(tensors) != len(self._tensor_data):
+            raise ValueError(f"Expected {len(self._tensor_data)} tensors, got {len(tensors)}.")
+
+        for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
+            if not isinstance(tensor, torch.Tensor):
+                raise TypeError(f"Recorded tensor path {locator} received {type(tensor).__name__}, not a tensor.")
+
+        tensor_memo = {}
+        for locator, _ in self._tensor_data:
+            if any(alias_locator.is_prefix_of(locator) for alias_locator, _ in preserved_values):
+                continue
+            current_value = locator.get_value(template)
+            if isinstance(current_value, torch.Tensor):
+                tensor_memo[id(current_value)] = current_value
+        result = copy.deepcopy(template, tensor_memo)
+
+        tensor_replacements = (
+            (locator, tensor)
+            for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True)
+            if not any(alias_locator.is_prefix_of(locator) for alias_locator, _ in preserved_values)
+        )
+        return Locator.set_values(result, (*preserved_values, *tensor_replacements))
+
+    def without_tensors(self, value: Any, preserved_values: tuple[Any, ...] = ()) -> Any:
+        """Copy a structure while replacing tensors and explicitly preserved values with ``None``.
+
+        The template retains Python structure without keeping sample tensor storage alive or invoking
+        tensor-subclass copy behavior. Preserved objects are supplied from the current call at restoration.
+        """
+        memo = {id(tensor): None for tensor in self.flatten_tensors(value)}
+        memo.update({id(preserved): None for preserved in preserved_values})
+        return copy.deepcopy(value, memo)
+
     @staticmethod
     def from_inputs(inputs: dict[str, Any], strict: bool = False, batch_size: int | None = None) -> "SampleMetadata":
         """Create SampleMetadata from inputs keyed by forward parameter name.
 
         If strict is True, then other data is also included.
         """
-        batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
+        effective_batch_size = cast(int | float, batch_size or global_context.get(BATCH_SIZE_KEY, float("nan")))
         tensor_data, other_data, cache_position = [], [], None
         for locator, value in Locator.find_leaves(inputs):
             if torch.is_tensor(value):
-                tensor_data.append((locator, TensorSpec.from_tensor(value, batch_size)))
+                tensor_data.append((locator, TensorSpec.from_tensor(value, effective_batch_size)))
             elif strict:
                 other_data.append((locator, value))
             if config.enable_transformers_integration and locator.root_name == "cache_position":
@@ -245,7 +311,7 @@ class SampleMetadata:
         if cache_position is None:
             llm_phase = None
         else:
-            llm_phase = "prefill" if cache_position[0].item() == 0 else "decode"
+            llm_phase = "prefill" if cast(Any, cache_position)[0].item() == 0 else "decode"
 
         return SampleMetadata(tuple(tensor_data), tuple(other_data), strict, llm_phase)
 
@@ -255,11 +321,11 @@ class SampleMetadata:
 
         If strict is True, then other data is also included.
         """
-        batch_size = batch_size or global_context.get(BATCH_SIZE_KEY, float("nan"))
+        effective_batch_size = cast(int | float, batch_size or global_context.get(BATCH_SIZE_KEY, float("nan")))
         tensor_data, other_data = [], []
         for locator, value in Locator.find_leaves(output, is_output=True):
             if torch.is_tensor(value):
-                tensor_data.append((locator, TensorSpec.from_tensor(value, batch_size)))
+                tensor_data.append((locator, TensorSpec.from_tensor(value, effective_batch_size)))
             elif strict:
                 other_data.append((locator, value))
         return SampleMetadata(tuple(tensor_data), tuple(other_data), strict, llm_phase=None)
@@ -372,7 +438,8 @@ class SampleMetadata:
         """
         inputs = copy.deepcopy(inputs)
         for locator, tensor_spec in self._tensor_data:
-            inputs = locator.set_value(inputs, batch_tensor(locator.get_value(inputs), tensor_spec, batch_size))
+            tensor = cast(torch.Tensor, locator.get_value(inputs))
+            inputs = cast(dict[str, Any], locator.set_value(inputs, batch_tensor(tensor, tensor_spec, batch_size)))
 
         return inputs
 

@@ -36,7 +36,7 @@ class AITuneError(Exception):
         return self._message
 
     @property
-    def log_path(self) -> pathlib.Path:
+    def log_path(self) -> pathlib.Path | None:
         """Get the log file path.
 
         Returns:
@@ -50,8 +50,6 @@ class AITuneUserInputError(AITuneError):
 
     Raised when user provided input (model, data or configuration option) is invalid.
     """
-
-    pass
 
 
 class AITunePublicationError(AITuneError):

@@ -7,7 +7,7 @@
 # allow_failure = false
 # [[pip_install]]
 # packages = ["onnxruntime-gpu"]
-# flags = ["--upgrade", "--index-url", "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"]
+# flags = ["--upgrade", "--index-url", "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/"]
 # ///
 
 """Export pretrained BERT to ONNX, tune, report throughput, and save/load.

@@ -3,6 +3,7 @@
 """AITune wrapper module."""
 
 from collections import OrderedDict
+from collections.abc import Callable
 from enum import Enum
 from logging import getLogger
 from pathlib import Path
@@ -13,7 +14,6 @@ import wrapt
 
 from aitune.records import DeploymentArtifact
 from aitune.torch.backend.backend import Backend
-from aitune.torch.config import aitune_cache_dir
 from aitune.torch.config import config as global_config
 from aitune.torch.distributed import coordinator, distributed_cache_dir, resolve_tuning_device
 from aitune.torch.dynamic_shapes import DynamicShapes, validate_dynamic_shape_definitions
@@ -33,7 +33,10 @@ from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import (
     count_parameters,
     get_module_device,
+    is_kept_on_device,
+    keep_on_device,
     offload_after_tuning,
+    release_kept_on_device,
 )
 
 logger = getLogger(__name__)
@@ -74,6 +77,7 @@ class Module(wrapt.CallableObjectProxy):
 
     TYPE_KEY = "type"
     NAME_KEY = "name"
+    KEPT_ON_DEVICE_KEY = "kept_on_device"
     DYNAMIC_SHAPES_KEY = "dynamic_shapes"
     TUNED_MODULE_KEY = "tuned_module"
 
@@ -106,7 +110,7 @@ class Module(wrapt.CallableObjectProxy):
         self._self_orig_forward = module.forward
         self._current_forward_pre_hooks = module._forward_pre_hooks
         self._current_forward_hooks = module._forward_hooks
-        self._self_proxy_forward = wrapt.decorator(self._forward)(module.forward)
+        self._self_proxy_forward: Callable = wrapt.decorator(self._forward)(module.forward)
         module.forward = self._self_proxy_forward
         self._setup_strategies(strategy, strategies)
 
@@ -143,11 +147,11 @@ class Module(wrapt.CallableObjectProxy):
         return self._module_cache_dir()
 
     @property
-    def device(self) -> torch.device:
+    def device(self) -> torch.device | None:
         """Get the device of the module.
 
         Returns:
-            The device the module is using.
+            The device the module is using, or None if the module is not tuned and has no parameters.
         """
         # Note: collect device from tuned module (_wrapper) to indicate correct device when loading HF pipeline.
         if self._self_state == ModuleState.TUNED:
@@ -162,12 +166,11 @@ class Module(wrapt.CallableObjectProxy):
         if self._self_state == ModuleState.RECORDING:
             wrapper = cast(RecordingModule, self._self_wrapper)
             return wrapper.graph_specs
-        elif self._self_state == ModuleState.PASSTHROUGH and self._self_prev_recording:
+        if self._self_state == ModuleState.PASSTHROUGH and self._self_prev_recording:
             return self._self_prev_recording.graph_specs
-        elif self._self_state == ModuleState.TUNED and self._self_prev_recording:
+        if self._self_state == ModuleState.TUNED and self._self_prev_recording:
             return self._self_prev_recording.graph_specs
-        else:
-            raise ValueError("Module has not recorded any samples. Cannot collect graph specs.")
+        raise ValueError("Module has not recorded any samples. Cannot collect graph specs.")
 
     @property
     def state(self) -> ModuleState:
@@ -273,6 +276,17 @@ class Module(wrapt.CallableObjectProxy):
             state_dict[Module.NAME_KEY],
             dynamic_shapes=state_dict[Module.DYNAMIC_SHAPES_KEY],
         )
+        if Module.KEPT_ON_DEVICE_KEY in state_dict:
+            release_kept_on_device(module)
+        kept = state_dict.get(Module.KEPT_ON_DEVICE_KEY, [])
+        if kept:
+            named = dict(module.named_parameters(remove_duplicate=False)) | dict(
+                module.named_buffers(remove_duplicate=False)
+            )
+            missing = [n for n in kept if n not in named]
+            if missing:
+                logger.warning("Skipping kept-on-device names missing from the module: %s", missing)
+            keep_on_device((named[n] for n in kept if n in named), owner=module)
         self._self_state = ModuleState.TUNED
         self._self_wrapper = TunedModule.from_dict(module, state_dict[Module.TUNED_MODULE_KEY])
         self._deploy_wrapper(device)
@@ -292,11 +306,20 @@ class Module(wrapt.CallableObjectProxy):
 
         destination = OrderedDict() if destination is None else destination
 
+        kept = sorted(
+            name
+            for name, t in (
+                *self.__wrapped__.named_parameters(remove_duplicate=False),
+                *self.__wrapped__.named_buffers(remove_duplicate=False),
+            )
+            if is_kept_on_device(t, owner=self.__wrapped__)
+        )
         destination[prefix] = {
             self.TYPE_KEY: Module.__name__,  # self.__class__ returns wrapped class, use direct class object instead
             self.NAME_KEY: self._self_name,
             self.DYNAMIC_SHAPES_KEY: self._self_dynamic_shapes,
-            self.TUNED_MODULE_KEY: self._self_wrapper.to_dict(),  # pytype: disable=attribute-error
+            self.TUNED_MODULE_KEY: self._self_wrapper.to_dict(),
+            self.KEPT_ON_DEVICE_KEY: kept,
         }
         return destination
 
@@ -320,7 +343,7 @@ class Module(wrapt.CallableObjectProxy):
         """
         if self._self_state == ModuleState.TUNED:
             raise ValueError(f"Module: '{self._self_name}' has already been tuned. Reset it to do it again.")
-        elif self._self_state == ModuleState.INIT or self._self_state == ModuleState.PASSTHROUGH:
+        if self._self_state == ModuleState.INIT or self._self_state == ModuleState.PASSTHROUGH:
             raise ValueError(f"Module: '{self._self_name}' has not recorded any samples. Cannot tune it.")
 
         with report_module_tune(
@@ -377,7 +400,7 @@ class Module(wrapt.CallableObjectProxy):
 
     def _module_cache_dir(self) -> Path:
         """Return the cache directory identified by the configured module name."""
-        return distributed_cache_dir(aitune_cache_dir()) / self._self_name
+        return distributed_cache_dir(global_config.cache_dir) / self._self_name
 
     def _activate_wrapper(self):
         try:
@@ -434,6 +457,15 @@ class Module(wrapt.CallableObjectProxy):
             self._proxy_forward()
 
         return result
+
+    def set_proxy_forward(self, forward: Callable) -> None:
+        """Install ``forward`` as the wrapped module's ``forward``; the wrapper reinstalls it after every call.
+
+        Args:
+            forward: The forward to proxy calls through between calls to the wrapper.
+        """
+        self._self_proxy_forward = forward
+        self.__wrapped__.forward = forward
 
     def _proxy_forward(self):
         """Proxy the forward calls.

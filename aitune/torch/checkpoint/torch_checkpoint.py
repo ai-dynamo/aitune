@@ -3,16 +3,23 @@
 """Torch checkpoint module."""
 
 from collections import OrderedDict
+from logging import getLogger
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar, cast
 
 import torch
 from torch.nn import Module as TorchModule
 
 from aitune.torch.checkpoint.checkpoint import Checkpoint
 from aitune.torch.checkpoint.storage import Storage
+from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.module.wrapper_module import Module as WrapperModule
 from aitune.torch.utils.device import get_device
+
+logger = getLogger(__name__)
+
+T = TypeVar("T")
+M = TypeVar("M", bound=TorchModule | WrapperModule)
 
 
 class TorchCheckpoint(Checkpoint):
@@ -53,16 +60,28 @@ class TorchCheckpoint(Checkpoint):
         """
         if isinstance(module_or_pipeline, TorchModule):
             state_dict = module_or_pipeline.state_dict()
+            module_states = {"": state_dict}
         else:
             state_dict = TorchCheckpoint.state_dict_from_pipeline(module_or_pipeline)
+            module_states = state_dict
         self._storage.save(path, state_dict)
+        for module_path, module_state in module_states.items():
+            for prefix, stored_object in module_state.items():
+                if not isinstance(stored_object, dict) or WrapperModule.TUNED_MODULE_KEY not in stored_object:
+                    continue
+                stored_path = ".".join(part for part in (module_path, prefix.rstrip(".")) if part)
+                stored_path = stored_path or stored_object[WrapperModule.NAME_KEY]
+                logger.info("📦 Saved module %s:", stored_path)
+                tuned_state = stored_object[WrapperModule.TUNED_MODULE_KEY]
+                for graph_index, (_, backend_state) in enumerate(tuned_state[TunedModule.BACKENDS_KEY]):
+                    logger.info("  ✅ graph %s stored with %s", graph_index, backend_state[TunedModule.TYPE_KEY])
 
     def load(
         self,
-        module_or_pipeline: TorchModule | Any,
+        module_or_pipeline: T,
         path: str | Path,
         device_map: dict[str, str | torch.device] | None = None,
-    ) -> TorchModule | WrapperModule:
+    ) -> T | WrapperModule:
         """Load a module or pipeline from a saved state dictionary.
 
         This method handles both individual torch modules and pipelines containing modules.
@@ -84,41 +103,49 @@ class TorchCheckpoint(Checkpoint):
             if the saved state contains tuning information.
 
         Raises:
-            ValueError: If a module in the state_dict is not found in the pipeline or
-                        if a matched attribute is not a torch.nn.Module or WrapperModule.
+            ValueError: If a module in the state_dict is not found in the pipeline, including keys that point to an
+                attribute that is not a torch.nn.Module or WrapperModule.
 
         """
         # Convert device_map to torch.device
-        device_map = {k: get_device(v) for k, v in (device_map or {}).items()}
+        devices = {k: get_device(v) for k, v in (device_map or {}).items()}
 
         state_dict = self._storage.load(path)
+        loaded: T | WrapperModule
         if isinstance(module_or_pipeline, TorchModule):
-            module_or_pipeline = TorchCheckpoint.load_state_dict_for_module(module_or_pipeline, state_dict, device_map)
+            loaded = TorchCheckpoint.load_state_dict_for_module(module_or_pipeline, state_dict, devices)
         else:
-            module_or_pipeline = TorchCheckpoint.load_state_dict_for_pipeline(
-                module_or_pipeline, state_dict, device_map
-            )
+            loaded = TorchCheckpoint.load_state_dict_for_pipeline(module_or_pipeline, state_dict, devices)
 
-        if device_map:
-            raise ValueError(f"Some modules in the device_map were not found: {list(device_map.keys())}")
+        if devices:
+            raise ValueError(f"Some modules in the device_map were not found: {list(devices.keys())}")
 
-        return module_or_pipeline
+        return loaded
 
     @staticmethod
-    def get_pipeline_modules(pipeline: Any) -> dict[str, torch.nn.Module]:
+    def get_pipeline_modules(pipeline: Any) -> dict[str, torch.nn.Module | WrapperModule]:
         """Get the modules from the pipeline.
 
         Args:
             pipeline: The pipeline object to extract modules from.
 
         Returns:
-            dict: A dictionary mapping attribute names to Module objects.
+            dict: A dictionary mapping dotted module paths to modules. The walk does not descend into
+                WrapperModule instances.
         """
-        modules = {}
+        modules: dict[str, torch.nn.Module | WrapperModule] = {}
+
+        def add_module(path: str, module: torch.nn.Module | WrapperModule) -> None:
+            modules[path] = module
+            if isinstance(module, WrapperModule):
+                return
+            for child_name, child in module._modules.items():
+                if child is not None:
+                    add_module(f"{path}.{child_name}", child)
 
         for name, attr in vars(pipeline).items():
             if isinstance(attr, (torch.nn.Module, WrapperModule)):
-                modules[name] = attr
+                add_module(name, attr)
 
         return modules
 
@@ -134,21 +161,23 @@ class TorchCheckpoint(Checkpoint):
         """
         state_dict = OrderedDict()
         pipeline_modules = TorchCheckpoint.get_pipeline_modules(pipeline)
+        saved_module_ids = set()
 
         for name, module in pipeline_modules.items():
-            if isinstance(module, WrapperModule):
+            if isinstance(module, WrapperModule) and id(module) not in saved_module_ids:
                 state_dict[name] = module.state_dict()
+                saved_module_ids.add(id(module))
         if not state_dict:
             raise ValueError("No tuned modules found in the pipeline")
         return state_dict
 
     @staticmethod
     def load_state_dict_for_module(
-        module: TorchModule | WrapperModule,
+        module: M,
         state_dict: dict,
         device_map: dict[str, torch.device],
         module_name: str = "",
-    ) -> TorchModule | WrapperModule:
+    ) -> M | WrapperModule:
         """Load a state dictionary into a module.
 
         This method loads a state dictionary into a module, replacing regular torch modules
@@ -182,6 +211,7 @@ class TorchCheckpoint(Checkpoint):
             tuned versions. Original torch modules that were not tuned are preserved.
         """
         top_module = None
+        checkpoint_module_path = module_name
 
         def replace_tuned_module(
             module: TorchModule,
@@ -208,6 +238,9 @@ class TorchCheckpoint(Checkpoint):
                 # This is a tuned module, replace with wrapper module
                 device = device_map.pop(module_name, None)
 
+                module_path = ".".join(part for part in (checkpoint_module_path, prefix.rstrip(".")) if part)
+                module_path = module_path or stored_object[WrapperModule.NAME_KEY]
+                logger.info("📦 Loading module %s:", module_path)
                 wrapper_module = WrapperModule.from_dict(module, stored_object, device)
                 if parent_module is None:
                     # We replace top module
@@ -216,6 +249,10 @@ class TorchCheckpoint(Checkpoint):
                 else:
                     # We replace a child module with wrapper module
                     setattr(parent_module, module_name, wrapper_module)
+                # from_dict() installs a TunedModule before returning the restored wrapper.
+                tuned_module = cast(TunedModule, wrapper_module.module)
+                for graph_index, backend in enumerate(tuned_module.backends.values()):
+                    logger.info("  ✅ graph %s restored with %s", graph_index, backend.name)
                 # Remove state_dict key - we already handled it
                 del local_state_dict[prefix]
             else:
@@ -246,7 +283,7 @@ class TorchCheckpoint(Checkpoint):
         return final_module
 
     @staticmethod
-    def load_state_dict_for_pipeline(pipeline, state_dict, device_map: dict[str, torch.device]):
+    def load_state_dict_for_pipeline(pipeline: T, state_dict: dict, device_map: dict[str, torch.device]) -> T:
         """Load a state dictionary into a pipeline.
 
         This method loads the state dictionary into the pipeline by matching module names
@@ -262,22 +299,32 @@ class TorchCheckpoint(Checkpoint):
             The pipeline with loaded modules.
 
         Raises:
-            ValueError: If a module in the state_dict is not found in the pipeline or
-                        if a matched attribute is not a torch.nn.Module or WrapperModule.
+            ValueError: If a module in the state_dict is not found in the pipeline, including keys that point to an
+                attribute that is not a torch.nn.Module or WrapperModule.
         """
+        modules = TorchCheckpoint.get_pipeline_modules(pipeline)
         matched_modules = set()
+        restored_modules = {}
         for name, module_state_dict in state_dict.items():
-            if hasattr(pipeline, name):
-                module = getattr(pipeline, name)
-                if isinstance(module, (torch.nn.Module, WrapperModule)):
-                    matched_modules.add(name)
-                    setattr(
-                        pipeline,
-                        name,
-                        TorchCheckpoint.load_state_dict_for_module(module, module_state_dict, device_map, name),
-                    )
-                else:
-                    raise ValueError(f"Module {name} is not a torch.nn.Module or WrapperModule")
+            module = modules.get(name)
+            if module is None:
+                # reported below as not found
+                continue
+            matched_modules.add(name)
+            if id(module) in restored_modules:
+                # Checkpoints can store one key for each alias of a module. Restore the module only once.
+                device_map.pop(name, None)
+                continue
+            restored_modules[id(module)] = TorchCheckpoint.load_state_dict_for_module(
+                module, module_state_dict, device_map, name
+            )
+
+        # Replace the module on all its paths, so that aliases stay the same object.
+        for path, module in modules.items():
+            if id(module) in restored_modules:
+                owner_path, _, attribute = path.rpartition(".")
+                owner = modules[owner_path] if owner_path else pipeline
+                setattr(owner, attribute, restored_modules[id(module)])
 
         unmatched_keys = set(state_dict.keys()).difference(matched_modules)
         if unmatched_keys:

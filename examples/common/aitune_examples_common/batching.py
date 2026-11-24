@@ -1,7 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-FileCopyrightText: Copyright 2023 Ray Authors
 # SPDX-License-Identifier: Apache-2.0
-"""Dynamic batching decorator for async endpoints in AI Dynamo."""
+"""Dynamic batching decorator for async endpoints in AI Dynamo.
+
+Modified from Ray Serve for AI Dynamo.
+See NOTICE.md at the repository root for attribution under the shared Apache 2.0 LICENSE.
+"""
 
 import asyncio
 import inspect
@@ -433,8 +437,7 @@ class _LazyBatchQueueWrapper:
         """
         if hasattr(self.queue, "curr_iteration_start_time"):
             return self.queue.curr_iteration_start_time
-        else:
-            return None
+        return None
 
     async def is_batching_task_alive(self) -> bool:
         """Gets whether default _BatchQueue's background task is alive.
@@ -443,8 +446,7 @@ class _LazyBatchQueueWrapper:
         """
         if hasattr(self.queue, "_handle_batch_task"):
             return not self.queue._handle_batch_task.done()  # type: ignore
-        else:
-            return False
+        return False
 
     async def get_handling_task_stack(self) -> str | None:
         """Gets the stack for the default _BatchQueue's background task.
@@ -455,8 +457,7 @@ class _LazyBatchQueueWrapper:
             str_buffer = io.StringIO()
             self.queue._handle_batch_task.print_stack(file=str_buffer)  # type: ignore
             return str_buffer.getvalue()
-        else:
-            return None
+        return None
 
     def finish(self):
         if self._queue is not None:
