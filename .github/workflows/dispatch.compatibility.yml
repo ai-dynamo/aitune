@@ -111,9 +111,14 @@ jobs:
           - torch: torch213
             cuda: *cu128
         include:
+          - python_version: "3.12"
+            torch: torch28
+            cuda: *cu128
+
           - python_version: "3.14"
             torch: torch214
             cuda: *cu130
+
           - python_version: "3.14"
             torch: torch215
             cuda:
