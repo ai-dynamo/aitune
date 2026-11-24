@@ -9,6 +9,7 @@ import torch
 from aitune.torch.libs.cuda.cudart import cudart
 
 _ORT_DTYPE_TO_TORCH: dict[str, torch.dtype] = {
+    "tensor(bfloat16)": torch.bfloat16,
     "tensor(float)": torch.float32,
     "tensor(float16)": torch.float16,
     "tensor(double)": torch.float64,
