@@ -25,6 +25,7 @@ from tests.functional_ci.test_jit import JitMLP
     "aot_tuning.models.tensor-inputs",
     "aot_tuning.models.static-shapes",
     "aot_tuning.models.single-graph",
+    "other.input-float32",
     "modes.aot-tune",
     "modes.aot-save-load",
     "topology.{backend}/single-gpu",
