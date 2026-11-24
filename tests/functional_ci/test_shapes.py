@@ -285,11 +285,6 @@ def test_spatial_dims_export_retry(device: torch.device):
 @with_backends(
     "base",
     marks={
-        "torch-tensorrt-aot": pytest.mark.xfail(
-            reason="Torch-TensorRT index_put conversion rejects dynamic free dimensions after index_copy_ (aitune#190)",
-            raises=AssertionError,
-            strict=True,
-        ),
         "torch-tensorrt-jit": pytest.mark.xfail(
             reason=(
                 "Torch-TensorRT JIT index_put conversion fails broadcasting after index_copy_ (aitune#190); "
