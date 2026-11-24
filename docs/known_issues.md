@@ -4,6 +4,23 @@
 title: "Known Issues and Limitations"
 ---
 
+- **Torch-TensorRT JIT in-place input tensor mutations.** On the current CI stack, an in-place cache update such as
+  `state["cache"].add_(1)` does not reach the caller's tensor. The same failure occurs with direct
+  `torch.compile(model, backend="torch_tensorrt")`, without AITune. Replacing the cached tensor with
+  `state["cache"] = state["cache"] + 1` passes the native compilation and AITune tests. For models that require
+  in-place updates, use [Torch-TensorRT AOT](guides/backends/torch_tensorrt_aot_backend.md), which passes the mutable-input
+  lifecycle tests, or Torch Inductor JIT. See the
+  [native compiler comparison](https://github.com/ai-dynamo/aitune/actions/runs/42835107722/job/129896715452?pr=185).
+  Upstream [Torch-TensorRT PR #4894](https://github.com/pytorch/TensorRT/pull/4894) proposes preserving input
+  write-back operations for a closely matching failure; its applicability to this JIT case is not yet verified.
+- **Changing Python input state with compiled backends.** Input-dependent updates to non-tensor Python values inside
+  mutable inputs are not generally supported. A recorded mutation stores its resulting value: recording
+  `step[0] += 1` with `step=[0]` stores `1`; reusing that graph with `step=[5]` can restore `1` instead of `6`.
+  With `config.strict_mode=False`, graph matching and post-call input validation ignore non-tensor values, so the
+  incorrect update can go undetected. Strict graph matching can reject a changed starting value, but does not make
+  the update dynamic. Strict mode alone does not protect calls when graph checking is disabled or graph selection
+  uses only the LLM prefill/decode phase. Keep updates to Python counters and similar changing non-tensor state
+  outside the compiled module.
 - **Diffusers context parallelism with JIT tuning.** AITune's automatic JIT tuning currently degrades inference
   performance with Diffusers context parallelism because of module wrapping and patching order. Use the explicit AOT
   tuning API as a workaround. JIT backends may still be selected through the AOT API.
@@ -25,6 +42,12 @@ title: "Known Issues and Limitations"
 - **Distributed checkpoints.** Multi-GPU tuning produces rank-local artifacts. Loading with a different world size or
   rank topology is not supported, and AITune does not currently package distributed artifacts into one portable
   checkpoint.
+- **Torch-TensorRT AOT with dynamic 4D image inputs on PyTorch 2.8–2.10.** AITune compiles a CNN with `BatchDim` and
+  spatial `DynamicDim` inputs shaped `(batch, channels, height, width)`, but reloading its saved `.pt2` artifact fails
+  in PyTorch's exported-program loader with `assert vr is not None`. The same model works on PyTorch 2.11–2.14. Upgrade
+  PyTorch and Torch-TensorRT to a compatible stack using PyTorch 2.11 or later, or use TensorRT, Torch Inductor AOT, or
+  ONNX Runtime with the CUDA execution provider. See
+  [issue #118](https://github.com/ai-dynamo/aitune/issues/118) for exact builds and results.
 - **Kernel providers with strict Torch Export on PyTorch 2.8 and 2.9.** PyTorch 2.8 and 2.9 strict export cannot capture
   the forward hooks that temporarily replace `torch.nn.functional` kernels and can fail with a guard-export assertion.
   This is a generic limitation affecting every kernel provider, including SageAttention, when `KernelSelectorBackend`

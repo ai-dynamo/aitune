@@ -1,0 +1,114 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+"""Functional CI coverage for toy FLUX pipelines."""
+
+from functools import partial
+from pathlib import Path
+from typing import cast
+
+import pytest
+import torch
+
+import aitune.torch as ait
+from aitune.torch.jit.config import JITMode
+from aitune.torch.jit.config import config as jit_config
+from aitune.torch.jit.patched_module import ModuleState, PatchedModule
+from aitune.torch.jit.patcher import prepare_for_jit_tuning
+from aitune.torch.module import Module
+from aitune.torch.module.tuned_module import TunedModule
+from tests.functional_ci.backends import BackendCase, with_backends
+from tests.functional_ci.flux import ToyFluxPipeline
+from tests.functional_ci.lifecycle import pinned_strategy, selected_backend
+
+PROMPT = "A futuristic cityscape with neon lights and flying cars"
+COMPONENTS = ("transformer", "decoder", "text_encoder", "text_encoder_2")
+
+
+def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor:
+    """Generate deterministic toy images."""
+    return pipeline(prompt, generator=torch.Generator(device=pipeline.device).manual_seed(0))
+
+
+def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
+    """Return the four wrapped pipeline components."""
+    components = {
+        "transformer": cast(Module, pipeline.transformer),
+        "decoder": cast(Module, pipeline.vae.decoder),
+        "text_encoder": cast(Module, pipeline.text_encoder),
+        "text_encoder_2": cast(Module, pipeline.text_encoder_2),
+    }
+    assert all(isinstance(component, Module) for component in components.values())
+    return components
+
+
+@pytest.mark.matrix("aot_tuning.models.pipelines", "modes.aot-inspect-wrap", "modes.aot-save-load")
+@with_backends("base")
+def test_pipeline_lifecycle(case: BackendCase, device: torch.device, tmp_path: Path):
+    """Inspect, tune, save, and restore the pipeline with each backend."""
+    backend = case.factory()
+    pipeline = ToyFluxPipeline(device)
+    expected = generate(pipeline, PROMPT)
+    run = partial(generate, pipeline)
+
+    inspected = ait.inspect(
+        pipeline,
+        [PROMPT],
+        inference_function=run,
+        number_of_iterations=1,
+        warmup_iterations=1,
+    )
+    modules = inspected.get_modules()
+    assert sorted(module.name for module in modules) == sorted(COMPONENTS)
+
+    ait.wrap(pipeline, modules, strategy=pinned_strategy(backend))
+    ait.tune(run, [PROMPT], batch_sizes=[1], device=device)
+
+    for module in _components(pipeline).values():
+        assert selected_backend(module, type(backend)).key() == backend.key()
+        assert len(module.graph_specs) == 1
+    case.tolerance.assert_close(generate(pipeline, PROMPT), expected)
+
+    checkpoint = tmp_path / "pipeline.ait"
+    ait.save(pipeline, checkpoint)
+    for module in _components(pipeline).values():
+        module.deactivate()
+
+    restored = ait.load(ToyFluxPipeline(device, seed=1), checkpoint)
+    assert isinstance(restored, ToyFluxPipeline)
+    assert restored is not pipeline
+    for module in _components(restored).values():
+        selected_backend(module, type(backend))
+    case.tolerance.assert_close(generate(restored, PROMPT), expected)
+
+
+@pytest.mark.matrix("jit_tuning.models.pipelines", "modes.jit-tune_eager")
+@with_backends("base")
+def test_pipeline_jit(case: BackendCase, device: torch.device):
+    """Tune the pipeline's four JIT heads from two prompt batch sizes."""
+    expected = generate(ToyFluxPipeline(device), PROMPT)
+    backend = case.factory()
+    jit_config.mode = JITMode.TUNE_EAGER
+    jit_config.device = device
+    jit_config.min_samples = 2
+    jit_config.strategy = ait.OneBackendStrategy(backend).enable_performance_validation(False)
+
+    with prepare_for_jit_tuning():
+        pipeline = ToyFluxPipeline(device)
+
+    generate(pipeline, [PROMPT])
+    generate(pipeline, [PROMPT] * 2)
+
+    heads = PatchedModule.heads
+    assert {head._name.split(" ")[0] for head in heads} == {
+        "ToyClipTextEncoder",
+        "ToyT5Encoder",
+        "ToyFluxTransformer",
+        "ToyDecoder",
+    }
+    assert all(head._state == ModuleState.TUNED for head in heads)
+    assert all(
+        type(selected) is type(backend)
+        for head in heads
+        for selected in cast(TunedModule, head._wrapper).backends.values()
+    )
+    case.tolerance.assert_close(generate(pipeline, PROMPT), expected)

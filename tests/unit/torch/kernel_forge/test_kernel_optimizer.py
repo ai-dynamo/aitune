@@ -291,7 +291,7 @@ def test_make_plan_returns_when_no_kernel_candidates(caplog):
 def test_make_plan_returns_when_kernel_sources_support_no_functions(caplog, monkeypatch):
     model = ReluModule()
     generator = MockKernelGenerator(F.relu, function_name="relu")
-    monkeypatch.setattr(generator, "supports_functions", lambda: [])
+    monkeypatch.setattr(generator, "supports_functions", list)
     profiler_count = len(MockKernelProfiler.instances)
     optimizer = KernelOptimizer(kernel_generators=[generator], kernel_profiler_factory=MockKernelProfiler)
 

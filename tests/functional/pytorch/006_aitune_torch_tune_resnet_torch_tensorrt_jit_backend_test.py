@@ -58,9 +58,7 @@ if __name__ == "__main__":
     do_test(
         TorchTensorRTJitBackend(
             config=TorchTensorRTJitBackendConfig(
-                compile_config=TorchTensorRTConfig(
-                    enabled_precisions={torch.float32, torch.float16, torch.bfloat16},
-                ),
+                compile_config=TorchTensorRTConfig(),
             ),
         ),
         torch.float32,

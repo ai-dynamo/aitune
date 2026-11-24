@@ -52,6 +52,7 @@ Non-batchable inputs should be handled by the user on module level.
 
 """
 
+import copy
 import itertools
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -172,17 +173,18 @@ def samples_generator(
 
     if max_num_batches_per_batch_size == 0:
         return
-    if max_num_batches_per_batch_size is None:
-        max_num_batches_per_batch_size = float("inf")
+    max_batches = float("inf") if max_num_batches_per_batch_size is None else max_num_batches_per_batch_size
     dataloader_factory = _make_dataloader_factory(dataset)
     for batch_size in batch_sizes:
         dataloader = dataloader_factory.create_dataloader(batch_size)
         for i, batch in enumerate(dataloader):
-            if i >= max_num_batches_per_batch_size:
+            if i >= max_batches:
                 break
 
             args, kwargs = [], {}
-            if isinstance(batch, Mapping):
+            if isinstance(batch, torch.Tensor):
+                args = [batch]
+            elif isinstance(batch, Mapping):
                 kwargs = batch
             elif len(batch) == 2 and isinstance(batch[1], Mapping):  # support for list of samples
                 args, kwargs = batch
@@ -196,6 +198,11 @@ def samples_generator(
 class InputConfig:
     """Configuration for an input tensor.
 
+    Floating-point and complex dtypes sample uniformly between ``min_value``
+    and ``max_value``, defaulting to an upper bound of 1. Integer and boolean
+    dtypes require an explicit integer ``max_value`` and sample discrete values
+    in ``[min_value, max_value)``. Set ``max_value=2`` to sample both boolean values.
+
     Example basic usage:
 
     >>> InputConfig(min_input=(3, 24, 24), max_input=(3, 48, 48), kwarg_name="input")
@@ -207,17 +214,21 @@ class InputConfig:
     InputConfig(min_input=(3, 24, 24), max_input=(3, 24, 24), dtype=torch.float32, kwarg_name='input2', min_value=0, max_value=3)
     """
 
-    min_input: torch.Size
-    max_input: torch.Size | None = None
+    min_input: tuple[int, ...]
+    max_input: tuple[int, ...] | None = None
     dtype: torch.dtype = torch.float32
     kwarg_name: str | None = None
     min_value: int | float = 0
-    max_value: int | float = 1
+    max_value: int | float | None = None
 
     def __post_init__(self):
-        """Post-initialization hook."""
+        """Resolve shape and continuous sampling defaults; require discrete upper bounds."""
         if self.max_input is None:
             self.max_input = self.min_input
+        if self.max_value is None:
+            if not (self.dtype.is_floating_point or self.dtype.is_complex):
+                raise ValueError("max_value must be specified for integer and boolean dtypes")
+            self.max_value = 1
 
 
 class DynamicShapeDataset(list, torch.utils.data.Dataset):
@@ -280,15 +291,13 @@ class MinMaxRandomDataset(DynamicShapeDataset):
         self.input_configs = input_configs
         self.include_min_max_shapes = include_min_max_shapes
         self.is_dict = self._validate_names()
-        self.samples = self._generate_samples()
+        # The list storage is the only copy of the samples, so indexing, iteration and assignment agree.
+        super().__init__(self._generate_samples())
 
-    def __len__(self):
-        """Return the number of samples in the dataset."""
-        return self.num_samples
-
-    def __getitem__(self, index):
-        """Get a sample from the dataset."""
-        return self.samples[index]
+    @property
+    def samples(self):
+        """The generated samples, i.e. the dataset itself."""
+        return self
 
     def _validate_names(self):
         all_has_name = all(cfg.kwarg_name is not None for cfg in self.input_configs)
@@ -314,14 +323,19 @@ class MinMaxRandomDataset(DynamicShapeDataset):
         min_x, max_x = cfg.min_input, cfg.max_input
         max_shape = np.array(max_x) + 1
         shapes = np.random.randint(min_x, max_shape).tolist()
-        tensor = torch.empty(shapes, dtype=cfg.dtype).uniform_(cfg.min_value, cfg.max_value)
-        return tensor
+        return self._sample_tensor(cfg, shapes)
 
     def _get_min_tensor(self, cfg: InputConfig):
-        return torch.empty(cfg.min_input, dtype=cfg.dtype).uniform_(cfg.min_value, cfg.max_value)
+        return self._sample_tensor(cfg, cfg.min_input)
 
     def _get_max_tensor(self, cfg: InputConfig):
-        return torch.empty(cfg.max_input, dtype=cfg.dtype).uniform_(cfg.min_value, cfg.max_value)
+        return self._sample_tensor(cfg, cfg.max_input)
+
+    def _sample_tensor(self, cfg: InputConfig, shape: Sequence[int]) -> torch.Tensor:
+        tensor = torch.empty(shape, dtype=cfg.dtype)
+        if tensor.is_floating_point() or tensor.is_complex():
+            return tensor.uniform_(cfg.min_value, cfg.max_value)
+        return tensor.random_(cfg.min_value, cfg.max_value)
 
 
 class SingleBatchDatasetWrapper(torch.utils.data.Dataset):
@@ -412,14 +426,13 @@ def default_data_collator(batch: list) -> tuple | list | dict:
 
     if isinstance(first, torch.Tensor):
         return _list_data_collator([[tensor] for tensor in batch])
-    elif isinstance(first, str):
+    if isinstance(first, str):
         return _list_data_collator([[s] for s in batch])
-    elif isinstance(first, (tuple, list)):
+    if isinstance(first, (tuple, list)):
         return _list_data_collator(batch)
-    elif isinstance(first, Mapping):
+    if isinstance(first, Mapping):
         return _map_data_collator(batch)
-    else:
-        raise ValueError(f"Unsupported batch type: {type(first)}")
+    raise ValueError(f"Unsupported batch type: {type(first)}")
 
 
 def _list_data_collator(features: list[list]) -> list:
@@ -445,7 +458,7 @@ def _list_data_collator(features: list[list]) -> list:
     Returns:
         List of concatenated tensors.
     """
-    batch = []
+    batch: list[Any] = []
     num_inputs = len(features[0])
     for i in range(num_inputs):
         first = features[0][i]
@@ -461,6 +474,15 @@ def _list_data_collator(features: list[list]) -> list:
     return batch
 
 
+def _label_dtype(label: object) -> torch.dtype:
+    """Return the batch dtype for a label without reading tensor values from the GPU."""
+    if isinstance(label, torch.Tensor):
+        is_integer = not (label.is_floating_point() or label.is_complex() or label.is_quantized)
+    else:
+        is_integer = isinstance(label, int)
+    return torch.long if is_integer else torch.float
+
+
 def _map_data_collator(features: list) -> dict:
     """Transformers default data collector copied from source.
 
@@ -469,17 +491,16 @@ def _map_data_collator(features: list) -> dict:
     Transformers are Apache 2.0 licensed.
 
     Copy has been made to add string support and avoid dependency on transformers.
+    See NOTICE.md at the repository root for attribution under the shared Apache 2.0 LICENSE.
     """
     first = features[0]
-    batch = {}
+    batch: dict[str, Any] = {}
 
     # Special handling for labels.
     # Ensure that tensor is created with the correct type
     # (it should be automatically the case, but let's make sure of it.)
     if "label" in first and first["label"] is not None:
-        label = first["label"].item() if isinstance(first["label"], torch.Tensor) else first["label"]
-        dtype = torch.long if isinstance(label, int) else torch.float
-        batch["labels"] = torch.tensor([f["label"] for f in features], dtype=dtype)
+        batch["labels"] = torch.tensor([f["label"] for f in features], dtype=_label_dtype(first["label"]))
     elif "label_ids" in first and first["label_ids"] is not None:
         if isinstance(first["label_ids"], torch.Tensor):
             batch["labels"] = torch.stack([f["label_ids"] for f in features])
@@ -514,6 +535,7 @@ def ensure_enough_samples(
     """Ensures there is enough samples in the dataset to run the model for the given number of iterations.
 
     NOTE: This function trims the dataset to the given number of samples.
+    A DataLoaderFactory is returned as a shallow copy holding the trimmed dataset; the one passed in is not modified.
 
     Args:
         dataset: The dataset to make iterable.
@@ -547,5 +569,7 @@ def ensure_enough_samples(
         return limited_dataset
 
     if isinstance(dataset, DataLoaderFactory):
-        dataset.dataset = ensure_enough_samples(dataset.dataset, number_of_samples)
-        return dataset
+        # Work on a copy so the caller's factory keeps its original dataset, e.g. for a later tune().
+        factory = copy.copy(dataset)
+        factory.dataset = ensure_enough_samples(dataset.dataset, number_of_samples)
+        return factory

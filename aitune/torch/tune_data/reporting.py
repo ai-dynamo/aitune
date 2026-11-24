@@ -10,7 +10,7 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import asdict, fields
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -101,7 +101,7 @@ def snapshot_config(mode: AITuneMode) -> dict[str, Any]:
     """Capture all config attributes for the given tuning mode."""
     if mode == AITuneMode.DECLARATIVE:
         return json_serialize(config.to_dict())
-    elif mode == AITuneMode.JIT:
+    if mode == AITuneMode.JIT:
         from aitune.torch.jit.config import config as jit_config
         from aitune.torch.tune_strategy.resolver import resolve_strategy
 
@@ -118,7 +118,7 @@ def report_tune_run_start(mode: AITuneMode) -> None:
     check_disk_space(config.cache_dir)
     report = TuneRunReport(
         mode=mode,
-        started_at=datetime.now(tz=timezone.utc),
+        started_at=datetime.now(tz=UTC),
         aitune_config=snapshot_config(mode),
     )
     _run_start_ts.set(time.perf_counter())

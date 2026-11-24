@@ -10,7 +10,7 @@ from collections.abc import Generator
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Generic, Self, TypeVar
 
 import torch
 import torch.nn as nn
@@ -19,7 +19,6 @@ from aitune.records import DeploymentArtifact
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
-from aitune.torch.tune_data.reporting import report_backend_build
 from aitune.torch.utils.memory import release_transient_memory
 from aitune.utils.hashing import hash_string
 from aitune.utils.monitoring import annotate, with_backend_context
@@ -183,8 +182,11 @@ class BackendConfig:
         return changed_fields
 
 
+ConfigType = TypeVar("ConfigType", bound=BackendConfig | None)
+
+
 @with_backend_context
-class Backend(ABC):
+class Backend(ABC, Generic[ConfigType]):
     """Backend interface for tuning a module."""
 
     # Supported devices types
@@ -213,11 +215,11 @@ class Backend(ABC):
         if not isinstance(cls.__dict__["_build_mode"], BuildMode):
             raise TypeError(f"{cls.__name__}._build_mode must be a BuildMode value")
 
-    def __init__(self):
+    def __init__(self, config: ConfigType = None):
         """Initialize the backend."""
         self.state = BackendState.INIT
-        self._device = None
-        self._config: BackendConfig | None = None
+        self._device: torch.device | None = None
+        self._config: ConfigType = config
         self._build_results = []
 
     @contextlib.contextmanager
@@ -242,13 +244,15 @@ class Backend(ABC):
         device: torch.device,
         cache_dir: Path,
         log_file: Path | None = None,
-    ) -> "Backend":
+    ) -> Self:
         """Build the model with the given arguments.
 
         After building, the backend should be activated.
         """
         if self.state != BackendState.INIT:
             raise RuntimeError(f"Backend {self.name} build should be called only once")
+
+        from aitune.torch.tune_data.reporting import report_backend_build
 
         self._assert_external_device_management(module)
         with release_transient_memory():
@@ -385,7 +389,7 @@ class Backend(ABC):
         ...
 
     @abstractmethod
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """Returns the state_dict of the backend.
 
         Files or directories required to restore the backend must be represented by
@@ -397,7 +401,7 @@ class Backend(ABC):
 
     @classmethod
     @abstractmethod
-    def from_dict(cls, module: torch.nn.Module | None, state_dict: dict):
+    def from_dict(cls, module: torch.nn.Module | None, state_dict: dict) -> Self:
         """Creates a backend from a module and state_dict.
 
         Artifact values have already been relocated by the checkpoint loader and
@@ -418,7 +422,12 @@ class Backend(ABC):
 
         Returns:
             The device the module is using.
+
+        Raises:
+            RuntimeError: If the device is not set yet by build() or deploy().
         """
+        if self._device is None:
+            raise RuntimeError(f"Device of backend {self.name} is not set. Call build() or deploy() first.")
         return self._device
 
     @property
@@ -432,7 +441,7 @@ class Backend(ABC):
         return self.state == BackendState.ACTIVE
 
     @abstractmethod
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> "Backend":
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Build the model with the given arguments.
 
         After building, the backend should be activated.
@@ -508,6 +517,8 @@ class Backend(ABC):
         """Store backend configuration metadata when configuration is available."""
         if self._config is None:
             return
+        if not isinstance(self._config, BackendConfig):
+            raise TypeError(f"Backend config must be a BackendConfig, got {type(self._config).__name__}")
 
         config_path = cache_dir / "config.json"
         self._config.to_json(config_path)
@@ -540,7 +551,7 @@ class DummyBackend(Backend):
         """Returns the description of the backend."""
         return "Dummy backend"
 
-    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Backend:
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
         """Build the model with the given arguments."""
         return self
 

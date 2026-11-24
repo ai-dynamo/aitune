@@ -19,7 +19,6 @@ from aitune.torch.config import config as global_config
 from aitune.torch.distributed import resolve_tuning_device
 from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.module.forward_signature import ForwardSignature
-from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.tuned_module import TunedModule
@@ -264,13 +263,7 @@ def test_tune_dry_run(module, torch_device):
         call(
             module,
             TEST_MODULE_NAME,
-            GraphSpec(
-                name="0",
-                input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
-                output_spec=SampleMetadata.from_outputs(1, strict=True),
-                forward_signature=IDENTITY_FORWARD_SIGNATURE,
-                post_input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
-            ),
+            module.graph_specs[0],
             stores[0],
             tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[0].name,
@@ -278,13 +271,7 @@ def test_tune_dry_run(module, torch_device):
         call(
             module,
             TEST_MODULE_NAME,
-            GraphSpec(
-                name="1",
-                input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
-                output_spec=SampleMetadata.from_outputs(2, strict=True),
-                forward_signature=IDENTITY_FORWARD_SIGNATURE,
-                post_input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
-            ),
+            module.graph_specs[1],
             stores[1],
             tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,
@@ -307,6 +294,20 @@ def test_tune_resolves_unspecified_device_with_module_context(mocker):
     module.tune(strategy=strategy, dry_run=True)
 
     resolve_device.assert_called_once_with(None, wrapped_module)
+
+
+def test_tune_uses_configured_cache_dir(module, torch_device, tmp_path):
+    strategy = Mock()
+    configured_cache_dir = tmp_path / "configured_cache"
+    global_config.cache_dir = configured_cache_dir
+
+    module(1, a=1)
+    module.tune(strategy=strategy, dry_run=True, device=torch_device)
+
+    graph_cache_dir = configured_cache_dir / TEST_MODULE_NAME / module.graph_specs[0].name
+    assert module.cache_dir == configured_cache_dir / TEST_MODULE_NAME
+    assert strategy.tune_dry_run.call_args.args[5] == graph_cache_dir
+    assert graph_cache_dir.is_dir()
 
 
 def test_tune(module, torch_device, mocker):
@@ -333,13 +334,7 @@ def test_tune(module, torch_device, mocker):
         call(
             module,
             TEST_MODULE_NAME,
-            GraphSpec(
-                name="0",
-                input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
-                output_spec=SampleMetadata.from_outputs(1, strict=True),
-                forward_signature=IDENTITY_FORWARD_SIGNATURE,
-                post_input_spec=_identity_metadata(args=(1,), kwargs={"a": 1}, strict=True),
-            ),
+            module.graph_specs[0],
             stores[0],
             tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[0].name,
@@ -347,13 +342,7 @@ def test_tune(module, torch_device, mocker):
         call(
             module,
             TEST_MODULE_NAME,
-            GraphSpec(
-                name="1",
-                input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
-                output_spec=SampleMetadata.from_outputs(2, strict=True),
-                forward_signature=IDENTITY_FORWARD_SIGNATURE,
-                post_input_spec=_identity_metadata(args=(2,), kwargs={"b": 2}, strict=True),
-            ),
+            module.graph_specs[1],
             stores[1],
             tuning_device,
             aitune_cache_dir() / module._self_name / module.graph_specs[1].name,
@@ -397,8 +386,8 @@ def test_tune_with_list_of_strategies(torch_device):
     module(2, b=2)
     module.tune(dry_run=False, device=torch_device)
 
-    module._self_strategy_list[0].tune.assert_called_once()  # pytype: disable=attribute-error
-    module._self_strategy_list[1].tune.assert_called_once()  # pytype: disable=attribute-error
+    module._self_strategy_list[0].tune.assert_called_once()
+    module._self_strategy_list[1].tune.assert_called_once()
     assert module.state == ModuleState.TUNED
 
     with pytest.raises(RuntimeError, match="Module is already tuned. Use force=True to reset tuned module."):
@@ -431,8 +420,8 @@ def test_tune_with_dict_of_strategies(torch_device):
     module(2)
     module.tune(dry_run=False, device=torch_device)
 
-    module._self_strategy_map[graph1].tune.assert_called_once()  # pytype: disable=attribute-error
-    module._self_strategy_map[graph2].tune.assert_called_once()  # pytype: disable=attribute-error
+    module._self_strategy_map[graph1].tune.assert_called_once()
+    module._self_strategy_map[graph2].tune.assert_called_once()
     assert module.state == ModuleState.TUNED
 
     with pytest.raises(RuntimeError, match="Module is already tuned. Use force=True to reset tuned module."):
@@ -710,3 +699,84 @@ def test_backend_added_hooks():
 
     module(1)
     assert hook_calls == ["backend pre hook", "module pre hook", "backend hook", "module hook"]
+
+
+def test_serialization_persists_kept_on_device_names(torch_device):
+    """to_dict stores kept names; from_dict re-registers them before offloading (meta keeps them)."""
+    from aitune.torch.config import config
+    from aitune.torch.utils.module import clear_kept_on_device, is_kept_on_device, keep_on_device
+
+    model = Identity()
+    kept_t = next(iter(model.parameters()))
+    keep_on_device([kept_t], owner=model)
+    module = Module(model, TEST_MODULE_NAME)
+    module(torch.ones(2, 5))
+    module.tune(strategy=_torch_inductor_strategy_for_wrapper_tests(), dry_run=False, device=torch_device)
+    state_dict = module.to_dict(prefix="test")
+    assert Module.KEPT_ON_DEVICE_KEY in state_dict["test"]
+
+    clear_kept_on_device()  # simulate a fresh process
+    old_meta = config.device_after_tuning
+    config.device_after_tuning = "meta"
+    try:
+        model2 = Identity()
+        Module.from_dict(model2, state_dict["test"], device=torch_device)
+        kept = {name for name, t in model2.named_parameters() if is_kept_on_device(t, owner=model2)}
+        expected_name = next(n for n, _ in model.named_parameters(remove_duplicate=False))
+        assert kept == {expected_name}
+    finally:
+        config.device_after_tuning = old_meta
+        clear_kept_on_device()
+
+
+def test_from_dict_without_kept_key_still_loads(torch_device):
+    """Old checkpoints without kept_on_device still load."""
+    model = Identity()
+    module = Module(model, TEST_MODULE_NAME)
+    module(torch.ones(2, 5))
+    module.tune(strategy=_torch_inductor_strategy_for_wrapper_tests(), dry_run=False, device=torch_device)
+    state_dict = module.to_dict(prefix="test")
+    del state_dict["test"][Module.KEPT_ON_DEVICE_KEY]
+    module2 = Module.from_dict(Identity(), state_dict["test"], device=torch_device)
+    assert module2.state == ModuleState.TUNED
+
+
+def test_from_dict_replaces_the_modules_kept_set(torch_device):
+    """Loading a checkpoint's kept list drops tensors the module kept but the checkpoint does not list."""
+    from aitune.torch.utils.module import clear_kept_on_device, is_kept_on_device, keep_on_device
+
+    model = Identity()
+    module = Module(model, TEST_MODULE_NAME)
+    module(torch.ones(2, 5))
+    module.tune(strategy=_torch_inductor_strategy_for_wrapper_tests(), dry_run=False, device=torch_device)
+    state_dict = module.to_dict(prefix="test")
+
+    weight, bias = model.linear.weight, model.linear.bias
+    keep_on_device([weight, bias], owner=model)
+    state_dict["test"][Module.KEPT_ON_DEVICE_KEY] = ["linear.weight"]
+    try:
+        Module.from_dict(model, state_dict["test"], device=torch_device)
+        assert is_kept_on_device(weight, owner=model)
+        assert not is_kept_on_device(bias)
+    finally:
+        clear_kept_on_device()
+
+
+def test_from_dict_without_kept_key_leaves_the_kept_set_unchanged(torch_device):
+    """Old checkpoints without kept_on_device do not touch what the module already keeps."""
+    from aitune.torch.utils.module import clear_kept_on_device, is_kept_on_device, keep_on_device
+
+    model = Identity()
+    module = Module(model, TEST_MODULE_NAME)
+    module(torch.ones(2, 5))
+    module.tune(strategy=_torch_inductor_strategy_for_wrapper_tests(), dry_run=False, device=torch_device)
+    state_dict = module.to_dict(prefix="test")
+    del state_dict["test"][Module.KEPT_ON_DEVICE_KEY]
+
+    weight = model.linear.weight
+    keep_on_device([weight], owner=model)
+    try:
+        Module.from_dict(model, state_dict["test"], device=torch_device)
+        assert is_kept_on_device(weight, owner=model)
+    finally:
+        clear_kept_on_device()

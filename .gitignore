@@ -294,9 +294,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# pytype static type analyzer
-.pytype/
-
 # profiling data
 .prof
 
@@ -326,6 +323,7 @@ cython_debug/
 .DS_Store
 
 ### Project specific files and directories ###
+/examples/*/uv.lock
 tests/data
 workspace/
 docs/README.md

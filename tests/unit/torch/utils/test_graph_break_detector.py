@@ -14,8 +14,7 @@ class ModelWithIf(nn.Module):
     def forward(self, x):
         if x.sum() > 0:
             return x - 1
-        else:
-            return x
+        return x
 
 
 class ModelWithWhileLoop(nn.Module):

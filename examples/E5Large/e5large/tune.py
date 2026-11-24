@@ -10,7 +10,6 @@ import torch
 from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch import MaxThroughputStrategy, inspect, save, tune, wrap
 from aitune.torch.backend import TensorRTBackend, TensorRTBackendConfig, TorchInductorAotBackend
-from aitune.torch.config import config as global_config
 from aitune_examples_common.checkpoint import copy_checkpoint_to_tmp
 
 from .cmd_args import get_parser
@@ -78,15 +77,9 @@ def tune_model(
     # NOTE: without min_depth=2, inspector finds a wrapper module `pipeline._modules["0"]` and fails with incorrect input in tunning
     #     with error: RuntimeError: Only Tensors created explicitly by the user (graph leaves) support the deepcopy protocol at the moment. @ torch/_tensor.py", line 136, in __deepcopy__
     #     during make_batch and deepcopy of arguments with all kwags arguments passed as dict in args[0]
-    inspected_modules_info = inspect(model, input_texts, inference_function=call_wrapper, min_depth=2)
+    # encode() moves the whole model with .to(); keep weights it accesses outside tuned submodules available.
+    inspected_modules_info = inspect(model, input_texts, inference_function=call_wrapper, min_depth=2, call_tree=True)
     inspected_modules_info.describe()
-
-    # NOTE: workaround for SentenceTransformer to work with tuned model see below first dirty hack
-    #       By default, we move modules to meta device after tuning to save memory. Our wrapper returns correct device for the module.
-    #       However, SentenceTransformer overrides .device property, has one more reference to the same module we tuned, returns meta device by this additional reference.
-    #       In encode() method, it calls .to(self.device) and tries to move modules that are already on right devices, breaking the inference.
-    #       We need to move modules to cpu device after tuning to work with SentenceTransformer.
-    global_config.device_after_tuning = "cpu"
 
     modules = inspected_modules_info.get_modules(min_execution_ratio=0.1)
     model = wrap(

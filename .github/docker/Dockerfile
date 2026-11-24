@@ -1,4 +1,6 @@
 #syntax=docker/dockerfile:1.3
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 ARG FROM_IMAGE=nvcr.io/nvidia/pytorch:26.01-py3
 FROM ${FROM_IMAGE}
 
@@ -12,7 +14,7 @@ ENV AITUNE_CI_IMAGE_CREATION_DATE=${AITUNE_CI_IMAGE_CREATION_DATE}
 
 ARG FRAMEWORK_VERSION=26.01
 
-ARG ONNXRUNTIME_VERSION=1.24.4
+ARG ONNXRUNTIME_VERSION=1.26.0 # only supports CUDA 13 for arm64
 ENV ONNXRUNTIME_VERSION=${ONNXRUNTIME_VERSION}
 
 ARG ADDITIONAL_PACKAGES
@@ -40,8 +42,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     rm -rf ${TMP_DIR} && \
     pip install pydantic --break-system-packages && \
     if [ -n "$ADDITIONAL_PACKAGES" ]; then pip install --break-system-packages $ADDITIONAL_PACKAGES; fi && \
-    pip install onnxruntime-gpu==$ONNXRUNTIME_VERSION --no-deps --force-reinstall --break-system-packages --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/ && \
-    groupadd -g $_GROUP_ID runner -f && useradd -m -u $_USER_ID -g $_GROUP_ID runner || true && \
+    pip install onnxruntime-gpu==$ONNXRUNTIME_VERSION \
+        --no-deps --force-reinstall --break-system-packages \
+        --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-13/pypi/simple/ && \
+    { groupadd -g $_GROUP_ID runner -f && useradd -m -u $_USER_ID -g $_GROUP_ID runner || true; } && \
     chown -R runner:runner ${AIT_DIR} && \
     chmod -R ug+rw ${AIT_DIR}
 

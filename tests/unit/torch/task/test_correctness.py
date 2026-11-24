@@ -2,13 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for correctness checking functionality."""
 
+from copy import deepcopy
+
 import numpy as np
 import pytest
 import torch
 
 from aitune.torch.distributed import DistributedOutcome
+from aitune.torch.module.forward_effects_spec import ForwardEffectsCapture, ForwardEffectsSpec
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
+from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.task.correctness import (
     CorrectnessDynamicShapeError,
@@ -42,6 +46,7 @@ def make_graph_spec(input_spec: SampleMetadata, output_spec: SampleMetadata | No
         input_spec=input_spec,
         output_spec=output_spec or SampleMetadata.from_outputs(torch.zeros(2, 8), batch_size=2),
         forward_signature=FORWARD_SIGNATURE,
+        forward_effects_spec=ForwardEffectsSpec(None),
     )
 
 
@@ -129,6 +134,7 @@ def test_check_inference_correctness_accepts_matching_input_mutations():
         input_spec=pre_call,
         output_spec=SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2),
         forward_signature=forward_signature,
+        forward_effects_spec=ForwardEffectsSpec(None),
         post_input_spec=post_call,
     )
 
@@ -154,6 +160,7 @@ def test_check_inference_correctness_rejects_missing_input_mutations():
         input_spec=pre_call,
         output_spec=SampleMetadata.from_outputs(torch.zeros(2, 4), batch_size=2),
         forward_signature=forward_signature,
+        forward_effects_spec=ForwardEffectsSpec(None),
         post_input_spec=post_call,
     )
 
@@ -170,6 +177,60 @@ def test_post_input_metadata_comparison_ignores_leaf_order():
     actual = SampleMetadata.from_inputs({"second": 2, "first": 1}, strict=True)
 
     _check_post_input_metadata(expected, actual, "test_model.mock_backend")
+
+
+@pytest.mark.parametrize(
+    "initial_slot",
+    ["pending", {"child": "before"}, {"child": {"value": "before"}}, torch.zeros(2, 4)],
+    ids=["leaf", "parent", "ancestor", "tensor"],
+)
+@pytest.mark.parametrize("mismatch", [None, "constant", "tensor", "extra_path"])
+def test_check_input_mutations_excludes_only_recorded_ignored_paths(initial_slot, mismatch):
+    class Opaque(dict):
+        def __deepcopy__(self, memo):
+            raise AssertionError("Ignored replacement must not be copied")
+
+    def forward(x, state):
+        state["slot"] = Opaque(child={"value": "after"})
+        state["visible"] = 1
+        state["cache"] = torch.ones(2, 3)
+        return x
+
+    signature = ForwardSignature.from_callable(forward)
+    sample = ((torch.zeros(2, 4), {"slot": initial_slot, "visible": 0, "cache": torch.zeros(2, 4)}), {})
+    eager_args, eager_kwargs = deepcopy(sample)
+    arguments = signature.normalize(eager_args, eager_kwargs).arguments
+    try:
+        Locator.ignore_type(Opaque)
+        input_spec = SampleMetadata.from_inputs(arguments, strict=True)
+        capture = ForwardEffectsCapture.before_call(arguments)
+        output = forward(*eager_args, **eager_kwargs)
+        output_spec = SampleMetadata.from_outputs(output)
+        contract = capture.after_call(arguments, output, output_spec)
+        graph_spec = GraphSpec(
+            name="test_model",
+            input_spec=input_spec,
+            output_spec=output_spec,
+            forward_signature=signature,
+            forward_effects_spec=contract,
+            post_input_spec=SampleMetadata.from_inputs(arguments, strict=True),
+        )
+
+        def infer(x, state):
+            # Compiled execution restores supported changes, leaving the ignored payload untouched.
+            state["visible"] = 2 if mismatch == "constant" else 1
+            state["cache"] = torch.ones(2, 5 if mismatch == "tensor" else 3)
+            if mismatch == "extra_path":
+                state["unexpected"] = True
+            return x
+
+        if mismatch is None:
+            check_inference_output_correctness([sample], graph_spec, infer, "test_model.backend")
+        else:
+            with pytest.raises(CorrectnessInputMutationError):
+                check_inference_output_correctness([sample], graph_spec, infer, "test_model.backend")
+    finally:
+        Locator.unignore_type(Opaque)
 
 
 def test_check_inference_output_correctness_stops_after_remote_failure(mocker):

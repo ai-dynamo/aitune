@@ -15,7 +15,7 @@ from aitune.torch.config import config as global_config
 from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.sample_store import Sample
-from aitune.torch.utils.module import move_module_to_device
+from aitune.torch.utils.module import offload
 
 
 class TunedModule:
@@ -70,8 +70,9 @@ class TunedModule:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run the call through the tuned module."""
-        forward_inputs = self._forward_signature.normalize(args, kwargs)
-        sample = (forward_inputs.args, forward_inputs.kwargs)
+        self._forward_signature.normalize(args, kwargs)
+        # Validate the signature without changing the caller's positional/keyword layout.
+        sample = (args, kwargs)
         with global_context:
             global_context.set(MODULE_CONTEXT_KEY, self._module_name)
             output = self._backend_func(sample)
@@ -145,8 +146,9 @@ class TunedModule:
         backends = OrderedDict()
 
         if not state_dict[TunedModule.IS_ANY_JIT_KEY]:
-            # AOT backends do not need ordinary modules, so they can be moved to meta(default) device.
-            move_module_to_device(module, global_config.device_after_tuning)
+            # AOT backends do not need original weights. Release their storage and cached
+            # CUDA allocations before the restored backend allocates its own weights.
+            offload(module, device=global_config.device_after_tuning)
 
         for sample_metadata_data, backend_data in state_dict[TunedModule.BACKENDS_KEY]:
             if backend_data[TunedModule.TYPE_KEY] not in backend_classes:
@@ -168,7 +170,7 @@ class TunedModule:
         backends_data = []
         is_any_jit = False
         for sample_metadata, backend in self._backends.items():
-            backends_data.append((sample_metadata.to_dict(), backend.to_dict()))  # pytype: disable=attribute-error
+            backends_data.append((sample_metadata.to_dict(), backend.to_dict()))
             if backend.build_mode == BuildMode.JUST_IN_TIME:
                 is_any_jit = True
 

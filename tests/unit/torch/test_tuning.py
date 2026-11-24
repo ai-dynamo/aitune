@@ -12,6 +12,7 @@ from torch.utils.data import Dataset
 
 from aitune.exceptions import AITuneUserInputError
 from aitune.torch import tuning
+from aitune.torch.config import config as global_config
 from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.module_registry import MODULE_REGISTRY
@@ -25,7 +26,7 @@ class DummyDataset(Dataset):
     def __len__(self):
         return self.size
 
-    def __getitem__(self, idx):
+    def __getitem__(self, index):
         return torch.randn(3, 32, 32)
 
 
@@ -120,6 +121,26 @@ def test_tune_with_cache_clear(mocker, clear_cache):
     assert batch_size_counter == Counter({1: max_batches, 2: max_batches, 4: max_batches})
 
 
+def test_tune_clear_cache_removes_configured_cache_dir(mocker, tmp_path, aitune_cache_dir):
+    # given
+    mock_module = Mock()
+    mock_module.backends = {}
+    configured_cache_dir = tmp_path / "configured_cache"
+    (configured_cache_dir / "test_module").mkdir(parents=True)
+    (aitune_cache_dir / "test_module").mkdir(parents=True)
+    global_config.cache_dir = configured_cache_dir
+
+    mocker.patch.dict(MODULE_REGISTRY.modules, {"test_module": mock_module}, clear=True)
+    mocker.patch("aitune.torch.tuning._describe_module")
+
+    # when
+    tune(mock_module, DummyDataset(size=1), batch_sizes=[1], clear_cache=True)
+
+    # then
+    assert not configured_cache_dir.exists()
+    assert (aitune_cache_dir / "test_module").is_dir()
+
+
 def test_tune_with_dataloader_factory(mocker):
     # given
     mock_module = Mock()
@@ -135,6 +156,27 @@ def test_tune_with_dataloader_factory(mocker):
 
     # then
     assert mock_module.call_count > 0
+
+
+@pytest.mark.parametrize("batch_size", [1, 2, 4])
+def test_tune_preserves_tensor_batches_from_custom_collator(batch_size):
+    dataset = [torch.tensor([index, index + 1, index + 2], dtype=torch.float32) for index in range(4)]
+    factory = DataLoaderFactory(dataset, collate_fn=torch.utils.data.default_collate)
+    model = torch.nn.Linear(3, 1)
+    received = []
+
+    def record_input(_module, args, _output):
+        received.append(args[0].clone())
+
+    handle = model.register_forward_hook(record_input)
+    try:
+        tune(model, factory, batch_sizes=[batch_size], device="cpu")
+    finally:
+        handle.remove()
+
+    assert len(received) == len(dataset) // batch_size
+    assert all(batch.shape == (batch_size, 3) for batch in received)
+    torch.testing.assert_close(torch.cat(received), torch.stack(dataset))
 
 
 def test_tune_disable_external_logging(mocker):

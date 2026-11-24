@@ -13,9 +13,10 @@ from aitune.torch.backend.torch_inductor_aot_backend import TorchInductorAotBack
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend
 from aitune.torch.config import AITuneConfig
 from aitune.torch.module.forward_signature import ForwardSignature
-from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.module.tuned_module import TunedModule
+from tests.utilities.helpers import make_graph_spec
 
 
 def get_tuned_module(check_graph=True, strict_mode=False):
@@ -94,12 +95,15 @@ def test_equivalent_call_layouts_use_same_backend(check_graph):
     )
 
     module(1, 2)
+    backend.infer.assert_called_with(1, 2)
     module(1, y=2)
+    backend.infer.assert_called_with(1, y=2)
     module(x=1, y=2)
+    backend.infer.assert_called_with(x=1, y=2)
     module(y=2, x=1)
+    backend.infer.assert_called_with(y=2, x=1)
 
     assert backend.infer.call_count == 4
-    backend.infer.assert_called_with(1, 2)
 
 
 def test_deactivate():
@@ -132,7 +136,7 @@ def test_artifact_rejects_multiple_compiled_graphs():
         module.artifact()
 
 
-def test_serialization():
+def test_serialization(tmp_path):
     """Test serialization and deserialization of TunedModule."""
     kwargs = {}
     signature = ForwardSignature.from_callable(lambda x: x)
@@ -142,6 +146,8 @@ def test_serialization():
     backend2 = TorchInductorJitBackend()
     backend1._orig_module = Mock(spec=torch.nn.Module)
     backend2._orig_module = Mock(spec=torch.nn.Module)
+    backend1._samples = SampleStore.from_samples([((1,), {})], tmp_path, "graph1")
+    backend2._samples = SampleStore.from_samples([((torch.randn(2),), {})], tmp_path, "graph2")
     backends = OrderedDict({graph1: backend1, graph2: backend2})
 
     module = TunedModule(
@@ -167,13 +173,9 @@ def test_deserialize_aot_preserves_distributed_module_placement(mocker):
     metadata = SampleMetadata.from_inputs(signature.normalize((torch.randn(2),), {}).arguments, strict=True)
     backend = TorchInductorAotBackend()
     backend._compiled_model_artifact = Mock()
-    backend._graph_spec = GraphSpec(
-        name="test",
-        input_spec=metadata,
-        output_spec=SampleMetadata.from_outputs(torch.randn(2), strict=True),
-        forward_signature=signature,
-    )
     backend._device = torch.device("cuda:0")
+    sample = ((torch.randn(2),), {})
+    backend._graph_spec = make_graph_spec(lambda x: x, sample, sample[0][0], strict=True)
     tuned_module = TunedModule(
         backends=OrderedDict({metadata: backend}),
         check_graph=True,
@@ -188,3 +190,39 @@ def test_deserialize_aot_preserves_distributed_module_placement(mocker):
     TunedModule.from_dict(module, tuned_module.to_dict())
 
     assert next(module.parameters()).device.type == "cpu"
+
+
+@pytest.mark.parametrize("is_any_jit", [False, True])
+def test_deserialize_cleans_offloaded_weights_before_restoring_backend(mocker, is_any_jit):
+    module = torch.nn.Linear(2, 2)
+    signature = ForwardSignature.from_callable(module.forward)
+    metadata = SampleMetadata.from_inputs(signature.normalize((torch.randn(2),), {}).arguments, strict=True)
+    events = []
+
+    def cleanup():
+        assert module.weight.device.type == "meta"
+        events.append("cleanup")
+
+    mocker.patch("aitune.torch.utils.module.cleanup_memory", side_effect=cleanup)
+    backend_class = TorchInductorJitBackend if is_any_jit else TorchInductorAotBackend
+    backend = Mock(spec=Backend)
+
+    def restore(original_module, backend_state):
+        assert original_module is module
+        assert events == ([] if is_any_jit else ["cleanup"])
+        assert module.weight.device.type == ("cpu" if is_any_jit else "meta")
+        events.append("restore")
+        return backend
+
+    mocker.patch.object(backend_class, "from_dict", side_effect=restore)
+    mocker.patch("aitune.torch.module.tuned_module.global_config.device_after_tuning", "meta")
+    state = {
+        TunedModule.IS_ANY_JIT_KEY: is_any_jit,
+        TunedModule.BACKENDS_KEY: [(metadata.to_dict(), {TunedModule.TYPE_KEY: backend_class.__name__})],
+        TunedModule.CHECK_GRAPH_KEY: True,
+        TunedModule.FORWARD_SIGNATURE_KEY: signature.to_dict(),
+    }
+
+    TunedModule.from_dict(module, state)
+
+    assert events == (["restore"] if is_any_jit else ["cleanup", "restore"])

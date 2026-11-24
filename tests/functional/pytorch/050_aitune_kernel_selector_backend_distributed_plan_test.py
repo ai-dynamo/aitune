@@ -34,6 +34,7 @@ from aitune.torch.module.sample_store import SampleStore
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from tests.utilities.distributed_helpers import run_or_launch_distributed_test
+from tests.utilities.helpers import make_graph_spec
 
 WORLD_SIZE = 4
 FEATURES = 8
@@ -115,7 +116,8 @@ def _run_worker(device: torch.device) -> None:
         samples = SampleStore.from_samples([((sample,), {})], root, "samples")
         cache_dir = root / "backend"
         cache_dir.mkdir()
-        backend.build(model, None, samples, device, cache_dir)
+        graph_spec = make_graph_spec(model.module.forward, ((sample,), {}), expected)
+        backend.build(model, graph_spec, samples, device, cache_dir)
 
     runtime = backend._runtime
     assert runtime is not None

@@ -17,6 +17,7 @@ from aitune.torch.tune_data.reporting import (
     _run_start_ts,
 )
 from aitune.torch.utils.cuda_utils import is_available as is_cuda_available
+from aitune.torch.utils.module import clear_kept_on_device
 from aitune.utils.logging import setup_logging
 
 pytest_plugins = ["tests.utilities.jit_process"]
@@ -37,6 +38,7 @@ def module_registry_cleanup():
         yield
     finally:
         MODULE_REGISTRY.clear()
+        clear_kept_on_device()
 
 
 @pytest.fixture(autouse=True)
@@ -50,7 +52,16 @@ def aitune_cache_dir(mocker, tmp_path):
 
     cache_dir = tmp_path / "aitune_cache"
     mocker.patch.object(config_module, "_AITUNE_CACHE_DIR", cache_dir)
+    # Reset an explicitly configured cache dir so config.cache_dir resolves to the temporary one.
+    mocker.patch.object(config_module.config, "_cache_dir", None)
     return cache_dir
+
+
+@pytest.fixture(autouse=True)
+def doctest_tmp_cwd(request, tmp_path, monkeypatch):
+    """Runs doctests in a temporary directory so files they write do not land in the repository."""
+    if isinstance(request.node, pytest.DoctestItem):
+        monkeypatch.chdir(tmp_path)
 
 
 @pytest.fixture

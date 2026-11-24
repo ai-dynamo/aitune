@@ -118,14 +118,15 @@ def _dispatch_signature(patched: PatchedModule) -> tuple[object, object]:
     """Require AITune's own proxy around the captured FlexTensor forward."""
     forward = patched.__wrapped__.forward
     router = getattr(forward, "_self_wrapper", None)
+    router_function = getattr(router, "__func__", None)
     if (
         type(forward) is not wrapt.FunctionWrapper
         or getattr(router, "__self__", None) is not patched
-        or getattr(router, "__func__", None) is not patched._forward_router.__func__
+        or router_function is not patched._forward_router.__func__
         or forward.__wrapped__ is not patched._original_forward
     ):
         raise RuntimeError("FlexTensor strategy replanning replaced an installed AITune forward; use a fresh worker")
-    return forward.__wrapped__, router.__func__
+    return forward.__wrapped__, router_function
 
 
 def _tuned_forward_signature(patched: PatchedModule) -> tuple[object, object, object]:

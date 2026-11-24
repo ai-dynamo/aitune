@@ -48,7 +48,6 @@ clean-test: ## remove test and coverage artifacts
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
-	rm -fr .pytype/
 	rm -fr .coverage*
 	rm -f *-report.xml
 
@@ -60,7 +59,6 @@ clean-notebooks: ## remove Jupyter notebook output cells
 fern-setup: ## setup Fern docs
 	npm install -g fern-api
 	fern --version
-	fern login
 
 docs: ## generate and validate Fern docs
 	fern docs md generate
@@ -74,9 +72,9 @@ docs-serve: docs ## serve Fern docs locally
 	fern docs dev
 
 
-lint: ## check style with pre-commit and pytype
+lint: ## check style with pre-commit and pyrefly
 	pre-commit run --all-files
-	pytype aitune tests -j auto
+	pyrefly check --error-stale-baseline
 	$(MAKE) validate-functional
 
 validate-functional: ## validate PEP-723 / [tool.aitune] metadata for functional tests and examples
@@ -133,5 +131,4 @@ install-dev: clean-build clean-pyc clean-test
 	$(PIP_INSTALL) --group dev -e .
 
 uv-locks-update:
-	uv lock
-	for ex in examples/*/pyproject.toml; do (echo $$ex && cd `dirname $$ex` && uv lock); done
+	uv lock --upgrade

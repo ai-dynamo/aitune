@@ -2,29 +2,30 @@
 # SPDX-License-Identifier: Apache-2.0
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 import pytest
 import torch
 import torch.nn as nn
 from torch._export.verifier import SpecViolationError
+from torch.export.graph_signature import ConstantArgument, TensorArgument
 
-from aitune.torch.backend import ArtifactPath
+from aitune.torch.backend import ArtifactPath, torch_tensorrt_aot_backend
 from aitune.torch.backend.torch_tensorrt_aot_backend import (
     TorchTensorRTAotBackend,
     TorchTensorRTAotBackendConfig,
     TorchTensorRTConfig,
+    _restore_constant_inputs,
     _save_compiled_model,
 )
 from aitune.torch.checkpoint.storage_tasks import torch_load_with_custom_types
 from aitune.torch.dynamic_shapes import BatchDim
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_metadata import SampleMetadata
-from aitune.torch.module.sample_store import Sample
+from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyTorchModel
 from tests.toy_models.torch_models import ToyTorchConditionalModel
-from tests.utilities.helpers import make_graph_spec, requires_cuda, update_input_spec
+from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store, requires_cuda, update_input_spec
 
 
 @dataclass
@@ -57,19 +58,19 @@ def model(torch_device) -> SimpleModel:
 
 
 @pytest.fixture
-def sample_data(torch_device) -> list[Sample]:
-    return [
+def sample_data(torch_device, tmp_path) -> SampleStore:
+    samples = [
         ((torch.randn(1, 10, device=torch_device),), {}),
         ((torch.randn(4, 10, device=torch_device),), {}),
         ((torch.randn(2, 10, device=torch_device),), {}),
     ]
+    return make_sample_store(samples, tmp_path)
 
 
 @pytest.fixture
 def graph_spec(model, sample_data) -> GraphSpec:
     args, kwargs = sample_data[0]
-    output = model(*args, **kwargs)
-    return make_graph_spec(model.forward, (args, kwargs), output, name="0", strict=True)
+    return make_recorded_graph_spec(model, (args, kwargs), name="0", strict=True)
 
 
 @pytest.fixture
@@ -95,58 +96,135 @@ def test_save_compiled_model_without_retracing(mocker, tmp_path: Path):
 
     _save_compiled_model(module, tmp_path / "model.pt", sample=((), {}), dynamic_shapes=None, pickle_protocol=5)
 
+    mock_torch_tensorrt.dynamo.export.assert_called_once_with(module)
     mock_torch_tensorrt.save.assert_called_once_with(
-        module,
+        mock_torch_tensorrt.dynamo.export.return_value,
         (tmp_path / "model.pt").as_posix(),
-        retrace=False,
         pickle_protocol=5,
     )
 
 
-def test_save_compiled_model_retraces_after_direct_save_failure(mocker, tmp_path: Path):
+def test_save_compiled_model_uses_legacy_exporter_when_available(mocker, tmp_path: Path):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
-    mock_torch_tensorrt.save.side_effect = [SpecViolationError("direct save failed"), None]
+    program = mocker.MagicMock()
+    exporter_flags = []
+
+    def export(gm: nn.Module, *, use_legacy_exporter: bool = False):  # Torch-TensorRT 2.11+ signature
+        exporter_flags.append(use_legacy_exporter)
+        return program
+
+    mock_torch_tensorrt.dynamo.export = export
+
+    _save_compiled_model(
+        mocker.Mock(spec=nn.Module), tmp_path / "model.pt", sample=((), {}), dynamic_shapes=None, pickle_protocol=5
+    )
+
+    assert exporter_flags == [True]
+    mock_torch_tensorrt.save.assert_called_once_with(program, (tmp_path / "model.pt").as_posix(), pickle_protocol=5)
+
+
+@pytest.mark.parametrize("with_kwargs", [False, True], ids=["flat-tensors", "non-tensor-keyword"])
+@pytest.mark.parametrize(
+    "direct_save_error",
+    [
+        SpecViolationError("direct save failed"),
+        RuntimeError("Only Tensors of floating point and complex dtype can require gradients"),
+    ],
+)
+def test_save_compiled_model_retraces_after_direct_save_failure(
+    mocker, tmp_path: Path, with_kwargs: bool, direct_save_error: Exception
+):
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.save.side_effect = [direct_save_error, None]
     module = mocker.Mock(spec=nn.Module)
-    sample = ((mocker.sentinel.input,), {"output_hidden_states": True})
+    sample = ((mocker.sentinel.input,), {"output_hidden_states": True} if with_kwargs else {})
     dynamic_shapes = {"x": {0: mocker.sentinel.batch}}
+    mock_export = mocker.patch("torch.export.export")
 
     _save_compiled_model(module, tmp_path / "model.pt", sample, dynamic_shapes=dynamic_shapes, pickle_protocol=5)
 
+    mock_export.assert_called_once_with(
+        module, sample[0], sample[1] or None, dynamic_shapes=dynamic_shapes, strict=False
+    )
     assert mock_torch_tensorrt.save.call_args_list == [
         mocker.call(
-            module,
+            mock_torch_tensorrt.dynamo.export.return_value,
             (tmp_path / "model.pt").as_posix(),
-            retrace=False,
             pickle_protocol=5,
         ),
-        mocker.call(
-            module,
-            (tmp_path / "model.pt").as_posix(),
-            retrace=True,
-            arg_inputs=sample[0],
-            kwarg_inputs=sample[1],
-            dynamic_shapes=dynamic_shapes,
-            pickle_protocol=5,
-        ),
+        mocker.call(mock_export.return_value, (tmp_path / "model.pt").as_posix(), pickle_protocol=5),
     ]
 
 
-def test_save_compiled_model_does_not_retrace_after_oserror(mocker, tmp_path: Path):
+@pytest.mark.parametrize("direct_save_error", [OSError("disk full"), RuntimeError("unrelated runtime failure")])
+def test_save_compiled_model_does_not_retrace_after_unrelated_error(
+    mocker, tmp_path: Path, direct_save_error: Exception
+):
     mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
-    mock_torch_tensorrt.save.side_effect = OSError("disk full")
+    mock_torch_tensorrt.save.side_effect = direct_save_error
     module = mocker.Mock(spec=nn.Module)
 
-    with pytest.raises(OSError, match="disk full"):
+    with pytest.raises(type(direct_save_error), match=str(direct_save_error)):
         _save_compiled_model(module, tmp_path / "model.pt", sample=((), {}), dynamic_shapes=None, pickle_protocol=5)
 
     mock_torch_tensorrt.save.assert_called_once()
 
 
+def test_restore_constant_inputs_makes_non_tensor_kwargs_serializable(tmp_path: Path):
+    class ScaledModel(nn.Module):
+        def forward(self, x: torch.Tensor, scale: float, mask: torch.Tensor | None = None) -> torch.Tensor:
+            return x * scale if mask is None else x * scale * mask
+
+    program = torch.export.export(ScaledModel(), (torch.ones(2),), {"scale": 2.0, "mask": None})
+    # Torch-TensorRT declares every placeholder as a tensor input: https://github.com/pytorch/TensorRT/issues/4941
+    for spec in program.graph_signature.input_specs:
+        spec.arg = TensorArgument(name=spec.arg.name)
+    with pytest.raises(KeyError, match="scale"):
+        torch.export.save(program, tmp_path / "invalid.pt2")
+
+    _restore_constant_inputs(program)
+
+    assert [spec.arg for spec in program.graph_signature.input_specs] == [
+        TensorArgument(name="x"),
+        ConstantArgument(name="scale", value=2.0),
+        ConstantArgument(name="mask", value=None),
+    ]
+    torch.export.save(program, tmp_path / "model.pt2")
+    loaded = torch.export.load(tmp_path / "model.pt2").module()
+    assert torch.equal(loaded(torch.ones(2), scale=2.0, mask=None), torch.full((2,), 2.0))
+
+
+def test_save_compiled_model_retraces_non_tensor_inputs(mocker, tmp_path: Path):
+    class StructuredModel(nn.Module):
+        def forward(
+            self, x: torch.Tensor, extras: dict[str, torch.Tensor], scale: float, mask: torch.Tensor | None
+        ) -> torch.Tensor:
+            output = (x + extras["bias"]) * scale
+            return output if mask is None else output * mask
+
+    batch = torch.export.Dim("batch", min=1, max=8)
+    dynamic_shapes = {"x": {0: batch}, "extras": {"bias": {0: batch}}, "scale": None, "mask": None}
+    sample = ((torch.ones(2, 4), {"bias": torch.ones(2, 4)}, 2.0, None), {})
+    module = torch.export.export(StructuredModel(), sample[0], dynamic_shapes=dynamic_shapes).module()
+    mock_torch_tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt")
+    mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
+    mock_torch_tensorrt.dynamo.export.side_effect = SpecViolationError("direct save failed")
+    mock_torch_tensorrt.save.side_effect = lambda program, path, **_: torch.export.save(program, path)
+
+    _save_compiled_model(module, tmp_path / "model.pt2", sample, dynamic_shapes=dynamic_shapes, pickle_protocol=5)
+
+    loaded = torch.export.load(tmp_path / "model.pt2").module()
+    output = loaded(torch.ones(3, 4), {"bias": torch.ones(3, 4)}, 2.0, None)
+    assert torch.equal(output, torch.full((3, 4), 4.0))
+
+
 @pytest.fixture
 def mock_torch_tensorrt(mocker, model: SimpleModel):
     mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.dynamo.export.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
@@ -158,9 +236,7 @@ def mock_torch_tensorrt(mocker, model: SimpleModel):
 
 
 def _graph_spec_from_samples(model: nn.Module, samples: list[Sample]) -> GraphSpec:
-    args, kwargs = samples[0]
-    output = model(*args, **kwargs)
-    graph_spec = make_graph_spec(model.forward, (args, kwargs), output, name="0", strict=True)
+    graph_spec = make_recorded_graph_spec(model, samples[0], name="0", strict=True)
     for args, kwargs in samples[1:]:
         output = model(*args, **kwargs)
         update_input_spec(graph_spec, (args, kwargs), strict=True)
@@ -231,6 +307,29 @@ def test_torch_tensorrt_timing_cache_path_is_rank_isolated(mocker, tmp_path):
     assert backend._config.compile_config.timing_cache_path == timing_cache.as_posix()
 
 
+def test_infer_restores_mutable_structured_inputs(mocker):
+    class StatefulDecoder(nn.Module):
+        def forward(self, x, cache):
+            cache[0] = x + 1
+            return x * 2
+
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_cuda_is_available")
+    mocker.patch("aitune.torch.backend.torch_tensorrt_aot_backend.assert_torch_tensorrt")
+    model = StatefulDecoder()
+    x = torch.ones(2)
+    graph_spec = make_recorded_graph_spec(model, ((x, [None]), {}), strict=True)
+    backend = TorchTensorRTAotBackend()
+    backend._graph_spec = graph_spec
+    backend._opt_module = mocker.Mock(return_value=(x * 2, x + 1))
+    cache = [None]
+
+    result = backend._infer(x, cache)
+
+    backend._opt_module.assert_called_once_with(x)
+    torch.testing.assert_close(result, x * 2)
+    torch.testing.assert_close(cache[0], x + 1)
+
+
 @requires_cuda
 def test_mock_build(
     mocker,
@@ -238,18 +337,19 @@ def test_mock_build(
     backend: TorchTensorRTAotBackend,
     model: SimpleModel,
     graph_spec: GraphSpec,
-    sample_data: list[Sample],
+    sample_data: SampleStore,
     torch_device: torch.device,
     tmp_path: Path,
 ):
     sentinel_exported = mocker.Mock(name="ExportedProgram")
+    sentinel_exported.example_inputs = ((mocker.sentinel.flat_input,), {})
     export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
+    save_compiled = mocker.spy(torch_tensorrt_aot_backend, "_save_compiled_model")
 
     active_backend = backend.build(model, graph_spec, sample_data, device=torch_device, cache_dir=tmp_path)
 
     assert active_backend is backend
 
-    active_backend = cast(TorchTensorRTAotBackend, active_backend)
     assert active_backend._device == torch_device
     assert active_backend.is_active
 
@@ -272,6 +372,7 @@ def test_mock_build(
     # Pin the pipeline shape: the ExportedProgram from torch.export.export must be
     # forwarded as the first positional arg to torch_tensorrt.dynamo.compile.
     assert mock_torch_tensorrt.dynamo.compile.call_args[0][0] is sentinel_exported
+    assert save_compiled.call_args.args[2] is sentinel_exported.example_inputs
 
 
 @pytest.mark.parametrize(
@@ -303,6 +404,7 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     if dynamic_shapes is not None:
         graph_spec.dynamic_shapes = dynamic_shapes
     mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.dynamo.export.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile = mocker.Mock(return_value=model)
@@ -318,10 +420,12 @@ def test_mock_build_exports_bounded_dynamic_shapes(
     sentinel_exported = mocker.Mock(name="ExportedProgram")
     export_mock = mocker.patch("torch.export.export", return_value=sentinel_exported)
 
-    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    backend.build(
+        model, graph_spec, make_sample_store(sample_data, tmp_path), device=torch.device("cpu"), cache_dir=tmp_path
+    )
 
     dynamic_shapes = export_mock.call_args.kwargs["dynamic_shapes"]
-    dim = dynamic_shapes["x"][0]
+    dim = dynamic_shapes["flat_inputs"][0][0]
     assert dim is not torch.export.Dim.AUTO
     assert dim.min == 1
     assert dim.max == expected_max
@@ -344,6 +448,7 @@ def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
     sample_data = [((torch.randn(1, 10),), {})]
     graph_spec = _graph_spec_from_samples(model, sample_data)
     mock_torch_tensorrt = mocker.Mock()
+    mock_torch_tensorrt.dynamo.export.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.warnings.return_value = mocker.MagicMock()
     mock_torch_tensorrt.logging.errors.return_value = mocker.MagicMock()
     mock_torch_tensorrt.dynamo.compile.return_value = model
@@ -357,7 +462,9 @@ def test_build_uses_placement_preserving_module_move(mocker, tmp_path):
     mocker.patch("torch.export.export", return_value=mocker.Mock())
     backend = TorchTensorRTAotBackend(config=TorchTensorRTAotBackendConfig(compile_config=TorchTensorRTTestConfig()))
 
-    backend.build(model, graph_spec, sample_data, device=torch.device("cpu"), cache_dir=tmp_path)
+    backend.build(
+        model, graph_spec, make_sample_store(sample_data, tmp_path), device=torch.device("cpu"), cache_dir=tmp_path
+    )
 
     move_module.assert_called_once_with(model, torch.device("cpu"))
 
@@ -367,7 +474,7 @@ def test_mock_infer(
     mocker,
     model: SimpleModel,
     graph_spec: GraphSpec,
-    sample_data: list[Sample],
+    sample_data: SampleStore,
     backend: TorchTensorRTAotBackend,
     torch_device: torch.device,
     tmp_path: Path,
@@ -378,6 +485,10 @@ def test_mock_infer(
     mocker.patch(
         "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.save",
         side_effect=_fake_torch_tensorrt_save,
+    )
+    mocker.patch(
+        "aitune.torch.backend.torch_tensorrt_aot_backend.torch_tensorrt.dynamo.export",
+        return_value=mocker.MagicMock(),
     )
     # torch.export.export is mocked above (returns Mock); torch_tensorrt.dynamo.compile
     # would reject a Mock at its isinstance(_, ExportedProgram) check, so mock it too
@@ -398,8 +509,6 @@ def test_mock_infer(
 
     args, kwargs = sample_data[0]
 
-    backend = cast(TorchTensorRTAotBackend, backend)
-
     output = backend.infer(*args, **kwargs)
     assert output.shape == (1, 2)
 
@@ -410,7 +519,7 @@ def test_mock_infer(
 def test_build_with_custom_precisions(
     model: SimpleModel,
     graph_spec: GraphSpec,
-    sample_data: list[Sample],
+    sample_data: SampleStore,
     mocker,
     mock_torch_tensorrt,
     torch_device: torch.device,
@@ -435,7 +544,7 @@ def test_full_run_simple_model(
     backend: TorchTensorRTAotBackend,
     model: SimpleModel,
     graph_spec: GraphSpec,
-    sample_data: list[Sample],
+    sample_data: SampleStore,
     torch_device: torch.device,
     tmp_path: Path,
 ):
@@ -446,7 +555,6 @@ def test_full_run_simple_model(
 
     args, kwargs = sample_data[0]
 
-    backend = cast(TorchTensorRTAotBackend, backend)
     assert backend._opt_module is not None
 
     output = backend.infer(*args, **kwargs)
@@ -460,10 +568,11 @@ def test_full_run_toy_model_linear(torch_device: torch.device, tmp_path: Path):
     graph_spec = model.graph_spec(batch_sizes=[2], device=torch_device)
 
     backend = TorchTensorRTAotBackend()
-    backend = backend.build(model, graph_spec, samples, device=torch_device, cache_dir=tmp_path)
+    backend = backend.build(
+        model, graph_spec, make_sample_store(samples, tmp_path), device=torch_device, cache_dir=tmp_path
+    )
     args, kwargs = samples[0]
 
-    backend = cast(TorchTensorRTAotBackend, backend)
     assert backend._opt_module is not None
 
     output = backend.infer(*args, **kwargs)
@@ -479,7 +588,9 @@ def test_conditional_model(torch_device, tmp_path: Path):
     graph_spec = model.graph_spec(batch_sizes=[2], device=torch_device, kwargs={"apply_relu": True})
 
     backend = TorchTensorRTAotBackend()
-    backend = backend.build(model, graph_spec, samples, device=torch_device, cache_dir=tmp_path)
+    backend = backend.build(
+        model, graph_spec, make_sample_store(samples, tmp_path), device=torch_device, cache_dir=tmp_path
+    )
 
     assert backend._opt_module is not None
 
@@ -494,7 +605,9 @@ def test_serialization(torch_device, tmp_path):
     graph_spec = model.graph_spec(batch_sizes=[2], device=torch_device)
 
     backend = TorchTensorRTAotBackend()
-    backend = backend.build(model, graph_spec, samples, device=torch_device, cache_dir=tmp_path)
+    backend = backend.build(
+        model, graph_spec, make_sample_store(samples, tmp_path), device=torch_device, cache_dir=tmp_path
+    )
 
     state_dict = backend.to_dict()
 
