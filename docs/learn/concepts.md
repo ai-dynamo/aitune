@@ -4,6 +4,8 @@
 title: "Core Concepts"
 ---
 
+## Scenario
+
 An image generation application encodes a prompt, calls a denoiser repeatedly, and decodes the result into an image.
 AITune can tune the denoiser and decoder independently while the Python pipeline still controls when each one runs.
 The example below follows a request through that process.
