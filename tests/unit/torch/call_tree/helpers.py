@@ -10,6 +10,7 @@ from torch import nn
 
 from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.methods import user_defined_methods
+from aitune.torch.call_tree.nodes import CallNode, CallPath, Sample
 from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder
 
 
@@ -77,3 +78,19 @@ def record(root, call, num_samples: int = 2, root_label: str = "root") -> CallTr
             with recorder.record_sample():
                 call()
     return recorder.result()
+
+
+def tree_of(
+    nodes: list[CallNode],
+    calls_per_sample: dict[CallPath, list[int]] | None = None,
+) -> CallTree:
+    """A ``CallTree`` of ``nodes`` whose samples give them ``calls_per_sample``.
+
+    A node's call count is stored only where it is > 0, so a sample in which the node made no call has no entry.
+    """
+    counts = calls_per_sample or {}
+    n_samples = max((len(v) for v in counts.values()), default=0)
+    samples = [
+        Sample(calls={path: c[i] for path, c in counts.items() if i < len(c) and c[i] > 0}) for i in range(n_samples)
+    ]
+    return CallTree(nodes={n.path: n for n in nodes}, samples=samples)

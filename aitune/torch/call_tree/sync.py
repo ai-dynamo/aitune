@@ -33,12 +33,11 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
 
     Every rank must have recorded the same tree: the same call paths (adapter names), with the same owner class,
     call count and ``CallNode.calls_per_sample`` per node, so each node's calls fall into the same samples — and
-    the same number of samples — on
-    every rank. The measured times, tensor bytes and the per-node signatures are taken
-    from rank zero, so every rank reports the same values; the bytes and signatures are not compared, because
-    tensor-parallel ranks can hold differently sized shards. ``.to()`` callers and recorded weight
+    the same number of samples — on every rank. The measured times, tensor bytes and the per-node signatures are
+    taken from rank zero, so every rank reports the same values; the bytes and signatures are not compared,
+    because tensor-parallel ranks can hold differently sized shards. ``.to()`` callers and recorded weight
     accesses stay local; they follow from the verified structure, so rank zero's signature call indices map to
-    the same samples on every rank.
+    the same samples on every rank. Each sample's ``inputs`` stay local too, as the arguments the rank received.
 
     Args:
         tree: The local call tree.

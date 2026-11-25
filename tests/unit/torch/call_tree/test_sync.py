@@ -4,10 +4,9 @@
 import pytest
 import torch
 
-from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.nodes import CallNode
+from aitune.torch.call_tree.nodes import CallNode, Leaf, TensorLeaf
 from aitune.torch.call_tree.sync import _NodeRecord, synchronize_call_tree
-from tests.unit.torch.call_tree.helpers import record
+from tests.unit.torch.call_tree.helpers import record, tree_of
 
 BROADCAST = "aitune.torch.call_tree.sync.coordinator.broadcast_from_rank0"
 
@@ -19,7 +18,6 @@ def _tree(total_time_ms=1.0, total_calls: int = 1):
         label="root.forward",
         owner_class="root",
         method="forward",
-        calls_per_sample=[1, 0],
         total_time_ms=10.0,
         first_seen=0,
         children=[head_path],
@@ -29,11 +27,10 @@ def _tree(total_time_ms=1.0, total_calls: int = 1):
         label="root.head.forward",
         owner_class="head",
         method="forward",
-        calls_per_sample=[total_calls, 0],
         total_time_ms=total_time_ms,
         first_seen=1,
     )
-    return CallTree(nodes={root.path: root, head_path: head})
+    return tree_of([root, head], calls_per_sample={root.path: [1, 0], head_path: [total_calls, 0]})
 
 
 def _records(tree):
@@ -91,8 +88,9 @@ def test_different_calls_per_sample_raise(mocker):
     """Equal call totals are not enough: rank zero's call indices must fall into the same samples."""
     tree, rank_zero = _tree(total_calls=2), _tree(total_calls=2)
     head = ("root.forward", "root.head.forward")
-    tree.nodes[head].calls_per_sample = [2, 0]
-    rank_zero.nodes[head].calls_per_sample = [1, 1]
+    tree.samples[0].calls[head] = 2
+    rank_zero.samples[0].calls[head] = 1
+    rank_zero.samples[1].calls[head] = 1
     mocker.patch(BROADCAST, return_value=_records(rank_zero))
 
     with pytest.raises(RuntimeError, match="head.forward"):
@@ -130,8 +128,9 @@ def test_rank_zero_shapes_are_applied(mocker):
     tree = record(local_model, lambda: local_model(torch.randn(1, 2)), num_samples=1)
     rank_zero = record(rank_zero_model, lambda: rank_zero_model(torch.randn(1, 4)), num_samples=1)
     for tree_ in (tree, rank_zero):
+        for sample in tree_.samples:
+            sample.calls = dict.fromkeys(tree_.nodes, 1)
         for node in tree_.nodes.values():
-            node.calls_per_sample = [1]
             node.owner_class = "Same"
     rank_zero_signatures = [n.signatures for n in rank_zero.nodes.values()]
     assert all(rank_zero_signatures)
@@ -141,3 +140,16 @@ def test_rank_zero_shapes_are_applied(mocker):
     synchronize_call_tree(tree)
 
     assert [n.signatures for n in tree.nodes.values()] == rank_zero_signatures
+
+
+def test_samples_are_not_synchronized(mocker):
+    """Each rank keeps its own recorded samples; sync only applies rank zero's per-node values."""
+    tree, rank_zero = _tree(), _tree()
+    inputs: dict[str, Leaf] = {"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 2))}
+    tree.samples[0].inputs = inputs
+    mocker.patch(BROADCAST, return_value=_records(rank_zero))
+
+    synchronize_call_tree(tree)
+
+    assert len(tree.samples) == 2
+    assert tree.samples[0].inputs == inputs

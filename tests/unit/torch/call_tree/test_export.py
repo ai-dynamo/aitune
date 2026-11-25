@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
+from aitune.torch.call_tree.nodes import CallNode, Sample, TensorLeaf
 from aitune.torch.call_tree.recording import StructureRecorder
 from tests.toy_models.call_tree_models import TwoRoleToy, VlaToy, vla_inputs
 from tests.unit.torch.call_tree.helpers import instrumented, record
@@ -29,7 +30,7 @@ def test_to_dict_exports_the_whole_tree():
     d = tree.to_dict()
 
     assert d["schema_version"] == 1
-    assert set(d) == {"schema_version", "total_time_ms", "nodes", "modules", "weights"}
+    assert set(d) == {"schema_version", "total_time_ms", "samples", "nodes", "modules", "weights"}
     assert "number_of_samples" not in tree.to_dict()
     assert d["total_time_ms"] == tree.total_time_ms
     nodes = d["nodes"]
@@ -281,3 +282,22 @@ def test_to_dict_modules_parameters_list_a_tied_parameter_under_each_name():
 
     parameters = tree.to_dict()["modules"][""]["parameters"]
     assert set(parameters) == {"weight", "alias"}
+
+
+def test_to_dict_exports_the_samples():
+    node = CallNode(
+        path=("m.forward",),
+        label="m.forward",
+        owner_class="M",
+        method="forward",
+    )
+    tree = CallTree(
+        nodes={node.path: node},
+        samples=[Sample(inputs={"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 8))})],
+    )
+
+    exported = tree.to_dict()
+
+    assert exported["samples"] == [
+        {"inputs": {"args[0]": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [2, 8]}}}
+    ]

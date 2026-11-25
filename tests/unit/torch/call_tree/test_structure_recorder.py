@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import dataclasses
+import pickle
 from collections import UserDict
 from collections.abc import Mapping
 
@@ -12,7 +13,7 @@ from torch import nn
 from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.callers import OUTSIDE_ANY_CALL
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container, user_defined_methods
-from aitune.torch.call_tree.nodes import CallNode, CallSignature, Leaf, TensorLeaf
+from aitune.torch.call_tree.nodes import CallNode, CallSignature, Leaf, Sample, TensorLeaf
 from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, storage_key
 from tests.toy_models.call_tree_models import (
@@ -41,7 +42,7 @@ def test_call_tree_copy_is_independent_of_the_original():
         owner_class="Root",
         method="forward",
         module=module,
-        calls_per_sample=[1, 1],
+        total_time_ms=3.0,
         signatures=[CallSignature(inputs={"x": Leaf("x", "int")}, outputs={}, call_indices=[0, 1])],
         children=[("root.forward", "root.child.forward")],
     )
@@ -50,13 +51,14 @@ def test_call_tree_copy_is_independent_of_the_original():
         label="root.child.forward",
         owner_class="Linear",
         method="forward",
-        calls_per_sample=[1, 1],
     )
     tree = CallTree(
         nodes={root.path: root, child.path: child},
+        samples=[Sample(calls={root.path: 1, child.path: 1}), Sample(calls={root.path: 1, child.path: 1})],
         weight_accesses={"weight": {WeightAccess("root.forward", "move")}},
         modules=[("root", module)],
     )
+    tree.samples[0].inputs = {"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 8))}
 
     copied = tree.copy()
     copied_root = copied.nodes[root.path]
@@ -64,17 +66,19 @@ def test_call_tree_copy_is_independent_of_the_original():
     copied_root.children.clear()
     copied_root.signatures[0].call_indices.append(2)
     copied_root.signatures[0].inputs["x"] = TensorLeaf("x", "torch.Tensor", dtype=torch.float16, shape=(1,))
-    copied_root.calls_per_sample.clear()
+    copied.samples[0].calls.clear()
     copied.weight_accesses["weight"].add(WeightAccess("other", "read"))
     copied.modules.append(("extra", nn.Linear(1, 1)))
+    copied.samples.clear()
 
-    assert root.total_time_ms is None
+    assert root.total_time_ms == 3.0
     assert root.children == [child.path]
     assert root.signatures[0].call_indices == [0, 1]
     assert isinstance(root.signatures[0].inputs["x"], Leaf)
     assert root.calls_per_sample == [1, 1]
     assert tree.weight_accesses["weight"] == {WeightAccess("root.forward", "move")}
     assert [label for label, _ in tree.modules] == ["root"]
+    assert tree.samples[0].inputs["args[0]"] == TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 8))
     assert copied_root.module is module and copied_root is not root
 
 
@@ -1783,7 +1787,8 @@ def test_a_sample_with_no_calls_gives_every_node_a_zero():
 
 
 def test_total_calls_is_read_only():
-    node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls_per_sample=[2, 1])
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward")
+    CallTree(nodes={node.path: node}, samples=[Sample(calls={node.path: 2}), Sample(calls={node.path: 1})])
 
     assert node.total_calls == 3
     with pytest.raises(AttributeError):
@@ -1991,3 +1996,111 @@ def test_a_compiled_modules_other_methods_are_not_compiled_calls():
     assert nodes[("root.forward", "root.inner.forward")].inside_compiled_part is True
     assert nodes[("root.encode",)].inside_compiled_part is False
     assert nodes[("root.encode", "root.lin.forward")].inside_compiled_part is False
+
+
+def test_samples_describe_the_arguments_the_inference_received():
+    model = TwoRoleToy()
+    recorder = StructureRecorder()
+    xs = [torch.randn(2, 8), torch.randn(4, 8)]
+
+    with instrumented(recorder, model), recorder:
+        for x in xs:
+            with recorder.record_sample((x,)):
+                model(x)
+
+    tree = recorder.result()
+    assert [s.inputs for s in tree.samples] == [
+        {"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 8))},
+        {"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (4, 8))},
+    ]
+    assert tree.samples[0].calls[("root.forward",)] == 1
+
+
+def test_samples_name_kwargs_and_nested_containers_and_skip_primitives():
+    recorder = StructureRecorder()
+
+    with recorder:
+        with recorder.record_sample(
+            (torch.randn(1, 2), "a string"),
+            {"kwarg": {"pixel_values": torch.randn(3, 4)}, "n": 5},
+        ):
+            pass
+
+    (sample,) = recorder.result().samples
+    assert set(sample.inputs) == {"args[0]", "kwarg['pixel_values']"}  # primitives are not recorded
+    assert sample.inputs["args[0]"] == TensorLeaf("args[0]", "torch.Tensor", torch.float32, (1, 2))
+    assert sample.inputs["kwarg['pixel_values']"] == TensorLeaf(
+        "kwarg['pixel_values']", "torch.Tensor", torch.float32, (3, 4)
+    )
+    assert all(leaf.source is None for leaf in sample.inputs.values())
+
+
+def test_record_sample_without_arguments_gives_an_empty_sample():
+    recorder = StructureRecorder()
+
+    with recorder, recorder.record_sample():
+        pass
+
+    (sample,) = recorder.result().samples
+    assert sample.inputs == {}
+
+
+def test_a_sample_is_described_before_the_inference_runs():
+    """In-place mutation during the sample does not change the description taken at the block's start."""
+    x, y = torch.randn(2, 4), {"pixel_values": torch.randn(3, 4)}
+    replacement = torch.randn(1, 1)
+    recorder = StructureRecorder()
+
+    with recorder:
+        with recorder.record_sample((x,), {"kw": y}):
+            x.resize_(4, 2)
+            y["pixel_values"] = replacement
+
+    (sample,) = recorder.result().samples
+    assert sample.inputs["args[0]"] == TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 4))
+    assert sample.inputs["kw['pixel_values']"] == TensorLeaf(
+        "kw['pixel_values']", "torch.Tensor", torch.float32, (3, 4)
+    )
+
+
+def test_a_failed_sample_is_not_appended():
+    model = TwoRoleToy()
+    recorder = StructureRecorder()
+
+    with instrumented(recorder, model), recorder:
+        with recorder.record_sample((torch.randn(2, 8),)):
+            model(torch.randn(2, 8))
+        with pytest.raises(RuntimeError, match="boom"):
+            with recorder.record_sample((torch.randn(2, 8),)):
+                _boom()
+
+    assert len(recorder._samples) == 1
+    with pytest.raises(RuntimeError, match="incomplete"):
+        recorder.result()
+
+
+def test_sample_leaves_have_no_source_and_are_not_registered():
+    """A sample's tensors are described but not indexed: a call receiving one of them gets no ``source``."""
+    model = TwoRoleToy()
+    x = torch.randn(2, 8)
+    recorder = StructureRecorder()
+
+    with instrumented(recorder, model), recorder:
+        with recorder.record_sample((x,)):
+            model(x)
+
+    tree = recorder.result()
+    assert all(leaf.source is None for leaf in tree.samples[0].inputs.values())
+    # the outermost call received the very tensor the sample describes; nothing points at the sample
+    for signature in tree.nodes[("root.forward",)].signatures:
+        assert all(leaf.source is None for leaf in signature.inputs.values())
+
+
+def test_pickle_keeps_the_nodes_bound_to_the_trees_samples():
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward")
+    tree = CallTree(nodes={node.path: node}, samples=[Sample(calls={node.path: 1})])
+
+    tree2 = pickle.loads(pickle.dumps(tree))
+
+    assert all(n._samples is tree2.samples for n in tree2.nodes.values())
+    assert tree2.nodes[node.path].calls_per_sample == [1]

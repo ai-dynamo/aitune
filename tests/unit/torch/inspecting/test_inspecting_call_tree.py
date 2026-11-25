@@ -1016,3 +1016,19 @@ def test_max_timing_depth_zero_skips_the_timing_pass(mocker, dataset):
     assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
     assert all(node.total_calls > 0 for node in tree.nodes.values())
     assert all(node.total_time_ms is None for node in tree.nodes.values())
+
+
+def test_samples_are_recorded_with_the_dataset_wraparound():
+    """``tree.samples[i]`` describes sample ``i``: with more iterations than samples, the dataset restarts."""
+    model = nn.Linear(8, 8)
+    s0, s1 = torch.randn(1, 8), torch.randn(3, 8)
+
+    info = inspect(model, [s0, s1], number_of_iterations=3, warmup_iterations=0, call_tree=True)
+
+    tree = _tree(info)
+    assert [tuple(sample.inputs["args[0]"].shape) for sample in tree.samples] == [
+        tuple(s0.unsqueeze(0).shape),
+        tuple(s1.unsqueeze(0).shape),
+        tuple(s0.unsqueeze(0).shape),
+    ]
+    assert all(len(node.calls_per_sample) == 3 for node in tree.nodes.values())

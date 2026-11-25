@@ -137,28 +137,33 @@ class TimingRecorder(CallRecorder):
             for example ``[[1, 2, 3], [1, 2]]``; empty when no node is timeable.
 
         Example:
-            The first sample is replayed twice, timing depth 1 and then depth 2. The second sample never calls the
-            child, so it is replayed once:
+            Two samples, a long and a short one. Both call the root once; only the long one calls the child. The
+            long sample is replayed twice, timing depth 1 and then depth 2; the short one only once, at depth 1:
 
-            >>> root = CallNode(
-            ...     path=("m.forward",), label="m.forward", owner_class="M", method="forward",
-            ...     calls_per_sample=[1, 1],
-            ... )
+            >>> import torch
+            >>> from aitune.torch.call_tree.nodes import Sample, TensorLeaf
+            >>> def inputs(*shape):
+            ...     return {"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, shape)}
+            >>> root = CallNode(path=("m.forward",), label="m.forward", owner_class="M", method="forward")
             >>> child = CallNode(
             ...     path=("m.forward", "m.child.forward"),
             ...     label="m.child.forward",
             ...     owner_class="C",
             ...     method="forward",
-            ...     calls_per_sample=[1, 0],
             ... )
-            >>> tree = CallTree(nodes={root.path: root, child.path: child})
+            >>> long = Sample(inputs=inputs(1, 512), calls={root.path: 1, child.path: 1})
+            >>> short = Sample(inputs=inputs(1, 64), calls={root.path: 1})
+            >>> tree = CallTree(nodes={root.path: root, child.path: child}, samples=[long, short])
             >>> TimingRecorder(tree).depths_per_sample()
             [[1, 2], [1]]
         """
-        timeable = [node for node in self._tree.nodes.values() if self._is_timeable(node)]
         return [
-            sorted({len(node.path) for node, calls in zip(timeable, counts, strict=True) if calls > 0})
-            for counts in zip(*(node.calls_per_sample for node in timeable), strict=True)
+            sorted({
+                len(path)
+                for path, calls in sample.calls.items()
+                if calls > 0 and self._is_timeable(self._tree.nodes[path])
+            })
+            for sample in self._tree.samples
         ]
 
     @contextmanager

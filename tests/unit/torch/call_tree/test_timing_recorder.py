@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.nodes import CallNode
+from aitune.torch.call_tree.nodes import CallNode, Sample
 from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder, TimingRecorder
 from tests.toy_models.call_tree_models import TwoRoleToy
 from tests.unit.torch.call_tree.helpers import instrumented
@@ -21,11 +21,13 @@ def _tree_of(calls_per_sample: list[list[tuple[str, ...]]]) -> CallTree:
         for path in paths:
             if path not in nodes:
                 nodes[path] = CallNode(path=path, label=path[-1], owner_class="M", method="forward")
-                nodes[path].calls_per_sample = [0] * len(calls_per_sample)
-    for i, paths in enumerate(calls_per_sample):
+    samples = []
+    for paths in calls_per_sample:
+        calls = {}
         for path in paths:
-            nodes[path].calls_per_sample[i] += 1
-    return CallTree(nodes=nodes)
+            calls[path] = calls.get(path, 0) + 1
+        samples.append(Sample(calls=calls))
+    return CallTree(nodes=nodes, samples=samples)
 
 
 def _boom() -> None:
@@ -162,9 +164,26 @@ def test_a_slow_sample_counts_in_the_total(mocker):
 
 
 def test_time_ms_is_none_without_a_timing_pass():
-    node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls_per_sample=[2])
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward")
+    CallTree(nodes={node.path: node}, samples=[Sample(calls={node.path: 2})])
 
     assert node.total_time_ms is None
+
+
+@pytest.mark.parametrize("value", ["calls_per_sample", "total_calls"])
+def test_a_node_outside_a_tree_has_no_per_sample_values(value):
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward")
+
+    with pytest.raises(ValueError, match="is not part of a CallTree"):
+        getattr(node, value)
+
+
+def test_the_derived_node_values_are_read_only():
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward")
+
+    for name in ("calls_per_sample", "total_calls"):
+        with pytest.raises(AttributeError):
+            setattr(node, name, 1)
 
 
 def test_depths_per_sample_of_a_tree_with_no_timeable_nodes():
@@ -174,10 +193,10 @@ def test_depths_per_sample_of_a_tree_with_no_timeable_nodes():
         label="a",
         owner_class="M",
         method="forward",
-        calls_per_sample=[1, 1],
         inside_compiled_part=True,
     )
-    assert TimingRecorder(CallTree(nodes={node.path: node})).depths_per_sample() == []
+    samples = [Sample(calls={node.path: 1}), Sample(calls={node.path: 1})]
+    assert TimingRecorder(CallTree(nodes={node.path: node}, samples=samples)).depths_per_sample() == [[], []]
 
 
 def test_the_pass_writes_each_nodes_measured_time(mocker):
@@ -533,17 +552,16 @@ def _tree_with_a_child() -> CallTree:
         label="root.forward",
         owner_class="Root",
         method="forward",
-        calls_per_sample=[1],
     )
     child = CallNode(
         path=("root.forward", "root.child.forward"),
         label="root.child.forward",
         owner_class="Linear",
         method="forward",
-        calls_per_sample=[1],
     )
     root.children.append(child.path)
-    return CallTree(nodes={root.path: root, child.path: child})
+    sample = Sample(calls={root.path: 1, child.path: 1})
+    return CallTree(nodes={root.path: root, child.path: child}, samples=[sample])
 
 
 def test_the_timing_pass_writes_times_into_the_tree(mocker):

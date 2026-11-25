@@ -318,6 +318,10 @@ The exported data has this structure:
 {
   "schema_version": 1,
   "total_time_ms": 30.0,
+  "samples": [
+    {"inputs": {"args[0]": {"type": "torch.Tensor", "dtype": "torch.int64", "shape": [1, 220]}}},
+    {"inputs": {"args[0]": {"type": "torch.Tensor", "dtype": "torch.int64", "shape": [1, 220]}}}
+  ],
   "nodes": [
     {"call_path": "forward", "owner_class": "Vla", "total_calls": 2, "total_time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
@@ -360,6 +364,9 @@ be in any of that node's signatures. In the example, `dit.forward` received `hid
 argument of that name.
 `calls_per_sample` gives how many of the node's calls each sample made, one entry per recorded sample; they add
 up to `total_calls`.
+`samples` lists the recorded samples in order, so entry `i` of `calls_per_sample` is for `samples[i]`. Each
+sample's `inputs` describes the arguments the inference function received, in the same format as a signature's
+inputs: `args[0]` is the first positional argument, and keyword arguments keep their names.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:
 
