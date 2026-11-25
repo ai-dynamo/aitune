@@ -38,8 +38,9 @@ Find your model in the [recipe catalog](../../examples/README.md), or follow the
 
 ## Why AITune?
 
-Inference pipelines can contain modules with very different workloads. Inspection shows which modules
-run and how they relate. AITune uses representative inputs to evaluate ways to speed up the modules you select.
+Modules in the same inference pipeline can differ in execution time, GPU memory use, input shapes, and how often
+they run. The best backend and configuration can therefore vary by module. Inspection shows which modules run
+and how they relate. AITune uses representative inputs to evaluate ways to speed up the modules you select.
 Both backends and strategies are plugin interfaces, so teams can develop and use complete implementations
 in their own code.
 

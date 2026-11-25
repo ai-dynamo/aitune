@@ -23,7 +23,7 @@ for how each workflow starts and records calls.
    the application runs.
 2. **Record the boundary.** The wrapper runs the original forward and captures the samples and metadata needed to
    replay the flow independently. It groups observations by input specification and records input and output structures and
-   effects such as supported changes to mutable inputs. See [Execution Graphs](execution_graphs.md) for graph matching,
+   supported changes to mutable inputs. See [Execution Graphs](execution_graphs.md) for graph matching,
    shape tracking, and [mutable inputs and caches](execution_graphs.md#mutable-inputs-and-caches).
 3. **Evaluate implementations.** A strategy receives the original module, graph specification, and sample store.
    It decides which backend candidate to build, which checks and measurements to apply, and which implementation to

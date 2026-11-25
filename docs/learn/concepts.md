@@ -17,8 +17,9 @@ and how much time they take. With call tree recording enabled, you can also see 
 where tensors come from, and which weights code outside a module uses. A denoiser that runs repeatedly may be a
 good place to start because even a small improvement per call can add up across the request.
 
-A **tuning boundary** is the module you choose to wrap and the work inside its forward call. Wrapping the denoiser
-lets AITune record its calls in the running pipeline and replay them separately to evaluate candidate implementations.
+A **tuning boundary** is the module whose forward call AITune intercepts to prepare a faster implementation.
+Wrapping the denoiser lets AITune record its calls in the running pipeline and replay them separately to evaluate
+candidate implementations.
 The scheduler still decides when to call it, and the decoder still turns the denoised result into an image. The
 decoder can have its own tuning boundary and use a different backend. When choosing a boundary, use the observed
 module relationships to account for dependencies such as weights shared with code outside the module.
