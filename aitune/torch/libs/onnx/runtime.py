@@ -7,6 +7,7 @@ collection agree for source artifacts and tuned sessions. Inputs are matched to 
 structured Python output reconstruction and recorded input mutations belong to the caller.
 """
 
+import ctypes
 from logging import getLogger
 
 import onnxruntime
@@ -38,7 +39,7 @@ def run_onnx(
 
     Contiguous input buffers stay alive until ORT execution and output synchronization finish.
     CUDA execution first waits for current-stream Torch writes because ORT uses its own stream.
-    CPU results become Torch tensors through NumPy; CUDA results are copied into Torch storage.
+    CPU results use NumPy when supported; CPU BF16 and CUDA results are copied into Torch storage.
     Returned names are the session's graph outputs, including any internal mutation results.
     """
     # Keep contiguous buffers alive until inference completes.
@@ -90,16 +91,32 @@ def _bind_outputs(
 def _collect_outputs(
     io_binding: onnxruntime.IOBinding, session: onnxruntime.InferenceSession, device: torch.device
 ) -> dict[str, torch.Tensor]:
-    """Collect CPU outputs as arrays or copy CUDA outputs directly to Torch."""
+    """Collect ORT outputs in Torch tensors on the requested device."""
+    outputs = session.get_outputs()
     if device.type == "cpu":
+        if any(node.type == "tensor(bfloat16)" for node in outputs):
+            return {
+                node.name: _cpu_output_to_torch(value)
+                for node, value in zip(outputs, io_binding.get_outputs(), strict=True)
+            }
         return {
             node.name: torch.from_numpy(value)
-            for node, value in zip(session.get_outputs(), io_binding.copy_outputs_to_cpu(), strict=True)
+            for node, value in zip(outputs, io_binding.copy_outputs_to_cpu(), strict=True)
         }
     return {
         node.name: memcpy_to_torch(ort_val.data_ptr(), list(ort_val.shape()), ort_val.data_type(), device)
-        for node, ort_val in zip(session.get_outputs(), io_binding.get_outputs(), strict=True)
+        for node, ort_val in zip(outputs, io_binding.get_outputs(), strict=True)
     }
+
+
+def _cpu_output_to_torch(value: onnxruntime.OrtValue) -> torch.Tensor:
+    if value.data_type() != "tensor(bfloat16)":
+        return torch.from_numpy(value.numpy())
+    # ORT cannot convert BF16 to NumPy, so copy the bits while it still owns the buffer.
+    result = torch.empty(value.shape(), dtype=torch.bfloat16, device="cpu")
+    if result.nbytes:
+        ctypes.memmove(result.data_ptr(), value.data_ptr(), result.nbytes)
+    return result
 
 
 def prepare_onnx_inputs(session: onnxruntime.InferenceSession, args: tuple, kwargs: dict) -> dict[str, torch.Tensor]:
