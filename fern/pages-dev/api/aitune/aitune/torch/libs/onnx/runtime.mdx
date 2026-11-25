@@ -24,7 +24,7 @@ structured Python output reconstruction and recorded input mutations belong to t
 
 ### Data
 
-[`_TORCH_DTYPE_TO_NUMPY`](#aitune-torch-libs-onnx-runtime-_TORCH_DTYPE_TO_NUMPY)
+[`_TORCH_DTYPE_TO_ONNX`](#aitune-torch-libs-onnx-runtime-_TORCH_DTYPE_TO_ONNX)
 
 [`logger`](#aitune-torch-libs-onnx-runtime-logger)
 
@@ -147,12 +147,12 @@ Returned names are the session's graph outputs, including any internal mutation 
 
 </Indent>
 
-<Anchor id="aitune-torch-libs-onnx-runtime-_TORCH_DTYPE_TO_NUMPY">
+<Anchor id="aitune-torch-libs-onnx-runtime-_TORCH_DTYPE_TO_ONNX">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
 
 ```python
-aitune.torch.libs.onnx.runtime._TORCH_DTYPE_TO_NUMPY: dict[dtype, type] = {torch.float16: np.float16, torch.float32: np.float32, torch.float64: np.float64...
+aitune.torch.libs.onnx.runtime._TORCH_DTYPE_TO_ONNX: dict[dtype, int] = {torch.bfloat16: TensorProto.BFLOAT16, torch.float16: TensorProto.FLOAT16, torch...
 ```
 
 </CodeBlock>
