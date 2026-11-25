@@ -22,7 +22,7 @@ for how each workflow starts and records calls.
    can help the wrapper preserve that weight during offload. JIT uses interception to discover eligible modules as
    the application runs.
 2. **Record the boundary.** The wrapper runs the original forward and captures the samples and metadata needed to
-   replay it independently. It groups observations by input specification and records input and output structures and
+   replay the flow independently. It groups observations by input specification and records input and output structures and
    effects such as supported changes to mutable inputs. See [Execution Graphs](execution_graphs.md) for graph matching,
    shape tracking, and [mutable inputs and caches](execution_graphs.md#mutable-inputs-and-caches).
 3. **Evaluate implementations.** A strategy receives the original module, graph specification, and sample store.
