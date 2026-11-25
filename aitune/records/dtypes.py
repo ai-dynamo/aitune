@@ -17,6 +17,7 @@ class DType(Enum):
     INT16 = "int16"
     INT32 = "int32"
     INT64 = "int64"
+    BFLOAT16 = "bfloat16"
     FLOAT16 = "float16"
     FLOAT32 = "float32"
     FLOAT64 = "float64"

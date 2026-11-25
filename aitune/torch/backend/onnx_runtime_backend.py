@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """ONNX Runtime backend."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from itertools import chain
 from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, Self, cast
@@ -52,13 +53,14 @@ _ORT_TYPE_TO_DTYPE = {
     "tensor(int16)": DType.INT16,
     "tensor(int32)": DType.INT32,
     "tensor(int64)": DType.INT64,
+    "tensor(bfloat16)": DType.BFLOAT16,
     "tensor(float16)": DType.FLOAT16,
     "tensor(float)": DType.FLOAT32,
     "tensor(double)": DType.FLOAT64,
 }
 
 
-def _validate_onnx_interface(nodes: list[onnxruntime.NodeArg], specs, kind: str) -> None:
+def _validate_onnx_interface(nodes: Sequence[onnxruntime.NodeArg], specs, kind: str) -> None:
     """Validate the finalized ONNX interface against the recorded Torch contract."""
     for node, spec in zip(nodes, specs, strict=True):
         try:
@@ -91,7 +93,8 @@ class ONNXRuntimeBackendConfig(BackendConfig):
             :attr:`ONNXExecutionProvider.CUDA` and
             :attr:`ONNXExecutionProvider.TENSORRT` are supported.
         opset_version: ONNX opset version passed to ``torch.onnx.export``.
-            ``None`` uses the torch default.
+            With ``None``, Dynamo exports use opset 22 for BF16 inputs, outputs, or
+            module state; other exports use the Torch default.
     """
 
     use_dynamo: bool = True
@@ -167,8 +170,8 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         self._external_data_artifacts: list[ArtifactPath] = []
         self._graph_spec: GraphSpec | None = None
         self._samples: SampleStore | None = None
-        self._input_nodes: list[onnxruntime.NodeArg] | None = None
-        self._output_nodes: list[onnxruntime.NodeArg] | None = None
+        self._input_nodes: Sequence[onnxruntime.NodeArg] | None = None
+        self._output_nodes: Sequence[onnxruntime.NodeArg] | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -194,7 +197,7 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
             self.STATE_EXTERNAL_DATA_PATHS: self._external_data_artifacts,
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_ONNX_MODEL_PATH: self._onnx_model_artifact,
-            self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
+            self.STATE_GRAPH_SPEC: cast(GraphSpec, self._graph_spec).to_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
         }
@@ -229,9 +232,10 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
             self._use_existing_onnx(module)
         else:
             self._export_onnx(module, graph_spec, samples, cache_dir)
-            data_file = Path(str(self._onnx_model_artifact.path) + ".data")
+            model_artifact = cast(ArtifactPath, self._onnx_model_artifact)
+            data_file = Path(str(model_artifact.path) + ".data")
             if data_file.exists():
-                self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=self._onnx_model_artifact.root)
+                self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=model_artifact.root)
 
         self._samples = samples
         offload(module, device="cpu")
@@ -296,6 +300,22 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
             for location in sorted(locations)
         ]
 
+    def _export_opset(self, module: nn.Module, graph_spec: GraphSpec) -> int | None:
+        """Select a BF16-capable Conv schema without changing explicit requests."""
+        requested = self._config.opset_version
+        if not self._config.use_dynamo:
+            if requested is not None and requested > 21:
+                raise ValueError("ONNX opset 22 or later requires use_dynamo=True, not legacy tracing")
+            return requested
+        if requested is not None:
+            return requested
+        tensors = chain(graph_spec.input_spec.tensor_specs, graph_spec.output_spec.tensor_specs)
+        if any(spec.dtype == torch.bfloat16 for spec in tensors) or any(
+            tensor.dtype == torch.bfloat16 for tensor in chain(module.parameters(), module.buffers())
+        ):
+            return 22
+        return None
+
     def _export_onnx(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> None:
         """Export a Torch module through the recorded flat tensor contract."""
         module = module.eval().to(self.device)
@@ -303,7 +323,7 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         onnx_exporter = ONNXExporter(
             output_path=self._onnx_model_artifact.path,
             use_dynamo=self._config.use_dynamo,
-            opset_version=self._config.opset_version,
+            opset_version=self._export_opset(module, graph_spec),
         )
         onnx_exporter.export(
             module=module,
@@ -346,9 +366,10 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         ONNX may remove unused inputs during export. The shared executor binds
         tensors on their current device.
         """
-        session_input_names = {inp.name for inp in self._session.get_inputs()}
+        session = cast(onnxruntime.InferenceSession, self._session)
+        session_input_names = {inp.name for inp in session.get_inputs()}
         inputs: dict[str, Any] = {}
-        for locator, tensor_spec in self._graph_spec.input_spec.tensor_data:
+        for locator, tensor_spec in cast(GraphSpec, self._graph_spec).input_spec.tensor_data:
             name = GraphSpec.tensor_name(locator, tensor_spec, "input")
             if name not in session_input_names:
                 logger.debug("Input: %s not found in session inputs", name)
@@ -422,7 +443,7 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         if self._samples is None:
             return ()
         try:
-            input_nodes = cast(list[onnxruntime.NodeArg], self._input_nodes)
+            input_nodes = cast(Sequence[onnxruntime.NodeArg], self._input_nodes)
             return artifact_input_sample(
                 cast(GraphSpec, self._graph_spec),
                 self._samples[0],

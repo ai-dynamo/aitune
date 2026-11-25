@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import cast
 
 import onnx
+import onnx_ir as ir
 import torch
 import torch.nn as nn
 from onnx_ir.passes.common import TopologicalSortPass
@@ -20,6 +21,27 @@ from aitune.torch.module.sample_store import Sample
 from aitune.torch.utils.tensor import format_tensor_name
 
 logger = logging.getLogger(__name__)
+
+
+def _lower_bf16_einsum_permutations(model: ir.Model) -> None:
+    """Use a lossless Transpose for unary axis permutations unsupported by Einsum-12."""
+    for graph in model.graphs():
+        for node in graph:
+            if node.domain or node.op_type != "Einsum" or len(node.inputs) != 1:
+                continue
+            operand = node.inputs[0]
+            if operand is None or operand.dtype != ir.DataType.BFLOAT16:
+                continue
+            # Transpose admits BF16 from opset 13; Einsum itself admits it from 28.
+            if not 13 <= model.opset_imports[""] < 28:
+                continue
+            equation = node.attributes["equation"].as_string().replace(" ", "")
+            axes, arrow, output = equation.partition("->")
+            if not arrow or not axes.isalpha() or len(set(axes)) != len(axes) or sorted(axes) != sorted(output):
+                continue
+            node.op_type = "Transpose"
+            del node.attributes["equation"]
+            node.attributes["perm"] = ir.AttrInt64s("perm", [axes.index(axis) for axis in output])
 
 
 class ONNXExporter:
@@ -119,6 +141,7 @@ class ONNXExporter:
         )
         if onnx_program is None:
             raise RuntimeError("Dynamo ONNX export did not return an ONNX program; cannot save the artifact.")
+        _lower_bf16_einsum_permutations(onnx_program.model)
         # onnxscript 0.5.x optimizer can emit unbind's Split after its consumers; re-sort before saving.
         TopologicalSortPass()(onnx_program.model)
         onnx_program.save(self.output_path, external_data=True)
