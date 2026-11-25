@@ -179,7 +179,10 @@ def _record_structure(
     # Recording reads each weight access eagerly; Dynamo cannot trace the TorchFunctionMode.
     with _pass_on_all_ranks(recorder, "call tree's structure pass"), torch.compiler.set_stance("force_eager"):
         for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
-            with recorder.record_sample(args, kwargs):
+            with contextlib.ExitStack() as stack:
+                # describing runs before ``_run_inference``'s barrier, so its failure must reach every rank
+                with coordinator.raise_if_any_rank_fails("Describing a call tree sample"):
+                    stack.enter_context(recorder.record_sample(args, kwargs))
                 _run_inference(inference_function, args, kwargs)
     with coordinator.raise_if_any_rank_fails("Reading the call tree's structure"):
         return recorder.result()

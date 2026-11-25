@@ -186,14 +186,7 @@ class StructureRecorder(CallRecorder):
             args: Positional arguments the inference function receives for this sample.
             kwargs: Keyword arguments the inference function receives for this sample.
         """
-        seen: set[int] = set()
-        named = list(_named_leaves(tuple(args), "args", seen))
-        for name, value in (kwargs or {}).items():
-            named.extend(_named_leaves(value, name, seen))
-        with torch._C.DisableTorchFunction():
-            values, _ = _leaves_and_bytes(named)
-        inputs = {leaf.name: leaf for _, leaf in values}
-        self._current_sample = Sample(inputs=inputs)
+        self._current_sample = Sample(inputs=describe_sample_inputs(args, kwargs))
         self._top_visible = _SourceIndex()  # a new top level: nothing links across samples
         try:
             yield
@@ -585,3 +578,18 @@ class _Frame:
     call_index: int
     visible: _SourceIndex
     compiled: bool
+
+
+def describe_sample_inputs(args: Sequence[Any] = (), kwargs: Mapping[str, Any] | None = None) -> dict[str, Leaf]:
+    """Describe a sample's arguments as ``Sample.inputs`` does, without registering them as sources.
+
+    The names follow ``Sample``: ``args[0]``, ... for positional arguments, keyword arguments by their name, and
+    ``kwargs['args']`` for a keyword argument named ``args``.
+    """
+    seen: set[int] = set()
+    named = list(_named_leaves(tuple(args), "args", seen))
+    for name, value in (kwargs or {}).items():
+        named.extend(_named_leaves(value, name if name != "args" else "kwargs['args']", seen))
+    with torch._C.DisableTorchFunction():
+        values, _ = _leaves_and_bytes(named)
+    return {leaf.name: leaf for _, leaf in values}

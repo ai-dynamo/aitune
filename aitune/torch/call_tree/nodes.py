@@ -268,7 +268,8 @@ class Sample:
     ``inputs`` follows the rules of ``CallSignature.inputs``: tensors become ``TensorLeaf``s with dtype and shape,
     other objects ``Leaf``s with their type, and primitives such as numbers and strings are left out. Positional
     arguments are named ``args[0]``, ``args[1]``, ..., keyword arguments by their name, with the usual suffixes for
-    nested values, such as ``args[0]['pixel_values']``.
+    nested values, such as ``args[0]['pixel_values']``. A keyword argument named ``args`` becomes ``kwargs['args']``,
+    so it cannot collide with the positional arguments.
 
     Attributes:
         inputs: The sample's argument leaves by ``Leaf.name``, described when the sample started. If reading the

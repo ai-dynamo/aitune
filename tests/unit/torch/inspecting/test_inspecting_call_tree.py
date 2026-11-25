@@ -791,6 +791,22 @@ def test_structure_result_failure_goes_through_the_rank_failure_context(mocker, 
     assert nn.Module._apply is original_apply
 
 
+def test_sample_description_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    mocker.patch(
+        "aitune.torch.call_tree.recording.structure_recorder.describe_sample_inputs",
+        side_effect=RuntimeError("bad description"),
+    )
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad description"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Describing a call tree sample")
+    assert nn.Module._apply is original_apply
+
+
 def test_compiled_child_inspects_and_its_calls_appear_in_the_tree(dataset):
     """A ``torch.compile`` child must not crash the legacy pass; the call tree sees inside it (force_eager)."""
 

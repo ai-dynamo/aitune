@@ -14,7 +14,7 @@ from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.callers import OUTSIDE_ANY_CALL
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container, user_defined_methods
 from aitune.torch.call_tree.nodes import CallNode, CallSignature, Leaf, Sample, TensorLeaf
-from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder
+from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder, describe_sample_inputs
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, storage_key
 from tests.toy_models.call_tree_models import (
     PlainPipeline,
@@ -2104,3 +2104,31 @@ def test_pickle_keeps_the_nodes_bound_to_the_trees_samples():
 
     assert all(n._samples is tree2.samples for n in tree2.nodes.values())
     assert tree2.nodes[node.path].calls_per_sample == [1]
+
+
+def test_a_kwarg_named_args_does_not_collide_with_the_positional_args():
+    """``record_sample((x,), {"args": [y]})`` keeps both: the kwarg's leaves are named ``kwargs['args']...``."""
+    x, y = torch.randn(2, 8), torch.randn(3, 4)
+    recorder = StructureRecorder()
+
+    with recorder, recorder.record_sample((x,), {"args": [y]}):
+        pass
+
+    (sample,) = recorder.result().samples
+    assert sample.inputs == {
+        "args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 8)),
+        "kwargs['args'][0]": TensorLeaf("kwargs['args'][0]", "torch.Tensor", torch.float32, (3, 4)),
+    }
+    assert sample.inputs == describe_sample_inputs((x,), {"args": [y]})
+
+
+def test_describe_sample_inputs_stores_what_record_sample_stores():
+    """``describe_sample_inputs`` is the description ``record_sample`` puts on the ``Sample``."""
+    x = torch.randn(2, 8)
+    recorder = StructureRecorder()
+
+    with recorder, recorder.record_sample((x,), {"kw": {"pixel_values": torch.randn(3, 4)}}):
+        pass
+
+    (sample,) = recorder.result().samples
+    assert sample.inputs == describe_sample_inputs((x,), {"kw": {"pixel_values": torch.randn(3, 4)}})
