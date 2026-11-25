@@ -443,6 +443,19 @@ for path, tuned_node in tuned.nodes.items():
         print(node.path_str, shape, f"{eager_ms:.1f} ms eager -> {tuned_ms:.1f} ms tuned")
 ```
 
+For an encoder on samples of 8 sequences of 64 to 512 tokens, the script's output could read as follows (illustrative
+numbers, not a benchmark; `inspect` passes each dataset item with a batch dimension of 1, so the recorded shapes
+start with 1):
+
+```text
+forward > encoder.forward (1, 8, 64) 1.6 ms eager -> 1.0 ms tuned
+forward > encoder.forward (1, 8, 128) 1.5 ms eager -> 1.2 ms tuned
+forward > encoder.forward (1, 8, 256) 1.9 ms eager -> 1.7 ms tuned
+forward > encoder.forward (1, 8, 512) 3.4 ms eager -> 3.2 ms tuned
+```
+
+Here the tuned encoder gains most on the short sequences, which a single speedup over all samples hides.
+
 ## Shared weights and wrap
 
 After tuning, AITune offloads a module's original weights (`device_after_tuning`, `"meta"` by default). That breaks a
