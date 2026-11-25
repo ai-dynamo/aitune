@@ -16,7 +16,7 @@ class _NodeRecord(NamedTuple):
     owner_class: str
     total_calls: int
     calls_per_sample: list[int]
-    total_time_ms: float | None
+    time_ms_per_sample: list[float] | None
     total_bytes_in: int
     total_bytes_out: int
     signatures: list[CallSignature]
@@ -32,12 +32,12 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
     Updates ``tree`` in place and returns it.
 
     Every rank must have recorded the same tree: the same call paths (adapter names), with the same owner class,
-    call count and ``CallNode.calls_per_sample`` per node, so each node's calls fall into the same samples — and
-    the same number of samples — on every rank. The measured times, tensor bytes and the per-node signatures are
-    taken from rank zero, so every rank reports the same values; the bytes and signatures are not compared,
-    because tensor-parallel ranks can hold differently sized shards. ``.to()`` callers and recorded weight
-    accesses stay local; they follow from the verified structure, so rank zero's signature call indices map to
-    the same samples on every rank. Each sample's ``inputs`` stay local too, as the arguments the rank received.
+    call count and ``CallNode.calls_per_sample`` per node, so each node's calls fall into the same samples on every
+    rank. Rank zero's measured times, tensor bytes and per-node signatures replace the local ones, so every rank
+    reports the same values; the times are written into the local ``samples``. The bytes and signatures are not
+    compared, because tensor-parallel ranks can hold differently sized shards. ``.to()`` callers and recorded weight
+    accesses stay local: they follow from the verified structure, so rank zero's signature call indices map to the
+    same samples on every rank. Each sample's ``inputs`` stay local too, as the arguments the rank received.
 
     Args:
         tree: The local call tree.
@@ -54,7 +54,7 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
             node.owner_class,
             node.total_calls,
             list(node.calls_per_sample),
-            node.total_time_ms,
+            node.time_ms_per_sample,
             node.total_bytes_in,
             node.total_bytes_out,
             node.signatures,
@@ -82,7 +82,12 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
                 )
     for record in rank_zero_records:
         node = tree.nodes[record.path]
-        node.total_time_ms = record.total_time_ms
+        if record.time_ms_per_sample is None:
+            for sample in tree.samples:
+                sample.time_ms.pop(record.path, None)
+        else:
+            for i, ms in enumerate(record.time_ms_per_sample):
+                tree.samples[i].time_ms[record.path] = ms
         node.total_bytes_in = record.total_bytes_in
         node.total_bytes_out = record.total_bytes_out
         node.signatures = list(record.signatures)

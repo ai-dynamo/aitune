@@ -210,10 +210,10 @@ def _time_call_tree(
     )
     samples = samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations)
     with _pass_on_all_ranks(timer, "call tree timing pass"):
-        for depths, (_, args, kwargs) in zip(depths_per_sample, samples, strict=True):
+        for sample_index, (depths, (_, args, kwargs)) in enumerate(zip(depths_per_sample, samples, strict=True)):
             for depth in depths:
                 with coordinator.raise_if_any_rank_fails("Timing a call tree replay"):
-                    with timer.time_replay(depth):
+                    with timer.time_replay(depth, sample_index):
                         _run_inference(inference_function, args, kwargs)
 
 

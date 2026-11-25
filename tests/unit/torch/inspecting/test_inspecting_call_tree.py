@@ -1034,6 +1034,40 @@ def test_max_timing_depth_zero_skips_the_timing_pass(mocker, dataset):
     assert all(node.total_time_ms is None for node in tree.nodes.values())
 
 
+def test_times_are_reported_per_sample():
+    """Two samples of different shapes give the root two signatures, each with its own timed total."""
+    model = nn.Linear(8, 8)
+    samples = [torch.randn(1, 8), torch.randn(3, 8)]
+
+    info = inspect(model, samples, number_of_iterations=2, warmup_iterations=0, call_tree=True)
+
+    tree = _tree(info)
+    timed = [node for node in tree.nodes.values() if node.total_time_ms is not None]
+    assert timed
+    for node in timed:
+        assert node.time_ms_per_sample is not None
+        assert len(node.time_ms_per_sample) == 2
+        assert sum(node.time_ms_per_sample) == pytest.approx(node.total_time_ms)
+
+
+def test_max_timing_depth_zero_leaves_all_detailed_times_none(dataset):
+    model, fn = _vla()
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=1,
+        call_tree=True,
+        max_timing_depth=0,
+    )
+
+    tree = _tree(info)
+    assert all(node.total_time_ms is None for node in tree.nodes.values())
+    assert all(node.time_ms_per_sample is None for node in tree.nodes.values())
+
+
 def test_samples_are_recorded_with_the_dataset_wraparound():
     """``tree.samples[i]`` describes sample ``i``: with more iterations than samples, the dataset restarts."""
     model = nn.Linear(8, 8)
@@ -1048,3 +1082,4 @@ def test_samples_are_recorded_with_the_dataset_wraparound():
         tuple(s0.unsqueeze(0).shape),
     ]
     assert all(len(node.calls_per_sample) == 3 for node in tree.nodes.values())
+    assert all(len(node.time_ms_per_sample) == 3 for node in tree.nodes.values() if node.time_ms_per_sample)

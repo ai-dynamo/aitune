@@ -11,14 +11,13 @@ from tests.unit.torch.call_tree.helpers import record, tree_of
 BROADCAST = "aitune.torch.call_tree.sync.coordinator.broadcast_from_rank0"
 
 
-def _tree(total_time_ms=1.0, total_calls: int = 1):
+def _tree(time_ms_per_sample=(0.5, 0.5), total_calls: int = 1):
     head_path = ("root.forward", "root.head.forward")
     root = CallNode(
         path=("root.forward",),
         label="root.forward",
         owner_class="root",
         method="forward",
-        total_time_ms=10.0,
         first_seen=0,
         children=[head_path],
     )
@@ -27,10 +26,13 @@ def _tree(total_time_ms=1.0, total_calls: int = 1):
         label="root.head.forward",
         owner_class="head",
         method="forward",
-        total_time_ms=total_time_ms,
         first_seen=1,
     )
-    return tree_of([root, head], calls_per_sample={root.path: [1, 0], head_path: [total_calls, 0]})
+    return tree_of(
+        [root, head],
+        calls_per_sample={root.path: [1, 0], head_path: [total_calls, 0]},
+        time_ms_per_sample={root.path: [5.0, 5.0], head_path: list(time_ms_per_sample)},
+    )
 
 
 def _records(tree):
@@ -40,7 +42,7 @@ def _records(tree):
             n.owner_class,
             n.total_calls,
             n.calls_per_sample,
-            n.total_time_ms,
+            n.time_ms_per_sample,
             n.total_bytes_in,
             n.total_bytes_out,
             n.signatures,
@@ -50,8 +52,8 @@ def _records(tree):
 
 
 def test_rank_zero_times_are_applied(mocker):
-    tree = _tree(total_time_ms=0.5)
-    rank_zero = _tree(total_time_ms=4.0)
+    tree = _tree(time_ms_per_sample=(0.5, 0.5))
+    rank_zero = _tree(time_ms_per_sample=(4.0, 0.0))
     records = _records(rank_zero)
     broadcast = mocker.patch(BROADCAST, return_value=records)
 
@@ -59,6 +61,7 @@ def test_rank_zero_times_are_applied(mocker):
 
     broadcast.assert_called_once()
     head = tree.nodes[("root.forward", "root.head.forward")]
+    assert head.time_ms_per_sample == [4.0, 0.0]
     assert head.total_time_ms == 4.0
 
 
@@ -99,7 +102,8 @@ def test_different_calls_per_sample_raise(mocker):
 
 def test_a_mismatch_leaves_the_local_tree_unchanged(mocker):
     tree, rank_zero = _tree(total_calls=1), _tree(total_calls=3)
-    rank_zero.nodes[("root.forward",)].total_time_ms = 99.0  # matches and comes first
+    for sample in rank_zero.samples:
+        sample.time_ms[("root.forward",)] = 99.0  # matches and comes first
     mocker.patch(BROADCAST, return_value=_records(rank_zero))
 
     with pytest.raises(RuntimeError, match="head.forward"):
@@ -153,3 +157,17 @@ def test_samples_are_not_synchronized(mocker):
 
     assert len(tree.samples) == 2
     assert tree.samples[0].inputs == inputs
+
+
+def test_rank_zeros_none_time_removes_the_local_nodes_time(mocker):
+    tree = _tree()
+    rank_zero = _tree()
+    for sample in rank_zero.samples:
+        sample.time_ms.clear()  # rank zero never timed: the node properties read None
+    mocker.patch(BROADCAST, return_value=_records(rank_zero))
+
+    synchronize_call_tree(tree)
+
+    head = tree.nodes[("root.forward", "root.head.forward")]
+    assert head.time_ms_per_sample is None
+    assert all(sample.time_ms == {} for sample in tree.samples)

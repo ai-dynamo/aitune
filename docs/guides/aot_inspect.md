@@ -274,6 +274,12 @@ What is recorded:
    on the sample the structure pass recorded it on, and no timed call runs inside another. The number of replays —
    at most `number_of_iterations` times the number of call-path depths — is logged before the pass starts.
 
+The replays assume that the inference makes the same calls each time it runs a sample. If it does not, for example
+`generate` with sampling, which can stop after a different number of tokens, `inspect` logs a warning naming the
+affected nodes. Their times then cover the calls the replays made, not the recorded ones, so
+`total_time_ms / total_calls` is not their mean time per call. Make the inference deterministic, for example with a
+fixed seed, before comparing trees.
+
 Some nodes get no time (`total_time_ms` is `null`):
 
 - calls inside a compiled part, since they run inside the compiled code. The compiled part itself is timed as one
@@ -342,7 +348,7 @@ The exported data has this structure:
                      "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
           "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
                                  "shape": [1, 1, 4096]}}}],
-     "calls_per_sample": [5, 5]}
+     "calls_per_sample": [5, 5], "time_ms_per_sample": [12.5, 12.5]}
   ],
   "modules": {"dit": {"class": "my_pkg.Dit",
                       "parameters": {"weight": {"dtype": "torch.float32", "shape": [4, 4]}},
@@ -364,9 +370,11 @@ be in any of that node's signatures. In the example, `dit.forward` received `hid
 argument of that name.
 `calls_per_sample` gives how many of the node's calls each sample made, one entry per recorded sample; they add
 up to `total_calls`.
-`samples` lists the recorded samples in order, so entry `i` of `calls_per_sample` is for `samples[i]`. Each
-sample's `inputs` describes the arguments the inference function received, in the same format as a signature's
-inputs: `args[0]` is the first positional argument, and keyword arguments keep their names.
+`time_ms_per_sample` splits `total_time_ms` the same way: the node's timed total in each sample, 0.0 where
+the sample made no calls. It is `null` when the node was not timed.
+`samples` lists the recorded samples in order, so entry `i` of `calls_per_sample` and `time_ms_per_sample` is for
+`samples[i]`. Each sample's `inputs` describes the arguments the inference function received, in the same format
+as a signature's inputs: `args[0]` is the first positional argument, and keyword arguments keep their names.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:
 
@@ -405,6 +413,35 @@ You can run `inspect(..., call_tree=True)` again after `ait.tune` or `ait.load`.
 `call_path`, so the two saved trees can be joined by `call_path` to compare eager and tuned time per node inside the
 pipeline. Nodes inside a module tuned with a compiling backend do not appear, because the compiled module runs as
 one call.
+
+### Comparing times per sample
+
+A speedup can depend on the input shape: a backend may speed up a 512×512 image more than a 1024×1024 one. To see
+this, inspect the eager and the tuned model on a dataset whose samples have different shapes, and compare the two
+trees sample by sample.
+
+`tree.samples[i]` describes sample `i` as recorded — its tensors' dtypes and shapes — so the labels need
+neither the dataset nor its order. The structure pass records each sample once, and the timing pass replays each
+sample once per depth, timing each node in the replay at its depth. So `time_ms_per_sample[i]` is a node's time
+on sample `i`, whatever shapes the node's calls had inside that sample. If reading the dataset can return a
+different sample each time, for example through random augmentation, the replays may run different inputs than
+`samples[i]` describes.
+
+The following script inspects the eager and the tuned model on the same dataset, joins the two trees by call path,
+and prints each node's eager and tuned time on every sample, labeled with the sample's shape:
+
+```python
+eager = inspect(model, dataset, call_tree=True).call_tree
+tuned = inspect(tuned_model, dataset, call_tree=True).call_tree
+
+for path, tuned_node in tuned.nodes.items():
+    node = eager.nodes.get(path)  # call_path joins the two trees
+    if node is None or node.time_ms_per_sample is None or tuned_node.time_ms_per_sample is None:
+        continue
+    for i, (eager_ms, tuned_ms) in enumerate(zip(node.time_ms_per_sample, tuned_node.time_ms_per_sample)):
+        shape = tuple(eager.samples[i].inputs["args[0]"].shape)  # the sample's tensor, as recorded
+        print(node.path_str, shape, f"{eager_ms:.1f} ms eager -> {tuned_ms:.1f} ms tuned")
+```
 
 ## Shared weights and wrap
 

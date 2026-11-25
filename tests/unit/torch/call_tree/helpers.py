@@ -83,14 +83,21 @@ def record(root, call, num_samples: int = 2, root_label: str = "root") -> CallTr
 def tree_of(
     nodes: list[CallNode],
     calls_per_sample: dict[CallPath, list[int]] | None = None,
+    time_ms_per_sample: dict[CallPath, list[float]] | None = None,
 ) -> CallTree:
-    """A ``CallTree`` of ``nodes`` whose samples give them ``calls_per_sample``.
+    """A ``CallTree`` of ``nodes`` whose samples give them ``calls_per_sample``/``time_ms_per_sample``.
 
-    A node's call count is stored only where it is > 0, so a sample in which the node made no call has no entry.
+    A node's call count is stored only where it is > 0, and its time only where ``time_ms_per_sample`` has an
+    entry, so a node can be untimed (``time_ms_per_sample`` None) or timed on some samples (trailing 0.0s come
+    from the missing keys).
     """
-    counts = calls_per_sample or {}
-    n_samples = max((len(v) for v in counts.values()), default=0)
+    counts, times = calls_per_sample or {}, time_ms_per_sample or {}
+    n_samples = max((len(v) for v in [*counts.values(), *times.values()]), default=0)
     samples = [
-        Sample(calls={path: c[i] for path, c in counts.items() if i < len(c) and c[i] > 0}) for i in range(n_samples)
+        Sample(
+            calls={path: c[i] for path, c in counts.items() if i < len(c) and c[i] > 0},
+            time_ms={path: t[i] for path, t in times.items() if i < len(t)},
+        )
+        for i in range(n_samples)
     ]
     return CallTree(nodes={n.path: n for n in nodes}, samples=samples)

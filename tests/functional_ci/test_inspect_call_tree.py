@@ -91,3 +91,20 @@ def test_call_tree_records_the_signatures_at_the_llm_to_dit_cut(device: torch.de
     tied = {"weight": {"dtype": "torch.float32", "shape": [16, HIDDEN]}}
     assert exported["modules"]["lm_head"]["parameters"] == tied
     assert exported["modules"]["llm.embed"]["parameters"] == tied
+
+
+@pytest.mark.matrix("inspecting.call-tree/aot")
+def test_call_tree_reports_times_per_sample(device: torch.device):
+    """Timed nodes get a time per sample, one entry per recorded sample summing to ``total_time_ms``."""
+    model, fn, dataset = _vla(device)
+
+    tree = _inspect(model, fn, dataset, call_tree=True).call_tree
+
+    assert tree is not None
+    assert len(tree.samples) == ITERATIONS
+    assert all("args[0]" in sample.inputs for sample in tree.samples)
+    for node in tree.nodes.values():
+        assert node.total_time_ms is not None and node.total_time_ms > 0
+        per_sample = node.time_ms_per_sample
+        assert per_sample is not None and len(per_sample) == ITERATIONS
+        assert sum(per_sample) == pytest.approx(node.total_time_ms)

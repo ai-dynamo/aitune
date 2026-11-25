@@ -158,9 +158,6 @@ class CallNode:
         owner_class: Class name of the object the method belongs to.
         method: Name of the called method (``forward`` for module calls).
         module: Module the method belongs to, or None for methods of plain objects.
-        total_time_ms: Total time of the node's calls in milliseconds over all calls and recorded samples;
-            None when the node was never timed (inside a compiled part or deeper than ``max_timing_depth``).
-            Time per call: ``total_time_ms / total_calls``.
         total_bytes_in: Total tensor bytes in the arguments over all calls and recorded samples. Bytes per call:
             ``total_bytes_in / total_calls``.
         total_bytes_out: Total tensor bytes in the results over all calls and recorded samples.
@@ -190,7 +187,6 @@ class CallNode:
     owner_class: str
     method: str
     module: nn.Module | None = None
-    total_time_ms: float | None = None
     total_bytes_in: int = 0
     total_bytes_out: int = 0
     signatures: list[CallSignature] = field(default_factory=list)
@@ -217,6 +213,33 @@ class CallNode:
             ValueError: If the node is not part of a ``CallTree``.
         """
         return [sample.calls.get(self.path, 0) for sample in self._tree_samples()]
+
+    @property
+    def time_ms_per_sample(self) -> list[float] | None:
+        """Time of the node's timed calls in each sample, in milliseconds: entry ``i`` is for ``CallTree.samples[i]``.
+
+        Read from the tree's samples: 0.0 for a sample in which the node was not timed. None when the node was never
+        timed: it runs inside a compiled part, lies deeper than ``max_timing_depth``, or no replay ran it.
+
+        The times come from the timing pass's replays, the calls from the structure pass. On a node the
+        diverged-replay warning names, the two can describe different calls, so ``time_ms_per_sample[i] /
+        calls_per_sample[i]`` is not the mean time per call there.
+
+        Raises:
+            ValueError: If the node is not part of a ``CallTree``.
+        """
+        samples = self._tree_samples()
+        if not any(self.path in sample.time_ms for sample in samples):
+            return None
+        return [sample.time_ms.get(self.path, 0.0) for sample in samples]
+
+    @property
+    def total_time_ms(self) -> float | None:
+        """Time of the node's calls over all samples, in milliseconds; None when the node was never timed.
+
+        The sum of ``time_ms_per_sample``. Per call: ``total_time_ms / total_calls``.
+        """
+        return None if self.time_ms_per_sample is None else sum(self.time_ms_per_sample)
 
     def calls_passing(self, name: str, side: Literal["inputs", "outputs"] = "inputs") -> list[int]:
         """The sorted indices of the calls that passed the argument ``name`` on ``side``.
@@ -263,7 +286,7 @@ class CallNode:
 
 @dataclass
 class Sample:
-    """One recorded sample: the arguments the inference function received, and the calls recorded on it.
+    """One recorded sample: the arguments the inference function received, and the calls and times recorded on it.
 
     ``inputs`` follows the rules of ``CallSignature.inputs``: tensors become ``TensorLeaf``s with dtype and shape,
     other objects ``Leaf``s with their type, and primitives such as numbers and strings are left out. Positional
@@ -277,7 +300,10 @@ class Sample:
             pass's replays may run other inputs.
         calls: Number of calls per node in this sample, by call path, written by the structure pass. A missing
             node made no call.
+        time_ms: Timed milliseconds per node in this sample, by call path, written by the timing pass. A missing
+            node was not timed in this sample.
     """
 
     inputs: dict[str, Leaf] = field(default_factory=dict)
     calls: dict[CallPath, int] = field(default_factory=dict)
+    time_ms: dict[CallPath, float] = field(default_factory=dict)
