@@ -3,12 +3,14 @@
 """Tests for ONNX export through the flat tensor boundary."""
 
 import onnx
+import onnx_ir as ir
 import onnxruntime as ort
 import pytest
 import torch
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicDim
 from aitune.torch.libs.exporting import ONNXExporter
+from aitune.torch.libs.exporting.onnx_exporter import _lower_bf16_einsum_permutations
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.utils.tensor import format_tensor_name
 from tests.toy_models import ToyNestedInputModel
@@ -164,3 +166,24 @@ def test_failed_export_removes_incomplete_artifact(mocker, tmp_path):
         ONNXExporter(output_path).export(model, sample, graph_spec)
 
     assert not output_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("equation", "dtype", "opset"),
+    [
+        ("ij->i", ir.DataType.BFLOAT16, 22),  # reduction
+        ("ii->i", ir.DataType.BFLOAT16, 22),  # diagonal
+        ("...ij->...ji", ir.DataType.BFLOAT16, 22),  # implicit axes
+        ("ij->ji", ir.DataType.FLOAT, 22),
+        ("ij->ji", ir.DataType.BFLOAT16, 28),
+    ],
+)
+def test_einsum_lowering_leaves_other_equations_and_supported_types_unchanged(equation, dtype, opset):
+    value = ir.Value(name="x", type=ir.TensorType(dtype))
+    node = ir.Node("", "Einsum", [value], {"equation": ir.AttrString("equation", equation)})
+    graph = ir.Graph([value], node.outputs, nodes=[node], opset_imports={"": opset})
+
+    _lower_bf16_einsum_permutations(ir.Model(graph, ir_version=10))
+
+    assert node.op_type == "Einsum"
+    assert node.attributes["equation"].as_string() == equation
