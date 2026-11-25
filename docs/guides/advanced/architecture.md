@@ -18,7 +18,7 @@ for how each workflow starts and records calls.
 
 1. **Inspect the application.** AOT inspection runs user-provided inputs to find executed modules and measure their
    calls. The optional call tree captures caller relationships, tensor sources, and observed external accesses to
-   weights. For example, if Python code outside the selected denoiser reads one of its weights, call tree information
+   weights. For example, if Python code outside the selected module reads one of its weights, call tree information
    can help the wrapper preserve that weight during offload. JIT uses interception to discover eligible modules as
    the application runs.
 2. **Record the boundary.** The wrapper runs the original forward and captures the samples and metadata needed to
