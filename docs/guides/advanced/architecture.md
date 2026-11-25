@@ -26,7 +26,7 @@ for how each workflow starts and records calls.
    effects such as supported changes to mutable inputs. See [Execution Graphs](execution_graphs.md) for graph matching,
    shape tracking, and [mutable inputs and caches](execution_graphs.md#mutable-inputs-and-caches).
 3. **Evaluate implementations.** A strategy receives the original module, graph specification, and sample store.
-   It decides which candidates to build, which checks and measurements to apply, and which implementation to
+   It decides which backend candidate to build, which checks and measurements to apply, and which implementation to
    return. A backend receives the same module-level context and owns compiler or runtime calls and resource
    management. Your code can provide a backend, a strategy, or both. See [Tuning Workflow](tuning_workflow.md)
    for how AITune builds, checks, profiles, and activates candidates.
