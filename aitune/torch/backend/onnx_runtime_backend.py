@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """ONNX Runtime backend."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from itertools import chain
@@ -60,7 +60,7 @@ _ORT_TYPE_TO_DTYPE = {
 }
 
 
-def _validate_onnx_interface(nodes: Sequence[onnxruntime.NodeArg], specs, kind: str) -> None:
+def _validate_onnx_interface(nodes: list[onnxruntime.NodeArg], specs, kind: str) -> None:
     """Validate the finalized ONNX interface against the recorded Torch contract."""
     for node, spec in zip(nodes, specs, strict=True):
         try:
@@ -170,8 +170,8 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         self._external_data_artifacts: list[ArtifactPath] = []
         self._graph_spec: GraphSpec | None = None
         self._samples: SampleStore | None = None
-        self._input_nodes: Sequence[onnxruntime.NodeArg] | None = None
-        self._output_nodes: Sequence[onnxruntime.NodeArg] | None = None
+        self._input_nodes: list[onnxruntime.NodeArg] | None = None
+        self._output_nodes: list[onnxruntime.NodeArg] | None = None
 
     def key(self) -> str:
         """Returns the key of the backend."""
@@ -197,7 +197,7 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
             self.STATE_EXTERNAL_DATA_PATHS: self._external_data_artifacts,
             self.STATE_CONFIG: self._config.to_dict(),
             self.STATE_ONNX_MODEL_PATH: self._onnx_model_artifact,
-            self.STATE_GRAPH_SPEC: cast(GraphSpec, self._graph_spec).to_dict(),
+            self.STATE_GRAPH_SPEC: self._graph_spec.to_dict(),
             self.STATE_DEVICE: self._device,
             self.STATE_SAMPLES: self._samples.to_dict() if self._samples is not None else None,
         }
@@ -232,10 +232,9 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
             self._use_existing_onnx(module)
         else:
             self._export_onnx(module, graph_spec, samples, cache_dir)
-            model_artifact = cast(ArtifactPath, self._onnx_model_artifact)
-            data_file = Path(str(model_artifact.path) + ".data")
+            data_file = Path(str(self._onnx_model_artifact.path) + ".data")
             if data_file.exists():
-                self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=model_artifact.root)
+                self._onnx_data_artifact = ArtifactPath.from_existing(data_file, root=self._onnx_model_artifact.root)
 
         self._samples = samples
         offload(module, device="cpu")
@@ -366,10 +365,9 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         ONNX may remove unused inputs during export. The shared executor binds
         tensors on their current device.
         """
-        session = cast(onnxruntime.InferenceSession, self._session)
-        session_input_names = {inp.name for inp in session.get_inputs()}
+        session_input_names = {inp.name for inp in self._session.get_inputs()}
         inputs: dict[str, Any] = {}
-        for locator, tensor_spec in cast(GraphSpec, self._graph_spec).input_spec.tensor_data:
+        for locator, tensor_spec in self._graph_spec.input_spec.tensor_data:
             name = GraphSpec.tensor_name(locator, tensor_spec, "input")
             if name not in session_input_names:
                 logger.debug("Input: %s not found in session inputs", name)
@@ -443,7 +441,7 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         if self._samples is None:
             return ()
         try:
-            input_nodes = cast(Sequence[onnxruntime.NodeArg], self._input_nodes)
+            input_nodes = cast(list[onnxruntime.NodeArg], self._input_nodes)
             return artifact_input_sample(
                 cast(GraphSpec, self._graph_spec),
                 self._samples[0],

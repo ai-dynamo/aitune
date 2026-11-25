@@ -87,7 +87,7 @@ def bounded_tensor_specs(
     for name, index in zip(names, selected_indices, strict=True):
         locator, tensor_spec = tensor_data[index]
         try:
-            dtype = _TORCH_DTYPE_TO_RECORD[cast(torch.dtype, tensor_spec.dtype)]
+            dtype = _TORCH_DTYPE_TO_RECORD[tensor_spec.dtype]
         except KeyError as error:
             raise ValueError(f"Artifact {kind} {name!r} uses unsupported torch dtype {tensor_spec.dtype}") from error
 

@@ -1,6 +1,13 @@
 {
   "errors": [
     {
+      "column": 44,
+      "path": "aitune/torch/artifact.py",
+      "name": "bad-index",
+      "concise_description": "Cannot index into `dict[dtype, DType]`",
+      "severity": "error"
+    },
+    {
       "column": 64,
       "path": "aitune/torch/backend/kernel_selector_backend.py",
       "name": "not-iterable",
@@ -75,6 +82,62 @@
       "path": "aitune/torch/backend/kernel_selector_backend.py",
       "name": "read-only",
       "concise_description": "Cannot set field `_execution_modes`",
+      "severity": "error"
+    },
+    {
+      "column": 34,
+      "path": "aitune/torch/backend/onnx_runtime_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `path`",
+      "severity": "error"
+    },
+    {
+      "column": 87,
+      "path": "aitune/torch/backend/onnx_runtime_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `root`",
+      "severity": "error"
+    },
+    {
+      "column": 29,
+      "path": "aitune/torch/backend/onnx_runtime_backend.py",
+      "name": "bad-assignment",
+      "concise_description": "`Sequence[Unknown]` is not assignable to attribute `_input_nodes` with type `list[Unknown] | None`",
+      "severity": "error"
+    },
+    {
+      "column": 30,
+      "path": "aitune/torch/backend/onnx_runtime_backend.py",
+      "name": "bad-assignment",
+      "concise_description": "`Sequence[Unknown]` is not assignable to attribute `_output_nodes` with type `list[Unknown] | None`",
+      "severity": "error"
+    },
+    {
+      "column": 52,
+      "path": "aitune/torch/backend/onnx_runtime_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `get_inputs`",
+      "severity": "error"
+    },
+    {
+      "column": 37,
+      "path": "aitune/torch/backend/onnx_runtime_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `input_spec`",
+      "severity": "error"
+    },
+    {
+      "column": 37,
+      "path": "aitune/torch/backend/onnx_runtime_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `output_spec`",
+      "severity": "error"
+    },
+    {
+      "column": 36,
+      "path": "aitune/torch/backend/onnx_runtime_backend.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `NoneType` has no attribute `to_dict`",
       "severity": "error"
     },
     {
