@@ -56,8 +56,7 @@ handles its own build and runtime requirements. A candidate is a backend with a 
 strategy can evaluate different configurations of the same backend if configured.
 
 A **strategy** owns how candidates are evaluated and which one is selected. An interactive image generator might
-prioritize latency, while a service processing a queue of requests might prioritize images per second. The same
-candidates can lead to different selections under those objectives. Other strategies can try candidates in order
+prioritize latency, while a service processing a queue of requests might prioritize images per second. Under those objectives, the same candidates may result in different selections. Other strategies can try candidates in order
 or use a specified backend. Once selected, the backend serves subsequent calls that match the tuned graph.
 
 Both are plugin interfaces. You can implement the full backend or strategy in your application package and pass
