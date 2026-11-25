@@ -53,7 +53,7 @@ image quality across the workload you plan to serve.
 A **backend** owns how a module implementation is built and run. For the denoiser, a TensorRT backend might build
 and execute an engine, while a Torch Inductor backend might compile the module through PyTorch. Each backend
 handles its own build and runtime requirements. A candidate is a backend with a particular configuration, so a
-strategy can evaluate different configurations of the same backend.
+strategy can evaluate different configurations of the same backend if configured.
 
 A **strategy** owns how candidates are evaluated and which one is selected. An interactive image generator might
 prioritize latency, while a service processing a queue of requests might prioritize images per second. The same
