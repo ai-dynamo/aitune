@@ -217,8 +217,10 @@ def _time_call_tree(
     different_inputs: list[int] = []
     with _pass_on_all_ranks(timer, "call tree timing pass"):
         for sample_index, (depths, (_, args, kwargs)) in enumerate(zip(depths_per_sample, samples, strict=True)):
-            if describe_sample_inputs(args, kwargs) != timer.tree.samples[sample_index].inputs:
-                different_inputs.append(sample_index)
+            # describing runs before the replays' barriers, so its failure must reach every rank
+            with coordinator.raise_if_any_rank_fails("Comparing a call tree sample's inputs"):
+                if describe_sample_inputs(args, kwargs) != timer.tree.samples[sample_index].inputs:
+                    different_inputs.append(sample_index)
             for depth in depths:
                 with coordinator.raise_if_any_rank_fails("Timing a call tree replay"):
                     with timer.time_replay(depth, sample_index):

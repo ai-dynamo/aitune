@@ -1134,3 +1134,19 @@ def test_same_inputs_between_the_passes_do_not_warn(mocker):
     )
 
     assert not any("different inputs" in str(c.args) for c in warning.call_args_list)
+
+
+def test_input_comparison_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    mocker.patch(
+        "aitune.torch.inspecting.inspecting.describe_sample_inputs",
+        side_effect=RuntimeError("bad comparison"),
+    )
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad comparison"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Comparing a call tree sample's inputs")
+    assert nn.Module._apply is original_apply
