@@ -14,7 +14,7 @@ class _NodeRecord(NamedTuple):
 
     path: CallPath
     owner_class: str
-    calls: int
+    total_calls: int
     calls_per_sample: list[int]
     total_time_ms: float | None
     total_bytes_in: int
@@ -23,7 +23,7 @@ class _NodeRecord(NamedTuple):
 
     def structure(self) -> tuple[str, int, list[int]]:
         """The part every rank must have recorded identically."""
-        return self.owner_class, self.calls, self.calls_per_sample
+        return self.owner_class, self.total_calls, self.calls_per_sample
 
 
 def synchronize_call_tree(tree: CallTree) -> CallTree:
@@ -32,10 +32,10 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
     Updates ``tree`` in place and returns it.
 
     Every rank must have recorded the same tree: the same call paths (adapter names), with the same owner class,
-    call count and ``CallTree.calls_per_sample`` per node, so each node's calls fall into the same samples on
+    call count and ``CallNode.calls_per_sample`` per node, so each node's calls fall into the same samples on
     every rank. The measured times, tensor bytes and the per-node signatures are taken
     from rank zero, so every rank reports the same values; the bytes and signatures are not compared, because
-    tensor-parallel ranks can hold differently sized shards. Sequences, ``.to()`` callers and recorded weight
+    tensor-parallel ranks can hold differently sized shards. ``.to()`` callers and recorded weight
     accesses stay local; they follow from the verified structure, so rank zero's signature call indices map to
     the same samples on every rank.
 
@@ -48,15 +48,14 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
     Raises:
         RuntimeError: If the local tree differs from rank zero's.
     """
-    calls_per_sample = tree.calls_per_sample()
     local = (
         tree.number_of_samples,
         tuple(
             _NodeRecord(
                 path,
                 node.owner_class,
-                node.calls,
-                calls_per_sample[path],
+                node.total_calls,
+                list(node.calls_per_sample),
                 node.total_time_ms,
                 node.total_bytes_in,
                 node.total_bytes_out,
@@ -78,11 +77,11 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
             )
         for record in rank_zero_records:
             node = tree.nodes[record.path]
-            local_structure = (node.owner_class, node.calls, calls_per_sample[record.path])
+            local_structure = (node.owner_class, node.total_calls, node.calls_per_sample)
             if local_structure != record.structure():
                 raise RuntimeError(
                     f"Local call {record.path[-1]!r} differs from rank zero: "
-                    f"(owner class, calls, calls per sample) local={local_structure!r}, "
+                    f"(owner class, total calls, calls per sample) local={local_structure!r}, "
                     f"rank zero={record.structure()!r}"
                 )
     for record in rank_zero_records:

@@ -225,7 +225,7 @@ modules_info = ait.inspect(model, input_data, inference_function=run_chunk, min_
 tree = modules_info.call_tree
 
 for node in tree.find("dit"):    # recorded calls whose label contains "dit"
-    print(node.path_str, node.calls, node.total_time_ms, node.total_bytes_in, node.total_bytes_out)
+    print(node.path_str, node.total_calls, node.total_time_ms, node.total_bytes_in, node.total_bytes_out)
 # forward > dit_forward 10 ...
 # forward > dit_forward > dit.forward 10 ...
 ```
@@ -320,9 +320,9 @@ The exported data has this structure:
   "number_of_samples": 2,
   "total_time_ms": 30.0,
   "nodes": [
-    {"call_path": "forward", "owner_class": "Vla", "calls": 2, "total_time_ms": 30.0, ...},
+    {"call_path": "forward", "owner_class": "Vla", "total_calls": 2, "total_time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
-     "calls": 10, "inside_compiled_part": false, "total_time_ms": 25.0,
+     "total_calls": 10, "inside_compiled_part": false, "total_time_ms": 25.0,
      "total_bytes_in": 3670056, "total_bytes_out": 3670016,
      "signatures": [
          {"call_indices": [0, 5],
@@ -348,9 +348,9 @@ The exported data has this structure:
 }
 ```
 
-`number_of_samples` is the number of recorded samples; `total_time_ms`, `total_bytes_in` and `total_bytes_out` are
-totals over all calls and samples; divide by `calls` for per-call values and by `number_of_samples` for per-sample
-values. `total_time_ms` is `null` when the timing pass never timed the node.
+`number_of_samples` is the number of recorded samples; `total_calls`, `total_time_ms`, `total_bytes_in` and
+`total_bytes_out` are totals over all calls and samples; divide by `total_calls` for per-call values and by
+`number_of_samples` for per-sample values. `total_time_ms` is `null` when the timing pass never timed the node.
 `inside_compiled_part` is true for calls inside a compiled part: they run inside the compiled code in the timing
 pass, so their `total_time_ms` is `null`; the compiled part's own call is timed.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
@@ -360,7 +360,7 @@ Every leaf has `type`, tensors also `dtype` and exact `shape`; `outputs` is null
 A leaf with a `source` names where its object was last seen: `call_path`, `side` and the leaf `name` there, which can
 be in any of that node's signatures. In the example, `dit.forward` received `hidden_states` as `dit_forward`'s own
 argument of that name.
-`calls_per_sample` gives how many of the node's calls each sample made; they add up to `calls`.
+`calls_per_sample` gives how many of the node's calls each sample made; they add up to `total_calls`.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:
 

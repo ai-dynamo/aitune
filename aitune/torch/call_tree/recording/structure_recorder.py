@@ -46,9 +46,9 @@ class StructureRecorder(CallRecorder):
     """Record a context-keyed call tree from begin_call/end_call callbacks: the structure pass.
 
     Inside a ``with`` block it installs the ``nn.Module._apply`` probe and the weight-access mode and records
-    every wrapped call until the block ends; it records no times — ``TimingRecorder`` times them in a second
-    pass, never inside this one. Everything restores on exit, also when the recorded code raised; repeated
-    ``with`` blocks keep accumulating.
+    every wrapped call inside a ``record_sample()`` block until the block ends; it records no times —
+    ``TimingRecorder`` times them in a second pass, never inside this one. Everything restores on exit, also
+    when the recorded code raised; repeated ``with`` blocks keep accumulating.
 
     Example:
         >>> recorder = StructureRecorder()
@@ -72,8 +72,10 @@ class StructureRecorder(CallRecorder):
         self._stack: list[_Frame] = []
         # what the outermost calls of the current sample returned; inside a call, its frame's ``visible``
         self._top_visible = _SourceIndex()
-        self._sequences: list[list[CallPath]] = []
-        self._current_sequence: list[CallPath] | None = None
+        self._number_of_samples = 0
+        self._current_sample_index: int | None = None
+        # per node: how many calls it has recorded so far, which is the index of its next call
+        self._call_counts: dict[CallPath, int] = {}
         self._failed = False
         self._apply_depth = 0
         self._original_apply: Callable[..., Any] | None = None
@@ -103,9 +105,10 @@ class StructureRecorder(CallRecorder):
             kwargs: Keyword arguments of the call.
 
         Returns:
-            A frame to pass to ``end_call``, or None if this recorder is not the active one.
+            A frame to pass to ``end_call``, or None if this recorder is not the active one or no sample is
+            being recorded.
         """
-        if CallRecorder.active() is not self:
+        if CallRecorder.active() is not self or self._current_sample_index is None:
             return None
         parent = self._stack[-1].compiled if self._stack else False
         parent_path = self._stack[-1].node.path if self._stack else ()
@@ -123,19 +126,22 @@ class StructureRecorder(CallRecorder):
             self._nodes[path] = node
             if self._stack:
                 self._stack[-1].node.children.append(path)
+        call_index = self._call_counts.get(path, 0)
+        self._call_counts[path] = call_index + 1
         # a node stays timeable if any call of it ran outside a compiled part
-        node.inside_compiled_part = parent if node.calls == 0 else node.inside_compiled_part and parent
-        node.calls += 1
+        node.inside_compiled_part = parent if call_index == 0 else node.inside_compiled_part and parent
+        i = self._current_sample_index
+        if len(node.calls_per_sample) <= i:
+            node.calls_per_sample.extend([0] * (i + 1 - len(node.calls_per_sample)))
+        node.calls_per_sample[i] += 1
         with torch._C.DisableTorchFunction():
             values, input_bytes = _leaves_and_bytes(self._input_leaves(obj, method, args, kwargs))
         node.total_bytes_in += input_bytes
-        if self._current_sequence is not None:
-            self._current_sequence.append(path)
         input_key, visible = self._link_inputs(path, values)
         frame = _Frame(
             node=node,
             input_key=input_key,
-            call_index=node.calls - 1,
+            call_index=call_index,
             visible=visible,
             compiled=parent or is_compiled_call(obj, method),
         )
@@ -172,19 +178,23 @@ class StructureRecorder(CallRecorder):
     def record_sample(self) -> Generator[None]:
         """Record one sample (one call of the inference function) inside the ``with`` block.
 
-        An exception inside the block invalidates the recorder: ``result()`` then raises instead of returning
-        an incomplete tree, also after later sessions; record again with a new recorder.
+        Calls are recorded only inside a ``record_sample()`` block. An exception inside the block invalidates
+        the recorder: ``result()`` then raises instead of returning an incomplete tree, also after later
+        sessions; record again with a new recorder.
         """
-        self._current_sequence = []
+        self._current_sample_index = self._number_of_samples
         self._top_visible = _SourceIndex()  # a new top level: nothing links across samples
         try:
             yield
         except BaseException:
             self._failed = True
-            self._current_sequence = None
+            self._current_sample_index = None
             raise
-        self._sequences.append(self._current_sequence)
-        self._current_sequence = None
+        self._number_of_samples += 1
+        # pad nodes this sample never called so every node has one entry per recorded sample
+        for node in self._nodes.values():
+            node.calls_per_sample.extend([0] * (self._number_of_samples - len(node.calls_per_sample)))
+        self._current_sample_index = None
 
     def result(self) -> CallTree:
         """Return the recorded call tree.
@@ -203,7 +213,6 @@ class StructureRecorder(CallRecorder):
             )
         return CallTree(
             nodes=self._nodes,
-            sequences=self._sequences,
             weight_accesses=self._weight_access_log.snapshot(),
             modules=list(self._modules.values()),
         ).copy()
@@ -226,7 +235,7 @@ class StructureRecorder(CallRecorder):
     def _stop(self, completed: bool) -> None:
         """End the structure pass and restore ``nn.Module._apply``, also when the recorded code raised."""
         self._stack.clear()
-        self._current_sequence = None
+        self._current_sample_index = None
         if self._weight_access_mode is not None:
             self._weight_access_mode.__exit__(None, None, None)
             self._weight_access_mode = None
@@ -557,8 +566,8 @@ def _signature(key: _SignatureKey) -> CallSignature:
 class _Frame:
     """An open call: its node, the raw key of its inputs, its call index and what it sees.
 
-    ``call_index`` is the call's position among the node's calls in start order (the same order
-    ``CallTree.sequences`` records). ``visible`` holds the values visible inside the call: its own
+    ``call_index`` is the call's position among the node's calls in start order (the order
+    ``CallNode.calls_per_sample`` counts). ``visible`` holds the values visible inside the call: its own
     arguments and what its child calls returned. ``compiled`` says whether calls inside this call run compiled.
     """
 

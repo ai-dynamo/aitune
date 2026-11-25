@@ -187,12 +187,14 @@ def _time_call_tree(
 ) -> None:
     """Time the tree's nodes in place, replaying each sample once per depth its calls reach."""
     depths_per_sample = timer.depths_per_sample()
+    # A tree without nodes has no per-sample counts, so its plan is empty: give each sample an empty plan (no replay).
+    depths_per_sample += [[]] * (number_of_iterations - len(depths_per_sample))
     # Ranks must run the same number of inferences or the barriers in _run_inference deadlock.
     coordinator.verify_equal(depths_per_sample, "call tree timing depths")
     logger.info(
         "Timing the call tree: %d samples, %d call-path depths, %d replays "
         "(each sample once per depth its calls reach).",
-        len(timer.tree.sequences),
+        len(depths_per_sample),
         len(set(itertools.chain.from_iterable(depths_per_sample))),
         sum(map(len, depths_per_sample)),
     )

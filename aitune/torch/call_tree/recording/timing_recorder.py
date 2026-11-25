@@ -133,33 +133,35 @@ class TimingRecorder(CallRecorder):
         Only reads the tree, so it can be called before entering the ``with`` block.
 
         Returns:
-            One sorted list of depths per sample, indexed like ``CallTree.sequences``, for example
-            ``[[1, 2, 3], [1, 2]]``.
+            One sorted list of depths per sample, ``depths_per_sample()[i]`` belonging to sample ``i``, for
+            example ``[[1, 2, 3], [1, 2]]``.
 
         Example:
             The first sample is replayed twice, timing depth 1 and then depth 2. The second sample never calls the
             child, so it is replayed once:
 
-            >>> root = CallNode(path=("m.forward",), label="m.forward", owner_class="M", method="forward")
+            >>> root = CallNode(
+            ...     path=("m.forward",), label="m.forward", owner_class="M", method="forward",
+            ...     calls_per_sample=[1, 1],
+            ... )
             >>> child = CallNode(
             ...     path=("m.forward", "m.child.forward"),
             ...     label="m.child.forward",
             ...     owner_class="C",
             ...     method="forward",
+            ...     calls_per_sample=[1, 0],
             ... )
-            >>> first_sample = [root.path, child.path]
-            >>> second_sample = [root.path]
-            >>> tree = CallTree(nodes={root.path: root, child.path: child}, sequences=[first_sample, second_sample])
+            >>> tree = CallTree(nodes={root.path: root, child.path: child})
             >>> TimingRecorder(tree).depths_per_sample()
             [[1, 2], [1]]
         """
         return [
             sorted({
-                len(path)
-                for path in sequence
-                if (node := self._tree.nodes.get(path)) is not None and self._is_timeable(node)
+                len(node.path)
+                for node in self._tree.nodes.values()
+                if node.calls_per_sample[i] > 0 and self._is_timeable(node)
             })
-            for sequence in self._tree.sequences
+            for i in range(self._tree.number_of_samples)
         ]
 
     @contextmanager
@@ -290,7 +292,7 @@ class TimingRecorder(CallRecorder):
         diverged = [
             node
             for node in self._tree.nodes.values()
-            if self._is_timeable(node) and len(self._times.get(node.path, ())) != node.calls
+            if self._is_timeable(node) and len(self._times.get(node.path, ())) != node.total_calls
         ]
         if diverged:
             examples = sorted(node.path_str for node in diverged)

@@ -101,7 +101,7 @@ class CallSignature:
         inputs: The signature's argument leaves by ``Leaf.name``.
         outputs: The signature's result leaves by ``Leaf.name``, or None when the calls raised.
         call_indices: The indices (0-based) of the node's calls with exactly this signature. Indices count the node's
-            calls in the order they started, across all samples — the order ``CallTree.sequences`` records —
+            calls in the order they started, across all samples — the order ``CallNode.calls_per_sample`` counts —
             not reset per sample.
 
     Example:
@@ -112,7 +112,7 @@ class CallSignature:
         ...     def forward(self, x, state=None):
         ...         return x
         >>> recorder, layer = StructureRecorder(), Layer()
-        >>> with recorder:
+        >>> with recorder, recorder.record_sample():
         ...     for args in (
         ...         ((torch.zeros(1, 4, 8),), {"state": Cache()}),
         ...         ((torch.zeros(1, 4, 8),), {}),
@@ -158,15 +158,18 @@ class CallNode:
         owner_class: Class name of the object the method belongs to.
         method: Name of the called method (``forward`` for module calls).
         module: Module the method belongs to, or None for methods of plain objects.
-        calls: Number of calls over all recorded samples.
+        calls_per_sample: Number of the node's calls in each recorded sample, recorded by the structure pass,
+            one entry per sample (``CallTree.number_of_samples`` entries, 0 for a sample that made no call of the
+            node); ``total_calls`` is their sum. ``CallSignature.call_indices`` count the node's calls across samples in
+            this order.
         total_time_ms: Total time of the node's calls in milliseconds over all calls and recorded samples;
             None when the node was never timed (inside a compiled part or deeper than ``max_timing_depth``).
-            Time per call: ``total_time_ms / calls``.
+            Time per call: ``total_time_ms / total_calls``.
         total_bytes_in: Total tensor bytes in the arguments over all calls and recorded samples. Bytes per call:
-            ``total_bytes_in / calls``.
+            ``total_bytes_in / total_calls``.
         total_bytes_out: Total tensor bytes in the results over all calls and recorded samples.
         signatures: The distinct ``CallSignature``s of the node's calls, in first-seen order; each records the
-            start-order indices of the calls that had it, so ``sum(len(s.call_indices)) == calls`` and every index
+            start-order indices of the calls that had it, so ``sum(len(s.call_indices)) == total_calls`` and every index
             appears exactly once. A signature whose calls raised has ``outputs`` None.
         children: Call paths of the called nodes in first-call order.
         first_seen: Position of the node's first call among all nodes.
@@ -191,7 +194,7 @@ class CallNode:
     owner_class: str
     method: str
     module: nn.Module | None = None
-    calls: int = 0
+    calls_per_sample: list[int] = field(default_factory=list)
     total_time_ms: float | None = None
     total_bytes_in: int = 0
     total_bytes_out: int = 0
@@ -226,6 +229,11 @@ class CallNode:
             if isinstance(leaf, TensorLeaf) and leaf.shape not in seen:
                 seen.append(leaf.shape)
         return seen
+
+    @property
+    def total_calls(self) -> int:
+        """Number of calls over all recorded samples: the sum of ``calls_per_sample``."""
+        return sum(self.calls_per_sample)
 
     @property
     def parent_path(self) -> CallPath:

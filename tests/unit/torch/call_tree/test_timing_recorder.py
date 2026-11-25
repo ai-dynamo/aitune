@@ -14,15 +14,18 @@ from tests.toy_models.call_tree_models import TwoRoleToy
 from tests.unit.torch.call_tree.helpers import instrumented
 
 
-def _tree_of(sequences: list[list[tuple[str, ...]]]) -> CallTree:
-    """A call tree whose nodes are exactly the paths ``sequences`` lists, one call per occurrence."""
+def _tree_of(calls_per_sample: list[list[tuple[str, ...]]]) -> CallTree:
+    """A call tree whose nodes are the paths ``calls_per_sample`` lists, with those counts per sample."""
     nodes = {}
-    for sequence in sequences:
-        for path in sequence:
+    for paths in calls_per_sample:
+        for path in paths:
             if path not in nodes:
-                nodes[path] = CallNode(path=path, label=path[-1], owner_class="M", method="forward", calls=0)
-            nodes[path].calls += 1
-    return CallTree(nodes=nodes, sequences=sequences)
+                nodes[path] = CallNode(path=path, label=path[-1], owner_class="M", method="forward")
+                nodes[path].calls_per_sample = [0] * len(calls_per_sample)
+    for i, paths in enumerate(calls_per_sample):
+        for path in paths:
+            nodes[path].calls_per_sample[i] += 1
+    return CallTree(nodes=nodes)
 
 
 def _boom() -> None:
@@ -159,7 +162,7 @@ def test_a_slow_sample_counts_in_the_total(mocker):
 
 
 def test_time_ms_is_none_without_a_timing_pass():
-    node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls=2)
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls_per_sample=[2])
 
     assert node.total_time_ms is None
 
@@ -176,12 +179,12 @@ def test_the_pass_writes_each_nodes_measured_time(mocker):
     model = nn.Linear(2, 2)
 
     with TimingRecorder(tree) as timer:
-        for sequence in tree.sequences:
+        for i in range(tree.number_of_samples):
             with timer.time_replay(1):  # times the root; the deeper child calls are skipped
                 timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
             with timer.time_replay(2):  # times the children
                 root = timer.begin_call("root.forward", model, "forward", ())
-                for _ in range(sequence.count(child_path)):
+                for _ in range(tree.nodes[child_path].calls_per_sample[i]):
                     timer.end_call(timer.begin_call("root.child.forward", model, "forward", ()))
                 timer.end_call(root)
 
@@ -340,7 +343,7 @@ def test_time_replay_synchronizes_every_end_event(mocker):
         with recorder.record_sample():
             model(x)
             model(x)
-    tree = recorder.result()  # the root has calls=2 in one sample
+    tree = recorder.result()  # the root has total_calls=2 in one sample
 
     with TimingRecorder(tree) as timer:
         timer._use_cuda = True
@@ -512,16 +515,22 @@ def test_the_timing_pass_writes_cuda_times_into_the_tree():
 
 def _tree_with_a_child() -> CallTree:
     """root -> child, one call each, no times yet."""
-    root = CallNode(path=("root.forward",), label="root.forward", owner_class="Root", method="forward", calls=1)
+    root = CallNode(
+        path=("root.forward",),
+        label="root.forward",
+        owner_class="Root",
+        method="forward",
+        calls_per_sample=[1],
+    )
     child = CallNode(
         path=("root.forward", "root.child.forward"),
         label="root.child.forward",
         owner_class="Linear",
         method="forward",
-        calls=1,
+        calls_per_sample=[1],
     )
     root.children.append(child.path)
-    return CallTree(nodes={root.path: root, child.path: child}, sequences=[[root.path, child.path]])
+    return CallTree(nodes={root.path: root, child.path: child})
 
 
 def test_the_timing_pass_writes_times_into_the_tree(mocker):

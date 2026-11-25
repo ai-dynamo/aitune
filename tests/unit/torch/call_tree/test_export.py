@@ -44,7 +44,7 @@ def test_to_dict_exports_the_whole_tree():
         ).removeprefix(".")
         if node.module is not None:
             assert _object_path(exported["call_path"]) in d["modules"]
-        assert exported["calls"] == node.calls
+        assert exported["total_calls"] == node.total_calls
         assert exported["inside_compiled_part"] == node.inside_compiled_part
         assert exported["total_time_ms"] == node.total_time_ms
         assert exported["total_bytes_in"] == node.total_bytes_in
@@ -52,7 +52,7 @@ def test_to_dict_exports_the_whole_tree():
         assert set(exported) == {
             "call_path",
             "owner_class",
-            "calls",
+            "total_calls",
             "inside_compiled_part",
             "total_time_ms",
             "total_bytes_in",
@@ -136,7 +136,7 @@ def test_to_dict_modules_parameters_skip_a_missing_bias():
 
 def test_to_dict_modules_parameters_list_meta_tensors():
     model = torch.nn.Linear(4, 4).to("meta")
-    tree = CallTree(sequences=[[]], modules=[("root", model)])
+    tree = CallTree(modules=[("root", model)])
 
     assert tree.to_dict()["modules"][""]["parameters"] == {
         "weight": {"dtype": "torch.float32", "shape": [4, 4]},

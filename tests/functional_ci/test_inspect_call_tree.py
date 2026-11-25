@@ -41,8 +41,8 @@ def test_call_tree_records_the_calls_and_their_cuda_times(device: torch.device):
 
     assert tree is not None
     assert tree.number_of_samples == ITERATIONS
-    assert tree.nodes[("root.forward",)].calls == ITERATIONS
-    assert tree.nodes[("root.forward", "root.dit_forward")].calls == 5 * ITERATIONS
+    assert tree.nodes[("root.forward",)].total_calls == ITERATIONS
+    assert tree.nodes[("root.forward", "root.dit_forward")].total_calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes
     assert all(node.total_time_ms is not None and node.total_time_ms > 0 for node in tree.nodes.values())
     [dit] = tree.nodes_of(model.dit)
@@ -82,7 +82,7 @@ def test_call_tree_records_the_signatures_at_the_llm_to_dit_cut(device: torch.de
         "x": TensorLeaf("x", "torch.Tensor", torch.float32, (2, HIDDEN)),
         "t": TensorLeaf("t", "torch.Tensor", torch.float32, (2, 1)),
     }
-    assert tree.calls_per_sample()[dit_key] == [5] * ITERATIONS
+    assert tree.nodes[dit_key].calls_per_sample == [5] * ITERATIONS
 
     exported = tree.to_dict()
     [dit] = [node for node in exported["nodes"] if node["call_path"] == "forward > dit_forward"]

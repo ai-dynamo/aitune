@@ -41,7 +41,7 @@ def test_call_tree_copy_is_independent_of_the_original():
         owner_class="Root",
         method="forward",
         module=module,
-        calls=2,
+        calls_per_sample=[1, 1],
         signatures=[CallSignature(inputs={"x": Leaf("x", "int")}, outputs={}, call_indices=[0, 1])],
         children=[("root.forward", "root.child.forward")],
     )
@@ -50,11 +50,10 @@ def test_call_tree_copy_is_independent_of_the_original():
         label="root.child.forward",
         owner_class="Linear",
         method="forward",
-        calls=2,
+        calls_per_sample=[1, 1],
     )
     tree = CallTree(
         nodes={root.path: root, child.path: child},
-        sequences=[[root.path, child.path], [root.path, child.path]],
         weight_accesses={"weight": {WeightAccess("root.forward", "move")}},
         modules=[("root", module)],
     )
@@ -65,7 +64,7 @@ def test_call_tree_copy_is_independent_of_the_original():
     copied_root.children.clear()
     copied_root.signatures[0].call_indices.append(2)
     copied_root.signatures[0].inputs["x"] = TensorLeaf("x", "torch.Tensor", dtype=torch.float16, shape=(1,))
-    copied.sequences[0].clear()
+    copied_root.calls_per_sample.clear()
     copied.weight_accesses["weight"].add(WeightAccess("other", "read"))
     copied.modules.append(("extra", nn.Linear(1, 1)))
 
@@ -73,7 +72,7 @@ def test_call_tree_copy_is_independent_of_the_original():
     assert root.children == [child.path]
     assert root.signatures[0].call_indices == [0, 1]
     assert isinstance(root.signatures[0].inputs["x"], Leaf)
-    assert tree.sequences[0] == [root.path, child.path]
+    assert root.calls_per_sample == [1, 1]
     assert tree.weight_accesses["weight"] == {WeightAccess("root.forward", "move")}
     assert [label for label, _ in tree.modules] == ["root"]
     assert copied_root.module is module and copied_root is not root
@@ -113,14 +112,14 @@ def test_calls_are_counted_over_samples_and_children_keep_first_call_order():
 
     root = tree.nodes[("root.forward",)]
     assert tree.number_of_samples == 3
-    assert root.calls == 3
+    assert root.total_calls == 3
     dit = tree.nodes[("root.forward", "root.dit_forward")]
-    assert dit.calls == 15
+    assert dit.total_calls == 15
     children = [tree.nodes[p].label for p in root.children]
     assert children[:2] == ["root.vision.0.forward", "root.vision.1.forward"]
     assert children[-1] == "root.dit_forward"
-    assert len(tree.sequences) == 3
-    assert tree.sequences[0][0] == ("root.forward",)
+    assert root.calls_per_sample == [1, 1, 1]
+    assert dit.calls_per_sample == [5, 5, 5]
 
 
 def test_exact_containers_are_transparent_but_subclasses_are_recorded():
@@ -183,9 +182,9 @@ def test_result_is_a_snapshot_that_later_recording_does_not_change():
     first = recorder.result()
     one_sample()
 
-    assert first.nodes[("root.forward",)].calls == 1
+    assert first.nodes[("root.forward",)].total_calls == 1
     assert first.number_of_samples == 1
-    assert recorder.result().nodes[("root.forward",)].calls == 2
+    assert recorder.result().nodes[("root.forward",)].total_calls == 2
 
 
 def test_second_recorder_cannot_record_while_one_is_active():
@@ -685,7 +684,7 @@ def test_bytes_in_counts_tensors_in_nested_args_and_kwargs():
 
     node = tree.nodes[("root.forward",)]
     assert node.total_bytes_in == expected
-    assert node.total_bytes_in / node.calls == expected
+    assert node.total_bytes_in / node.total_calls == expected
 
 
 def test_bytes_in_counts_a_tensor_passed_twice_once():
@@ -754,10 +753,10 @@ def test_bytes_sum_over_calls_and_samples():
     tree = record(model, lambda: model(x), num_samples=num_samples)
 
     [node] = tree.nodes_of(model.head)
-    calls = 2 * num_samples  # forward calls head twice per sample
-    assert node.calls == calls
-    assert node.total_bytes_in == calls * per_call
-    assert node.total_bytes_out == calls * per_call  # Linear returns a same-shaped tensor here
+    total_calls = 2 * num_samples  # forward calls head twice per sample
+    assert node.total_calls == total_calls
+    assert node.total_bytes_in == total_calls * per_call
+    assert node.total_bytes_out == total_calls * per_call  # Linear returns a same-shaped tensor here
 
 
 def test_bytes_in_counts_a_call_that_raises_but_not_bytes_out():
@@ -1473,7 +1472,7 @@ def test_signature_counts_the_calls_each_path_was_passed():
     tree = record(model, lambda: (model(object()), model(None)), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.calls == 2
+    assert node.total_calls == 2
     assert node.calls_passing("x") == [0]
 
 
@@ -1706,6 +1705,20 @@ def test_a_later_session_does_not_clear_a_raised_sample():
         recorder.result()
 
 
+def test_calls_outside_a_sample_are_not_recorded():
+    """A call inside ``with recorder`` but outside ``record_sample()`` records nothing."""
+    model = nn.Linear(4, 4)
+    x = torch.randn(4, 4)
+
+    recorder = StructureRecorder()
+    with instrumented(recorder, model), recorder:
+        model(x)
+
+    tree = recorder.result()
+    assert tree.nodes == {}
+    assert tree.number_of_samples == 0
+
+
 def test_calls_per_sample_counts_each_samples_calls():
     class Model(nn.Module):
         def forward(self, x):
@@ -1725,9 +1738,65 @@ def test_calls_per_sample_counts_each_samples_calls():
             model(x)
 
     tree = recorder.result()
-    assert tree.calls_per_sample()[("root.forward",)] == [2, 0, 1]
     node = tree.nodes[("root.forward",)]
-    assert sum(tree.calls_per_sample()[node.path]) == node.calls
+    assert node.calls_per_sample == [2, 0, 1]
+    assert sum(node.calls_per_sample) == node.total_calls
+
+
+def test_calls_per_sample_counts_calls_only_in_the_samples_that_made_them():
+    """A node called in only one sample (e.g. a routed expert) counts 0 in the samples that skipped it."""
+    model, expert = nn.Linear(2, 2), nn.Linear(2, 2)
+
+    recorder = StructureRecorder()
+    with recorder:
+        for i in range(3):
+            with recorder.record_sample():
+                outer = recorder.begin_call("root.forward", model, "forward", ())
+                if i == 1:
+                    for _ in range(2):
+                        inner = recorder.begin_call("root.expert_2.forward", expert, "forward", ())
+                        recorder.end_call(inner)
+                recorder.end_call(outer)
+
+    tree = recorder.result()
+    assert tree.number_of_samples == 3
+    assert tree.nodes[("root.forward",)].calls_per_sample == [1, 1, 1]
+    expert_node = tree.nodes[("root.forward", "root.expert_2.forward")]
+    assert expert_node.calls_per_sample == [0, 2, 0]
+    assert expert_node.total_calls == 2
+
+
+def test_a_sample_with_no_calls_gives_every_node_a_zero():
+    """An empty sample still counts: the nodes it skipped get a 0 for it."""
+    model = nn.Linear(2, 2)
+
+    recorder = StructureRecorder()
+    with recorder:
+        for calls in (2, 0, 1):
+            with recorder.record_sample():
+                outer = recorder.begin_call("root.forward", model, "forward", ())
+                for _ in range(calls):
+                    inner = recorder.begin_call("root.lin.forward", model, "forward", ())
+                    recorder.end_call(inner)
+                recorder.end_call(outer)
+
+    tree = recorder.result()
+    assert tree.nodes[("root.forward",)].calls_per_sample == [1, 1, 1]
+    assert tree.nodes[("root.forward", "root.lin.forward")].calls_per_sample == [2, 0, 1]
+
+
+def test_number_of_samples_is_derived_from_the_nodes():
+    assert CallTree().number_of_samples == 0
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls_per_sample=[2, 1, 0])
+    assert CallTree(nodes={node.path: node}).number_of_samples == 3
+
+
+def test_total_calls_is_read_only():
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls_per_sample=[2, 1])
+
+    assert node.total_calls == 3
+    with pytest.raises(AttributeError):
+        node.total_calls = 5  # pyrefly: ignore[read-only]
 
 
 def test_call_indices_continue_across_samples():
@@ -1748,7 +1817,8 @@ def test_call_indices_continue_across_samples():
 
     node = recorder.result().nodes[("root.forward",)]
     assert [sig.call_indices for sig in node.signatures] == [[0, 2], [1]]
-    assert node.calls == 3
+    assert node.calls_per_sample == [1, 2]
+    assert node.total_calls == 3
 
 
 def test_signatures_fall_back_to_arg_positions_when_the_call_does_not_bind():

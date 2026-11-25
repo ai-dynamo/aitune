@@ -60,8 +60,8 @@ def test_call_tree_leaves_legacy_output_unchanged(dataset):
     assert _legacy(with_graph) == _legacy(without)
     tree = _tree(with_graph)
     assert tree.number_of_samples == ITERATIONS
-    assert tree.nodes[("root.forward",)].calls == ITERATIONS
-    assert tree.nodes[("root.forward", "root.dit_forward")].calls == 5 * ITERATIONS
+    assert tree.nodes[("root.forward",)].total_calls == ITERATIONS
+    assert tree.nodes[("root.forward", "root.dit_forward")].total_calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes
 
 
@@ -182,7 +182,9 @@ def test_every_timeable_node_is_timed(mocker, dataset):
     tree = _tree(info)
     assert max(len(path) for path in tree.nodes) > 2
     assert all(
-        node.total_time_ms is not None for node in tree.nodes.values() if node.calls and not node.inside_compiled_part
+        node.total_time_ms is not None
+        for node in tree.nodes.values()
+        if node.total_calls and not node.inside_compiled_part
     )
     warning.assert_not_called()
 
@@ -246,8 +248,7 @@ def test_calls_that_only_some_samples_make_are_timed(mocker):
     tree = _tree(info)
     branch = ("root.forward", "root.sometimes.forward")
     deep = (*branch, "root.sometimes.lin.forward")
-    assert branch in tree.sequences[0] and branch in tree.sequences[2]
-    assert branch not in tree.sequences[1] and branch not in tree.sequences[3]
+    assert tree.nodes[branch].calls_per_sample == [1, 0, 1, 0]
     # only the branch reaches depth 3, so only samples 0 and 2 get a replay at that depth
     assert TimingRecorder(tree).depths_per_sample() == [[1, 2, 3], [1, 2], [1, 2, 3], [1, 2]]
     assert tree.nodes[branch].total_time_ms is not None
@@ -836,7 +837,7 @@ def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(datase
         call_tree=True,
     )
 
-    paths = {n.path_str: n.calls for n in _tree(info).nodes.values()}
+    paths = {n.path_str: n.total_calls for n in _tree(info).nodes.values()}
     assert paths == {
         "forward": ITERATIONS,
         "forward > child.forward": ITERATIONS,
@@ -875,7 +876,7 @@ def test_module_compiled_child_is_recorded_once_and_counts_stay_unchanged(datase
 
     assert _legacy(info) == without_tree
     nodes = _tree(info).nodes
-    assert nodes[("root.forward", "root.child.forward")].calls == ITERATIONS
+    assert nodes[("root.forward", "root.child.forward")].total_calls == ITERATIONS
     assert ("root.forward", "root.child.forward", "root.child.lin.forward") in nodes
 
 
@@ -960,9 +961,9 @@ def test_max_timing_depth_leaves_deep_nodes_untimed_without_a_warning(mocker, da
     tree = _tree(info)
     assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
     deep = [node for node in tree.nodes.values() if len(node.path) > 2]
-    assert all(node.calls > 0 for node in deep)
+    assert all(node.total_calls > 0 for node in deep)
     assert all(node.total_time_ms is None for node in deep)
-    shallow = [node for node in tree.nodes.values() if node.calls and len(node.path) <= 2]
+    shallow = [node for node in tree.nodes.values() if node.total_calls and len(node.path) <= 2]
     assert shallow and all(node.total_time_ms is not None for node in shallow)
     warning.assert_not_called()
 
@@ -993,5 +994,5 @@ def test_max_timing_depth_zero_skips_the_timing_pass(mocker, dataset):
     timing.assert_not_called()
     tree = _tree(info)
     assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
-    assert all(node.calls > 0 for node in tree.nodes.values())
+    assert all(node.total_calls > 0 for node in tree.nodes.values())
     assert all(node.total_time_ms is None for node in tree.nodes.values())

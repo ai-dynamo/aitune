@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The context-keyed call tree recorded by the call recorder."""
 
-from collections import Counter
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -50,8 +49,6 @@ class CallTree:
 
     Attributes:
         nodes: All nodes by call path.
-        number_of_samples: Number of recorded samples (the length of ``sequences``).
-        sequences: Per sample, the call paths of the entered nodes in the order the calls started.
         weight_accesses: For each parameter or buffer (by weight name: its object path, e.g.
             ``vlm.lm_head.weight``; a tied weight appears under each of its names), the ``WeightAccess`` records of
             accesses to it: reads, device checks and moves. Names stay valid when ``.to()`` or casts replace the
@@ -64,7 +61,7 @@ class CallTree:
         ...     label="root.forward",
         ...     owner_class="Vla",
         ...     method="forward",
-        ...     calls=2,
+        ...     calls_per_sample=[1, 1],
         ...     total_time_ms=30.0,
         ... )
         >>> dit_module = nn.Linear(2, 2)
@@ -74,35 +71,31 @@ class CallTree:
         ...     owner_class="Dit",
         ...     method="forward",
         ...     module=dit_module,
-        ...     calls=10,
+        ...     calls_per_sample=[5, 5],
         ...     total_time_ms=25.0,
         ...     first_seen=1,
         ... )
         >>> outer.children.append(dit.path)
-        >>> one_sample = [outer.path] + [dit.path] * 5
-        >>> tree = CallTree(nodes={n.path: n for n in (outer, dit)}, sequences=[one_sample, one_sample])
+        >>> tree = CallTree(nodes={n.path: n for n in (outer, dit)})
         >>> [n.path_str for n in tree.roots], tree.total_time_ms
         (['forward'], 30.0)
         >>> [n.path_str for n in tree.descendants(outer)]
         ['forward > dit.forward']
-        >>> [(n.path_str, n.calls) for n in tree.find("dit")]
+        >>> [(n.path_str, n.total_calls) for n in tree.find("dit")]
         [('forward > dit.forward', 10)]
         >>> [n.path_str for n in tree.nodes_of(dit_module)]
         ['forward > dit.forward']
     """
 
     nodes: dict[CallPath, CallNode] = field(default_factory=dict)
-    sequences: list[list[CallPath]] = field(default_factory=list)
     weight_accesses: dict[str, set[WeightAccess]] = field(default_factory=dict)
     modules: list[tuple[str, nn.Module]] = field(default_factory=list)
 
     @property
     def number_of_samples(self) -> int:
-        """Number of recorded samples.
-
-        The structure pass runs ``number_of_iterations`` samples from the dataset, one inference each.
-        """
-        return len(self.sequences)
+        """Number of recorded samples: the length of every node's ``calls_per_sample``; 0 for a tree without nodes."""
+        node = next(iter(self.nodes.values()), None)
+        return 0 if node is None else len(node.calls_per_sample)
 
     @property
     def roots(self) -> list[CallNode]:
@@ -151,9 +144,9 @@ class CallTree:
 
         Each node is replaced by a copy whose ``children`` and ``signatures`` are new —
         each signature with copied ``inputs``/``outputs`` dicts and ``call_indices`` list — so later writes into
-        them (a timing pass's times, a ``synchronize_call_tree``'s values) don't reach this tree. ``sequences`` and
-        the per-weight ``WeightAccess`` sets are copied too, and the ``modules`` list. Shared: the ``nn.Module``s
-        (in ``modules`` and on the nodes), the signature leaves (``Leaf``/``TensorLeaf``
+        them (a timing pass's times, a ``synchronize_call_tree``'s values) don't reach this tree. Each node's
+        ``calls_per_sample`` list, the per-weight ``WeightAccess`` sets and the ``modules`` list are copied too.
+        Shared: the ``nn.Module``s (in ``modules`` and on the nodes), the signature leaves (``Leaf``/``TensorLeaf``
         are frozen dataclasses) and the ``WeightAccess`` records (``NamedTuple``s).
 
         Example:
@@ -169,6 +162,7 @@ class CallTree:
                 path: replace(
                     node,
                     children=list(node.children),
+                    calls_per_sample=list(node.calls_per_sample),
                     signatures=[
                         replace(
                             sig,
@@ -181,7 +175,6 @@ class CallTree:
                 )
                 for path, node in self.nodes.items()
             },
-            sequences=[list(seq) for seq in self.sequences],
             weight_accesses={name: set(records) for name, records in self.weight_accesses.items()},
             modules=list(self.modules),
         )
@@ -190,37 +183,10 @@ class CallTree:
         """Nodes whose label contains ``text``, in first-call order."""
         return sorted((n for n in self.nodes.values() if text in n.label), key=lambda n: n.first_seen)
 
-    def calls_per_sample(self) -> dict[CallPath, list[int]]:
-        """For each node, how many of its calls each sample made.
-
-        ``calls_per_sample()[path]`` has one entry per sample (``len(...) == number_of_samples``, zeros for
-        samples that do not call the node), and ``sum(...) == node.calls``. It maps a call index from
-        ``CallSignature.call_indices`` to its sample: with ``counts = calls_per_sample()[path]``,
-        ``offsets = list(itertools.accumulate(counts, initial=0))`` and
-        ``sample = bisect.bisect_right(offsets, call_index) - 1``. It assumes that all calls are recorded
-        inside samples, as ``inspect`` does.
-
-        Example:
-            >>> outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
-            >>> step = CallNode(path=("root.forward", "root.step"), label="root.step", owner_class="Vla", method="step")
-            >>> tree = CallTree(
-            ...     nodes={n.path: n for n in (outer, step)},
-            ...     sequences=[[outer.path, step.path, step.path], [outer.path, step.path]],
-            ... )
-            >>> tree.calls_per_sample()[step.path]
-            [2, 1]
-        """
-        counts: dict[CallPath, list[int]] = {path: [] for path in self.nodes}
-        for sequence in self.sequences:
-            made = Counter(sequence)
-            for path in self.nodes:
-                counts[path].append(made[path])
-        return counts
-
     def to_dict(self) -> dict[str, Any]:
         """The call tree as plain JSON data, for tools that read it without torch or aitune.
 
-        Node values are totals over all calls and ``number_of_samples``: divide by ``calls`` for per call, by
+        Node values are totals over all calls and ``number_of_samples``: divide by ``total_calls`` for per call, by
         ``number_of_samples`` for per sample.
 
         Returns:
@@ -231,7 +197,7 @@ class CallTree:
             - ``number_of_samples``: number of recorded samples.
             - ``total_time_ms``: time of the outermost calls over all samples (``CallTree.total_time_ms``).
             - ``nodes``: one dict per node, in first-call order, with ``call_path`` (``CallNode.path_str``, which
-              identifies the node), ``owner_class``, ``calls``, ``total_time_ms`` (the total measured time of the
+              identifies the node), ``owner_class``, ``total_calls``, ``total_time_ms`` (the total measured time of the
               node's calls, null when never timed), ``total_bytes_in``, ``total_bytes_out`` and
               ``signatures``: the node's distinct ``CallSignature``s in first-seen order, each with its
               ``call_indices`` (the indices of the calls that had it) and ``inputs``/``outputs`` dicts of leaves
@@ -239,7 +205,7 @@ class CallTree:
               also ``dtype`` and ``shape``. A leaf whose object a recorded call had before also has ``source``:
               ``{"call_path": ..., "side": ..., "name": ...}``, where it was last seen (``Leaf.source``).
               ``calls_per_sample``: ``calls_per_sample[i]`` is how many of the node's calls sample ``i``
-              made (``CallTree.calls_per_sample``).
+              made (``CallNode.calls_per_sample``).
             - ``modules``: for each instrumented module, by object path, its ``class`` (qualified name),
               ``parameters`` and ``parameter_bytes``. ``parameters`` maps the local name of each of the module's own
               parameters and buffers — not its submodules', which have their own entries if instrumented — to its
@@ -270,7 +236,7 @@ class CallTree:
             ...     first_seen=1,
             ... )
             >>> outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
-            >>> tree = CallTree(nodes={n.path: n for n in (outer, node)}, sequences=[[], []])
+            >>> tree = CallTree(nodes={n.path: n for n in (outer, node)})
             >>> exported = tree.to_dict()["nodes"][1]
             >>> exported["call_path"], exported["owner_class"]
             ('forward > dit.forward', 'Dit')
@@ -295,7 +261,6 @@ class CallTree:
                         for t in {id(t): t for t in (*module.parameters(), *module.buffers())}.values()
                     ),
                 }
-        calls_per_sample = self.calls_per_sample()
         return {
             "schema_version": SCHEMA_VERSION,
             "number_of_samples": self.number_of_samples,
@@ -304,7 +269,7 @@ class CallTree:
                 {
                     "call_path": node.path_str,
                     "owner_class": node.owner_class,
-                    "calls": node.calls,
+                    "total_calls": node.total_calls,
                     "inside_compiled_part": node.inside_compiled_part,
                     "total_time_ms": node.total_time_ms,
                     "total_bytes_in": node.total_bytes_in,
@@ -317,7 +282,7 @@ class CallTree:
                         }
                         for sig in node.signatures
                     ],
-                    "calls_per_sample": calls_per_sample[node.path],
+                    "calls_per_sample": list(node.calls_per_sample),
                 }
                 for node in sorted(self.nodes.values(), key=lambda n: n.first_seen)
             ],
