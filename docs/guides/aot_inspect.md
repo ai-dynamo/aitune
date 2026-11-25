@@ -423,9 +423,12 @@ trees sample by sample.
 `tree.samples[i]` describes sample `i` as recorded — its tensors' dtypes and shapes — so the labels need
 neither the dataset nor its order. The structure pass records each sample once, and the timing pass replays each
 sample once per depth, timing each node in the replay at its depth. So `time_ms_per_sample[i]` is a node's time
-on sample `i`, whatever shapes the node's calls had inside that sample. If reading the dataset can return a
-different sample each time, for example through random augmentation, the replays may run different inputs than
-`samples[i]` describes.
+on sample `i`, whatever shapes the node's calls had inside that sample.
+
+The timing pass reads the dataset again, so it needs the same samples in the same order. If it reads different
+inputs, for example from a shuffling `DataLoader`, `inspect` warns: those per-sample times can belong to other
+inputs than `samples[i]` describes. Inputs that differ only in their values, not in types, dtypes or shapes, are
+not detected.
 
 The following script inspects the eager and the tuned model on the same dataset, joins the two trees by call path,
 and prints each node's eager and tuned time on every sample, labeled with the sample's shape:

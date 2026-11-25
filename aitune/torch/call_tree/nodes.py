@@ -295,9 +295,9 @@ class Sample:
     so it cannot collide with the positional arguments.
 
     Attributes:
-        inputs: The sample's argument leaves by ``Leaf.name``, described when the sample started. If reading the
-            dataset can return different data each time, for example through random augmentation, the timing
-            pass's replays may run other inputs.
+        inputs: The sample's argument leaves by ``Leaf.name``, described when the sample started. ``inspect`` warns
+            when the timing pass reads different inputs for a sample, for example from a shuffling ``DataLoader``.
+            Inputs that differ only in their values, not in types, dtypes or shapes, are not detected.
         calls: Number of calls per node in this sample, by call path, written by the structure pass. A missing
             node made no call.
         time_ms: Timed milliseconds per node in this sample, by call path, written by the timing pass. A missing

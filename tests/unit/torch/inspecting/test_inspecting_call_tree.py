@@ -13,6 +13,7 @@ from torch import nn
 import aitune.torch.inspecting.inspecting as inspecting_module
 from aitune.torch.call_tree import WeightAccess
 from aitune.torch.call_tree.recording import StructureRecorder, TimingRecorder
+from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.distributed import coordinator
 from aitune.torch.inspecting import inspect
 from aitune.torch.inspecting.module_inspector import ModuleInspector
@@ -1083,3 +1084,53 @@ def test_samples_are_recorded_with_the_dataset_wraparound():
     ]
     assert all(len(node.calls_per_sample) == 3 for node in tree.nodes.values())
     assert all(len(node.time_ms_per_sample) == 3 for node in tree.nodes.values() if node.time_ms_per_sample)
+
+
+class _ReversingFactory(DataLoaderFactory):
+    """A "shuffling" factory: it yields its samples in order on odd reads, reversed on even reads."""
+
+    def __init__(self, samples):
+        super().__init__(samples)
+        self._samples = samples
+        self._reads = 0
+
+    def create_dataloader(self, batch_size):
+        self._reads += 1
+        samples = self._samples if self._reads % 2 else self._samples[::-1]
+        return torch.utils.data.DataLoader(samples, batch_size=batch_size)
+
+
+def test_different_inputs_between_the_passes_warn(mocker):
+    """The timing pass re-reads the dataset; different inputs mean the per-sample times belong to other inputs."""
+    warning = mocker.patch("aitune.torch.inspecting.inspecting.logger.warning")
+    model, fn = _vla()
+    dataset = _ReversingFactory([torch.randn(1, 8), torch.randn(3, 8)])
+
+    inspect(
+        model,
+        dataset,
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=0,
+        call_tree=True,
+    )
+
+    call = next((c for c in warning.call_args_list if "different inputs" in str(c.args)), None)
+    assert call is not None
+    assert call.args[1:] == (2, 2, 0)
+
+
+def test_same_inputs_between_the_passes_do_not_warn(mocker):
+    warning = mocker.patch("aitune.torch.inspecting.inspecting.logger.warning")
+    model, fn = _vla()
+
+    inspect(
+        model,
+        [torch.randn(1, 8), torch.randn(3, 8)],
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=0,
+        call_tree=True,
+    )
+
+    assert not any("different inputs" in str(c.args) for c in warning.call_args_list)
