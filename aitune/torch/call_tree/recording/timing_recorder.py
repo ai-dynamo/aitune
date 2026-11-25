@@ -51,9 +51,9 @@ class TimingRecorder(CallRecorder):
       this stream does not wait for, is not measured, so such a call is timed too short.
 
     Results: when the ``with`` block ends normally and no ``time_replay`` block raised, the pass writes each
-    node's ``time_ms_per_sample`` into the tree in place — each timed call is labeled with the sample its replay
-    ran, so the per-sample times stay correct when a replay diverges — and ``total_time_ms`` is its sum
-    (``CallNode``). Entering the pass resets them, so a pass replaces earlier times. ``total_time_ms`` None means
+    sample's ``time_ms``, which the nodes' ``time_ms_per_sample`` and ``total_time_ms`` read — each timed call is
+    labeled with the sample its replay ran, so the per-sample times stay correct when a replay diverges.
+    Entering the pass resets the samples' times, so a pass replaces earlier times. ``total_time_ms`` None means
     the node was not timed in this pass, for example a call inside a compiled part, never that it took no time.
     To keep several timed trees, time a ``tree.copy()`` each.
 
@@ -116,8 +116,9 @@ class TimingRecorder(CallRecorder):
         self._failed = False
         self._sample_index = 0
         self._stack: list[_TimedCall] = []
-        self._times: dict[CallPath, list[tuple[int, float]]] = {}
-        self._events: list[tuple[CallNode, Any, Any, int, int]] = []
+        self._time_ms: list[dict[CallPath, float]] = []
+        self._timed_calls: list[dict[CallPath, int]] = []
+        self._events: list[tuple[CallNode, Any, Any, int]] = []
         self._free_events: dict[int, list[Any]] = {}
         self._streams: dict[tuple[int, int, int], torch.cuda.Stream] = {}
 
@@ -189,6 +190,7 @@ class TimingRecorder(CallRecorder):
             self._depth = None
             self._events.clear()  # drop the interrupted replay's pending event pairs
             raise
+        # resolve inside the replay: the events' times are labeled with the replay's ``_sample_index``
         self._resolve_events()
 
     def begin_call(
@@ -206,7 +208,6 @@ class TimingRecorder(CallRecorder):
             start=start,
             device=device,
             stream=stream,
-            sample_index=self._sample_index,
         )
         self._stack.append(call)
         return call
@@ -229,10 +230,10 @@ class TimingRecorder(CallRecorder):
         if not self._events:
             return
         if self._use_cuda:
-            for _, _, end, _, _ in self._events:
+            for _, _, end, _ in self._events:
                 end.synchronize()
-        for node, start, end, device, sample_index in self._events:
-            self._add_time(node, sample_index, start.elapsed_time(end))
+        for node, start, end, device in self._events:
+            self._add_time(node.path, start.elapsed_time(end))
             pool = self._free_events.setdefault(device, [])
             pool.append(start)
             pool.append(end)
@@ -261,26 +262,23 @@ class TimingRecorder(CallRecorder):
         self._depth = None
         self._failed = False
         self._stack.clear()
-        self._times.clear()
+        self._time_ms = [{} for _ in self._tree.samples]
+        self._timed_calls = [{} for _ in self._tree.samples]
         self._events.clear()
 
     def _stop(self, completed: bool) -> None:
-        """End the timing pass, writing the measured times into the nodes and warning on a normal exit.
+        """End the timing pass, writing the measured times into the samples and warning on a normal exit.
 
-        Each timed call is labeled with the sample its replay ran, so the per-sample times stay correct
-        when the replay diverges: each timed node gets ``time_ms_per_sample`` (one entry per recorded sample,
-        summing to ``total_time_ms``, ``CallNode``). When the block raised (``completed`` False) or a replay
-        raised inside it, nothing is written: the nodes keep the None ``_start`` set.
+        Each sample gets the times its replays measured: each timed call is labeled with the sample its replay
+        ran, so the per-sample times stay correct when the replay diverges. When the block raised
+        (``completed`` False) or a replay raised inside it, nothing is written: the samples keep the empty
+        ``time_ms`` ``_start`` set.
         """
         if not completed or self._failed:
             return
         self._resolve_events()
-        for sample in self._tree.samples:
-            sample.time_ms.clear()
-        for path, times in self._times.items():
-            for sample_index, ms in times:
-                time_ms = self._tree.samples[sample_index].time_ms
-                time_ms[path] = time_ms.get(path, 0.0) + ms
+        for sample, time_ms in zip(self._tree.samples, self._time_ms, strict=True):
+            sample.time_ms = time_ms
         self._warn_about_diverged_replay()
 
     def _skips_calls(self) -> bool:
@@ -304,17 +302,14 @@ class TimingRecorder(CallRecorder):
         as sampling in ``generate``. Such a node's times then cover the calls the replays made, not the recorded
         ones. Nodes inside a compiled part or deeper than ``max_depth`` are never timed and never counted.
         """
-
-        def timed_per_sample(node: CallNode) -> list[int]:
-            counts = [0] * len(node.calls_per_sample)
-            for sample_index, _ in self._times.get(node.path, ()):
-                counts[sample_index] += 1
-            return counts
-
         diverged = [
             node
             for node in self._tree.nodes.values()
-            if self._is_timeable(node) and timed_per_sample(node) != node.calls_per_sample
+            if self._is_timeable(node)
+            and any(
+                timed.get(node.path, 0) != sample.calls.get(node.path, 0)
+                for sample, timed in zip(self._tree.samples, self._timed_calls, strict=True)
+            )
         ]
         if diverged:
             examples = sorted(node.path_str for node in diverged)
@@ -330,9 +325,11 @@ class TimingRecorder(CallRecorder):
                 ", ..." if len(examples) > 3 else "",
             )
 
-    def _add_time(self, node: CallNode, sample_index: int, milliseconds: float) -> None:
-        """Record one timed call of ``node``, labeled with the sample its replay ran."""
-        self._times.setdefault(node.path, []).append((sample_index, milliseconds))
+    def _add_time(self, path: CallPath, milliseconds: float) -> None:
+        """Record one timed call of ``path``, labeled with the sample the current replay runs."""
+        i = self._sample_index
+        self._time_ms[i][path] = self._time_ms[i].get(path, 0.0) + milliseconds
+        self._timed_calls[i][path] = self._timed_calls[i].get(path, 0) + 1
 
     def _start_timer(self) -> tuple[Any, int | None, Any]:
         """Start timing a call: record a pooled CUDA event on the current stream, or read ``perf_counter``.
@@ -351,9 +348,9 @@ class TimingRecorder(CallRecorder):
         """Stop timing ``node``'s call: queue the CUDA event pair for the end of the replay, or record the CPU time."""
         if call.device is not None:  # set exactly when the start is a CUDA event
             end = self._record_event(call.device, call.stream)
-            self._events.append((node, call.start, end, call.device, call.sample_index))
+            self._events.append((node, call.start, end, call.device))
         else:
-            self._add_time(node, call.sample_index, (time.perf_counter() - call.start) * 1000.0)
+            self._add_time(node.path, (time.perf_counter() - call.start) * 1000.0)
 
     def _current_stream(self, device: int) -> torch.cuda.Stream:
         """The current stream of ``device``, cached by its raw id: ~0.1us, and stream contexts change the id."""
@@ -377,7 +374,7 @@ class _TimedCall:
 
     ``node`` is None for a call with no recorded node. The start is a CUDA event or a ``perf_counter`` value, or
     None for an untimed call; ``device`` and ``stream`` are the CUDA device and stream the start event was
-    recorded on. ``sample_index`` is the replayed sample that labels the call's time.
+    recorded on.
     """
 
     path: CallPath
@@ -385,7 +382,6 @@ class _TimedCall:
     start: Any
     device: int | None
     stream: Any
-    sample_index: int
 
 
 def _record(event: Any, stream: Any) -> None:

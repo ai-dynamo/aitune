@@ -856,7 +856,7 @@ def test_calls_below_the_timed_depth_are_skipped(mocker):
     with TimingRecorder(tree) as timer:
         with timer.time_replay(1, 0):  # depth 1: the root runs and is timed; a nested child call is skipped
             timer.call(lambda: call("root.child.forward"), (), {}, label="root.forward", obj=model, method="forward")
-            assert child_path not in timer._times  # the skip kept the child out of the recording entirely
+            assert child_path not in timer._time_ms[0]  # the skip kept the child out of the recording entirely
 
         with timer.time_replay(2, 0):  # the child's depth: this time the child is recorded and timed
             root = timer.begin_call("root.forward", model, "forward", ())
