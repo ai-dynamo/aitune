@@ -235,11 +235,6 @@ class SampleMetadata:
         Top-level indexed paths use a prepared itemgetter; nested and attribute paths retain locator
         traversal. Neither path copies tensor data, so cost depends on path count and depth, not tensor size.
         """
-        # A validated root tensor needs neither a getter nor a path walk. Invalid root values
-        # retain the general validation below, including its recorded-path error message.
-        if len(self._tensor_data) == 1 and self._tensor_data[0][0].depth == 0 and isinstance(value, torch.Tensor):
-            return (value,)
-
         getter = self._tensor_itemgetter
         if getter is None:
             tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)

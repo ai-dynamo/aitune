@@ -246,6 +246,43 @@ def test_flatten_unflatten_timing(
         assert template == metadata.without_tensors(value, preserved_containers)
 
 
+@pytest.mark.parametrize("gc_enabled", [False, True], ids=["gc-off", "gc-on"])
+@pytest.mark.parametrize("metadata_kind", ["list", "dict"])
+@pytest.mark.parametrize("scalar_count", [32, 256, 1024, 4096])
+def test_flatten_unflatten_timing_metadata_size(scalar_count, metadata_kind, gc_enabled, record_property):
+    """Report absolute reconstruction cost as scalar metadata containers grow."""
+    scalars = (
+        list(range(scalar_count)) if metadata_kind == "list" else {str(index): index for index in range(scalar_count)}
+    )
+    value = {"tensor": torch.ones(1), "metadata": scalars}
+    metadata = SampleMetadata.from_outputs(value)
+    template = metadata.without_tensors(value)
+    start = perf_counter_ns()
+    reconstruction = OutputReconstruction.prepare(metadata, template)
+    record_property("preparation_us", (perf_counter_ns() - start) / 1000)
+    assert reconstruction is not None
+    tensors = (torch.zeros(1),)
+
+    first = reconstruction.unflatten_tensors(tensors)
+    assert first["tensor"] is tensors[0]
+    assert first["metadata"] == scalars
+    assert type(first["metadata"]) is type(scalars)
+    first["metadata"].clear()
+    assert len(scalars) == scalar_count
+    assert len(template["metadata"]) == scalar_count
+
+    record_timings(
+        {
+            "unflatten": lambda: metadata.unflatten_tensors(tensors, template),
+            "prepared_unflatten": lambda: reconstruction.unflatten_tensors(tensors),
+        },
+        gc_enabled,
+        record_property,
+    )
+    second = reconstruction.unflatten_tensors(tensors)
+    assert second["metadata"] == template["metadata"] == scalars
+
+
 def test_make_batch():
     # the following tensors should not be modified
     constant_tensor = torch.ones(2, 2)

@@ -82,6 +82,97 @@ def test_prepared_reconstruction_uses_recorded_paths_instead_of_template_leaf_or
     assert restored["second"] is second
 
 
+@pytest.mark.parametrize("scalar_count", [0, 32, 1024])
+@pytest.mark.parametrize("container_type", [list, dict])
+@pytest.mark.parametrize("restore_recipe", [False, True])
+def test_scalar_metadata_containers_remain_isolated_between_calls(scalar_count, container_type, restore_recipe):
+    tokens = (
+        list(range(scalar_count)) if container_type is list else {str(index): index for index in range(scalar_count)}
+    )
+    value = {"tensor": torch.ones(2), "metadata": [{"tokens": tokens, "tags": ["first", "second"]}]}
+    metadata = SampleMetadata.from_outputs(value)
+    template = metadata.without_tensors(value)
+    recipe = OutputReconstruction.prepare(metadata, template)
+    assert recipe is not None
+    if restore_recipe:
+        recipe = pickle.loads(pickle.dumps(recipe))
+    first_tensor, second_tensor = torch.zeros(2), torch.ones(2)
+
+    first = recipe.unflatten_tensors((first_tensor,))
+    if container_type is list:
+        first["metadata"][0]["tokens"].append(-1)
+    else:
+        first["metadata"][0]["tokens"]["changed"] = -1
+    first["metadata"][0]["tags"].append("changed")
+    second = recipe.unflatten_tensors((second_tensor,))
+
+    assert first["tensor"] is first_tensor
+    assert second["tensor"] is second_tensor
+    assert type(second["metadata"]) is list
+    assert type(second["metadata"][0]) is dict
+    assert type(second["metadata"][0]["tokens"]) is container_type
+    assert second["metadata"] == template["metadata"] == value["metadata"]
+    assert second["metadata"][0]["tokens"] is not tokens
+
+
+def test_scalar_none_containers_do_not_hide_tensor_placeholders():
+    first, second = torch.ones(2), torch.zeros(2)
+    value = {"tensors": [first, second], "constants": [None, None]}
+    metadata = SampleMetadata.from_outputs(value)
+    template = metadata.without_tensors(value)
+    recipe = OutputReconstruction.prepare(metadata, template)
+    assert recipe is not None
+
+    restored = recipe.unflatten_tensors((second, first))
+
+    assert restored["tensors"][0] is second
+    assert restored["tensors"][1] is first
+    assert restored["constants"] == [None, None]
+    restored["constants"].append("changed")
+    assert template == {"tensors": [None, None], "constants": [None, None]}
+    assert value["constants"] == [None, None]
+
+
+@pytest.mark.parametrize("value", [list(range(32)), {str(index): index for index in range(32)}])
+def test_scalar_only_outputs_are_copied_without_tensor_results(value):
+    metadata = SampleMetadata.from_outputs(value)
+    recipe = OutputReconstruction.prepare(metadata, value)
+    assert recipe is not None
+
+    first = recipe.unflatten_tensors(())
+    first.clear()
+    second = recipe.unflatten_tensors(())
+
+    assert type(second) is type(value)
+    assert second == value
+    assert len(second) == 32
+    assert second is not value
+
+
+def test_shared_scalar_metadata_keeps_general_reconstruction():
+    shared = [1, 2, 3]
+    graph = _graph({"tensor": torch.ones(2), "first": shared, "second": shared})
+    template = graph.forward_effects_spec.output_template
+    assert OutputReconstruction.prepare(graph.output_spec, template) is None
+    tensor = torch.zeros(2)
+
+    restored = graph.restore_outputs((tensor,), {})
+
+    assert restored["tensor"] is tensor
+    assert restored["first"] is restored["second"]
+    assert restored["first"] is not shared
+    restored["first"].append(4)
+    assert restored["second"] == [1, 2, 3, 4]
+    assert shared == template["first"] == [1, 2, 3]
+
+
+def test_unrecorded_tensors_in_metadata_keep_general_reconstruction():
+    metadata = SampleMetadata.from_outputs({"tensor": torch.ones(2)})
+    template = {"tensor": None, "metadata": [torch.zeros(2)]}
+
+    assert OutputReconstruction.prepare(metadata, template) is None
+
+
 def test_prepared_recipe_does_not_retain_sample_tensor_storage():
     tensor = torch.ones(2)
     reference = weakref.ref(tensor)
