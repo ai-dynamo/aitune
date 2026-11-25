@@ -1,18 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Shared reporting for the reconstruction baseline; timings are observations, never assertions.
-
-For a controlled comparison, use the same idle runner and software environment on both revisions::
-
-    pytest -s -n 0 tests/unit/torch/module/test_sample_metadata.py \
-        tests/unit/torch/module/test_reconstruction_contract.py \
-        -k 'test_flatten_unflatten_timing or test_restore_outputs_timing' \
-        -o junit_family=legacy --junitxml=tensor-reconstruction-benchmark.xml
-
-CI retains the serial report in pytorch-gpu-results. Parallel unit-suite timings are only smoke
-coverage. Compare absolute microseconds and repeated samples before selecting an optimization;
-these CPU contract measurements do not establish model latency or GPU throughput improvements.
-"""
+"""Report CPU microbenchmark samples and environment details without latency thresholds."""
 
 import gc
 import os

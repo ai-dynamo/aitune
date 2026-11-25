@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Correctness and CPU baseline measurements for the complete restoration contract."""
+"""Correctness tests for the complete restoration contract."""
 
 from collections import namedtuple
 from dataclasses import dataclass
@@ -14,7 +14,6 @@ from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.module.sample_metadata import SampleMetadata
-from tests.unit.torch.module.reconstruction_benchmark import record_timings
 
 
 @dataclass
@@ -223,15 +222,10 @@ class CacheModel(torch.nn.Module):
         return {"value": x * 2, "aliases": state[: self.alias_count], "metadata": []}
 
 
-@pytest.mark.parametrize("gc_enabled", [False, True], ids=["gc-off", "gc-on"])
 @pytest.mark.parametrize("alias_count", [0, 1, 8])
 @pytest.mark.parametrize("mutation", ["none", "copy", "replace"])
-def test_restore_outputs_timing(mutation, alias_count, gc_enabled, record_property):
-    """Time GraphSpec restoration including mutation handling and live alias lookup.
-
-    The local model records the contract outside timing; this measures CPU restoration alone,
-    without compilation, tensor allocation, or model execution in the measured region.
-    """
+def test_restore_outputs_preserves_mutations_aliases_and_call_isolation(mutation, alias_count):
+    """Restore mutations and aliases without sharing non-preserved data between calls."""
     model = CacheModel(mutation, alias_count)
     signature = ForwardSignature.from_callable(model.forward)
     value = torch.ones(16)
@@ -267,14 +261,6 @@ def test_restore_outputs_timing(mutation, alias_count, gc_enabled, record_proper
 
     first = check_restoration()
     first["metadata"].append("changed")
-    record_timings(
-        {
-            "restore_outputs": lambda: graph.restore_outputs(flat_outputs, runtime_arguments),
-            "locator_restore_outputs": lambda: effects.restore_outputs(flat_outputs, runtime_arguments, output_spec),
-        },
-        gc_enabled,
-        record_property,
-    )
     second = check_restoration()
     assert second["metadata"] == effects.output_template["metadata"] == []
     assert second is not first

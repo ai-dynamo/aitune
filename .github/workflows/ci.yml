@@ -354,16 +354,6 @@ jobs:
             --cov=aitune \
             --cov-report=xml:coverage.xml \
             --junitxml=pytorch-gpu.test-report.xml
-      - name: Measure tensor reconstruction baseline
-        # Run after the parallel suite, without coverage or competing pytest workers.
-        # JUnit properties retain repeated samples and environment details; no latency thresholds.
-        run: |
-          python -m pytest -q -s -n 0 \
-            tests/unit/torch/module/test_sample_metadata.py \
-            tests/unit/torch/module/test_reconstruction_contract.py \
-            -k 'test_flatten_unflatten_timing or test_restore_outputs_timing' \
-            -o junit_family=legacy \
-            --junitxml=tensor-reconstruction-benchmark.xml
       - if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
@@ -371,7 +361,43 @@ jobs:
           path: |
             coverage.xml
             pytorch-gpu.test-report.xml
-            tensor-reconstruction-benchmark.xml
+          if-no-files-found: ignore
+
+  microbenchmarks:
+    name: Microbenchmarks
+    needs: [wheel, pytorch-image]
+    if: *wheel_and_image_ready
+    # Keep the original runner type and image for comparisons with earlier CPU timings.
+    runs-on: prod-aitune-tester-rtx-pro-4500-v1
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.wheel.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: dist
+          path: dist
+      - name: Run microbenchmarks
+        # Serial execution without coverage; JUnit properties retain samples and environment details.
+        run: |
+          python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
+          python -m pytest -q -s -n 0 tests/benchmarks/micro \
+            -o junit_family=legacy \
+            --junitxml=microbenchmark-results.xml
+      - if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: microbenchmark-results
+          path: microbenchmark-results.xml
           if-no-files-found: ignore
 
   functional-ci:
