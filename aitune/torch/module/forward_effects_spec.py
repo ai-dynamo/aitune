@@ -96,14 +96,17 @@ class InputMutation:
     def can_replace_input(self, arguments: dict[str, Any]) -> bool:
         """Return whether replacement reaches a mutable container owned by the caller.
 
-        Rebinding a direct argument, or rebuilding only tuples above it, changes
-        the normalized argument dictionary without updating the caller's state.
+        Check the containers between the argument binding and the changed leaf. Exclude the
+        normalized arguments dictionary, which is internal to AITune, and the leaf itself.
+        Replacement reaches the caller if at least one of those containers is mutable.
 
-        For a COPY_TENSOR update, state=tensor or state=(tensor,) therefore needs value copy-back.
-        With state={"cache": tensor}, assignment reaches the caller's dictionary. A tuple containing
-        that dictionary also permits replacement: the mutable ancestor, not the outer call layout,
-        determines whether the new reference reaches the caller. The normalized argument dictionary
-        itself is excluded because it is an internal binding, not caller-owned state.
+        For example, state={"cache": tensor}, state={"cache": (tensor,)}, and
+        state=({"cache": tensor},) all permit replacement through the caller's dictionary.
+        A tuple containing the tensor can be rebuilt and assigned into that dictionary.
+
+        For direct arguments or paths containing only tuples, such as state=tensor,
+        state=(tensor,), or state=((tensor,),), replacement would change only the internal
+        argument binding. COPY_TENSOR therefore falls back to copying values into the original tensor.
         """
         steps = tuple(self.locator.path_iter())
         return any(not isinstance(Locator(steps[:depth]).get_value(arguments), tuple) for depth in range(1, len(steps)))

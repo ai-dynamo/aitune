@@ -118,9 +118,9 @@ The supported restoration operations are:
 | Restore an output-to-input alias | Return the corresponding input tensor or container so the output shares its object identity. |
 
 Only values reached by `Locator` are checked for changes. A leaf is a value inside the input structure that
-`Locator` does not inspect further, such as a tensor or a number. Integrations can register non-tensor
-fields to check in otherwise tensor-only objects, such as the initialization fields of Transformers static
-cache layers. The contract does not describe deleted leaves, arbitrary Python side effects, or hidden module
+`Locator` does not inspect further, such as a tensor or a Python primitive (for example, a number).
+Integrations can register non-tensor fields to check in otherwise tensor-only objects, such as the initialization
+fields of Transformers static cache layers. The contract does not describe deleted leaves, arbitrary Python side effects, or hidden module
 attributes and buffers. Exporters and backends handle module state separately. Restoring an alias means returning
 the same object. It does not support rebuilding every possible tensor view that shares memory with an input.
 

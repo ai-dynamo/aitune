@@ -239,9 +239,19 @@ def test_restore_applies_input_mutations_and_rebuilds_output():
     assert arguments["step"] == [1]
 
 
-def test_restore_can_replace_a_tensor_normally_copied_into_the_input():
+@pytest.mark.parametrize(
+    "container",
+    [
+        pytest.param(lambda tensor: [tensor], id="list"),
+        pytest.param(lambda tensor: {"cache": tensor}, id="dict"),
+        pytest.param(lambda tensor: {"cache": (tensor,)}, id="dict-containing-tuple"),
+        pytest.param(lambda tensor: ({"cache": tensor},), id="tuple-containing-dict"),
+    ],
+)
+def test_restore_can_replace_a_tensor_normally_copied_into_the_input(container):
     original = torch.zeros(2)
-    arguments = {"state": [original]}
+    state = container(original)
+    arguments = {"state": state}
     locator = SampleMetadata.from_inputs(arguments).tensor_data[0][0]
     output_spec = SampleMetadata.from_outputs(torch.zeros(2))
     replacement = torch.ones(2)
@@ -257,8 +267,9 @@ def test_restore_can_replace_a_tensor_normally_copied_into_the_input():
         tensor_mutation_policies={1: TensorMutationPolicy.REPLACE_INPUT},
     )
 
-    assert arguments["state"][0] is replacement
-    assert arguments["state"][0] is not original
+    # Read through the caller's state, independently of AITune's argument bindings.
+    assert locator.get_value({"state": state}) is replacement
+    torch.testing.assert_close(original, torch.zeros(2))
 
 
 def test_restore_preserves_an_input_container_returned_in_mixed_outputs():
@@ -301,7 +312,14 @@ def test_restore_preserves_a_tensor_returned_directly_from_inputs():
     assert result is input_tensor
 
 
-@pytest.mark.parametrize("container", [lambda tensor: tensor, lambda tensor: (tensor,), lambda tensor: ((tensor,),)])
+@pytest.mark.parametrize(
+    "container",
+    [
+        pytest.param(lambda tensor: tensor, id="direct-tensor"),
+        pytest.param(lambda tensor: (tensor,), id="tuple"),
+        pytest.param(lambda tensor: ((tensor,),), id="nested-tuples"),
+    ],
+)
 def test_replacement_policy_copies_mutations_back_through_immutable_arguments(container):
     target = torch.zeros(2)
     arguments = {"state": container(target)}
