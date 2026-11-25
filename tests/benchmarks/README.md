@@ -1,3 +1,7 @@
+---
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+---
 # Benchmarks
 
 Benchmarks measure performance separately from correctness tests under `tests/unit/` and functional test suites.
