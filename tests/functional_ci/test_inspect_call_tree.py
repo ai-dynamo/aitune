@@ -40,7 +40,7 @@ def test_call_tree_records_the_calls_and_their_cuda_times(device: torch.device):
     tree = _inspect(model, fn, dataset, call_tree=True).call_tree
 
     assert tree is not None
-    assert tree.number_of_samples == ITERATIONS
+    assert all(len(node.calls_per_sample) == ITERATIONS for node in tree.nodes.values())
     assert tree.nodes[("root.forward",)].total_calls == ITERATIONS
     assert tree.nodes[("root.forward", "root.dit_forward")].total_calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes

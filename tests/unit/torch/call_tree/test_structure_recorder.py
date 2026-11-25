@@ -111,7 +111,6 @@ def test_calls_are_counted_over_samples_and_children_keep_first_call_order():
     tree = record(model, lambda: model(tokens, image), num_samples=3)
 
     root = tree.nodes[("root.forward",)]
-    assert tree.number_of_samples == 3
     assert root.total_calls == 3
     dit = tree.nodes[("root.forward", "root.dit_forward")]
     assert dit.total_calls == 15
@@ -183,7 +182,7 @@ def test_result_is_a_snapshot_that_later_recording_does_not_change():
     one_sample()
 
     assert first.nodes[("root.forward",)].total_calls == 1
-    assert first.number_of_samples == 1
+    assert first.nodes[("root.forward",)].calls_per_sample == [1]
     assert recorder.result().nodes[("root.forward",)].total_calls == 2
 
 
@@ -1716,7 +1715,6 @@ def test_calls_outside_a_sample_are_not_recorded():
 
     tree = recorder.result()
     assert tree.nodes == {}
-    assert tree.number_of_samples == 0
 
 
 def test_calls_per_sample_counts_each_samples_calls():
@@ -1759,7 +1757,6 @@ def test_calls_per_sample_counts_calls_only_in_the_samples_that_made_them():
                 recorder.end_call(outer)
 
     tree = recorder.result()
-    assert tree.number_of_samples == 3
     assert tree.nodes[("root.forward",)].calls_per_sample == [1, 1, 1]
     expert_node = tree.nodes[("root.forward", "root.expert_2.forward")]
     assert expert_node.calls_per_sample == [0, 2, 0]
@@ -1783,12 +1780,6 @@ def test_a_sample_with_no_calls_gives_every_node_a_zero():
     tree = recorder.result()
     assert tree.nodes[("root.forward",)].calls_per_sample == [1, 1, 1]
     assert tree.nodes[("root.forward", "root.lin.forward")].calls_per_sample == [2, 0, 1]
-
-
-def test_number_of_samples_is_derived_from_the_nodes():
-    assert CallTree().number_of_samples == 0
-    node = CallNode(path=("a",), label="a", owner_class="M", method="forward", calls_per_sample=[2, 1, 0])
-    assert CallTree(nodes={node.path: node}).number_of_samples == 3
 
 
 def test_total_calls_is_read_only():

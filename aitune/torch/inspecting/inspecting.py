@@ -47,8 +47,8 @@ def inspect(
         dataset: List of tuples with batch size and input.
         inference_function: Custom inference function to use for inspection, obj is used by default.
         number_of_iterations: Number of samples from the dataset to inspect, run once per pass. The call tree's
-            timing pass runs each sample once per call-path depth. The call tree reports it as
-            ``CallTree.number_of_samples``.
+            timing pass runs each sample once per call-path depth; each node's ``calls_per_sample`` has one entry
+            per inspected sample.
         warmup_iterations: Number of iterations to run for warmup.
         min_depth: Minimum depth of the modules to inspect, if root level modules is not working, try to increase this value
         max_depth: Maximum depth of the modules to inspect
@@ -142,6 +142,12 @@ def _record_call_tree(
 ) -> CallTree:
     """Record the call tree without times, then time it in a second pass, each sample once per depth it reaches."""
     tree = _record_structure(recorder, inference_function, dataset, number_of_iterations)
+    if not tree.nodes:
+        logger.warning(
+            "The call tree recorded no calls: no instrumented module or method ran during the structure pass, "
+            "for example because the inference function does not call the inspected object or inspect runs "
+            "inside torch.compile. The returned call tree is empty."
+        )
     if max_timing_depth == 0:
         logger.info("Skipping the call tree's timing pass (max_timing_depth=0); node times stay None.")
     else:
@@ -187,14 +193,15 @@ def _time_call_tree(
 ) -> None:
     """Time the tree's nodes in place, replaying each sample once per depth its calls reach."""
     depths_per_sample = timer.depths_per_sample()
-    # A tree without nodes has no per-sample counts, so its plan is empty: give each sample an empty plan (no replay).
-    depths_per_sample += [[]] * (number_of_iterations - len(depths_per_sample))
     # Ranks must run the same number of inferences or the barriers in _run_inference deadlock.
     coordinator.verify_equal(depths_per_sample, "call tree timing depths")
+    if not any(depths_per_sample):
+        logger.info("Timing the call tree: no call is timeable, so the timing pass is skipped.")
+        return
     logger.info(
         "Timing the call tree: %d samples, %d call-path depths, %d replays "
         "(each sample once per depth its calls reach).",
-        len(depths_per_sample),
+        number_of_iterations,
         len(set(itertools.chain.from_iterable(depths_per_sample))),
         sum(map(len, depths_per_sample)),
     )

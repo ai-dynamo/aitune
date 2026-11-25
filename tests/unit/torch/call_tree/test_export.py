@@ -29,8 +29,8 @@ def test_to_dict_exports_the_whole_tree():
     d = tree.to_dict()
 
     assert d["schema_version"] == 1
-    assert set(d) == {"schema_version", "number_of_samples", "total_time_ms", "nodes", "modules", "weights"}
-    assert d["number_of_samples"] == tree.number_of_samples
+    assert set(d) == {"schema_version", "total_time_ms", "nodes", "modules", "weights"}
+    assert "number_of_samples" not in tree.to_dict()
     assert d["total_time_ms"] == tree.total_time_ms
     nodes = d["nodes"]
     assert len(nodes) == len(tree.nodes)

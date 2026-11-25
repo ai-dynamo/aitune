@@ -56,7 +56,7 @@ def test_rank_zero_times_are_applied(mocker):
     tree = _tree(total_time_ms=0.5)
     rank_zero = _tree(total_time_ms=4.0)
     records = _records(rank_zero)
-    broadcast = mocker.patch(BROADCAST, return_value=(2, records))
+    broadcast = mocker.patch(BROADCAST, return_value=records)
 
     synchronize_call_tree(tree)
 
@@ -71,7 +71,7 @@ def test_different_keys_raise(mocker):
         _NodeRecord(("root.forward",), "root", 1, [], None, 0, 0, []),
         _NodeRecord(("root.forward", "root.other.forward"), "other", 1, [], None, 0, 0, []),
     )
-    mocker.patch(BROADCAST, return_value=(2, records))
+    mocker.patch(BROADCAST, return_value=records)
 
     with pytest.raises(RuntimeError, match="differs from rank zero"):
         synchronize_call_tree(tree)
@@ -81,7 +81,7 @@ def test_different_call_counts_raise(mocker):
     tree = _tree(total_calls=1)
     rank_zero = _tree(total_calls=3)
     records = _records(rank_zero)
-    mocker.patch(BROADCAST, return_value=(2, records))
+    mocker.patch(BROADCAST, return_value=records)
 
     with pytest.raises(RuntimeError, match="head.forward"):
         synchronize_call_tree(tree)
@@ -93,7 +93,7 @@ def test_different_calls_per_sample_raise(mocker):
     head = ("root.forward", "root.head.forward")
     tree.nodes[head].calls_per_sample = [2, 0]
     rank_zero.nodes[head].calls_per_sample = [1, 1]
-    mocker.patch(BROADCAST, return_value=(2, _records(rank_zero)))
+    mocker.patch(BROADCAST, return_value=_records(rank_zero))
 
     with pytest.raises(RuntimeError, match="head.forward"):
         synchronize_call_tree(tree)
@@ -102,7 +102,7 @@ def test_different_calls_per_sample_raise(mocker):
 def test_a_mismatch_leaves_the_local_tree_unchanged(mocker):
     tree, rank_zero = _tree(total_calls=1), _tree(total_calls=3)
     rank_zero.nodes[("root.forward",)].total_time_ms = 99.0  # matches and comes first
-    mocker.patch(BROADCAST, return_value=(2, _records(rank_zero)))
+    mocker.patch(BROADCAST, return_value=_records(rank_zero))
 
     with pytest.raises(RuntimeError, match="head.forward"):
         synchronize_call_tree(tree)
@@ -116,7 +116,7 @@ def test_rank_zero_bytes_are_applied(mocker):
     for node in rank_zero.nodes.values():
         node.total_bytes_in, node.total_bytes_out = 100, 200
     records = _records(rank_zero)
-    mocker.patch(BROADCAST, return_value=(2, records))
+    mocker.patch(BROADCAST, return_value=records)
 
     synchronize_call_tree(tree)
 
@@ -136,7 +136,7 @@ def test_rank_zero_shapes_are_applied(mocker):
     rank_zero_signatures = [n.signatures for n in rank_zero.nodes.values()]
     assert all(rank_zero_signatures)
     assert [n.signatures for n in tree.nodes.values()] != rank_zero_signatures
-    mocker.patch(BROADCAST, return_value=(1, _records(rank_zero)))
+    mocker.patch(BROADCAST, return_value=_records(rank_zero))
 
     synchronize_call_tree(tree)
 

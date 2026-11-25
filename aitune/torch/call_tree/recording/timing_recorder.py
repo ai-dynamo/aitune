@@ -133,8 +133,8 @@ class TimingRecorder(CallRecorder):
         Only reads the tree, so it can be called before entering the ``with`` block.
 
         Returns:
-            One sorted list of depths per sample, ``depths_per_sample()[i]`` belonging to sample ``i``, for
-            example ``[[1, 2, 3], [1, 2]]``.
+            One sorted list of depths per recorded sample, ``depths_per_sample()[i]`` belonging to sample ``i``,
+            for example ``[[1, 2, 3], [1, 2]]``; empty when no node is timeable.
 
         Example:
             The first sample is replayed twice, timing depth 1 and then depth 2. The second sample never calls the
@@ -155,13 +155,10 @@ class TimingRecorder(CallRecorder):
             >>> TimingRecorder(tree).depths_per_sample()
             [[1, 2], [1]]
         """
+        timeable = [node for node in self._tree.nodes.values() if self._is_timeable(node)]
         return [
-            sorted({
-                len(node.path)
-                for node in self._tree.nodes.values()
-                if node.calls_per_sample[i] > 0 and self._is_timeable(node)
-            })
-            for i in range(self._tree.number_of_samples)
+            sorted({len(node.path) for node, calls in zip(timeable, counts, strict=True) if calls > 0})
+            for counts in zip(*(node.calls_per_sample for node in timeable), strict=True)
         ]
 
     @contextmanager

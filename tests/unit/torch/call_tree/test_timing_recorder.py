@@ -167,6 +167,19 @@ def test_time_ms_is_none_without_a_timing_pass():
     assert node.total_time_ms is None
 
 
+def test_depths_per_sample_of_a_tree_with_no_timeable_nodes():
+    assert TimingRecorder(CallTree()).depths_per_sample() == []
+    node = CallNode(
+        path=("a",),
+        label="a",
+        owner_class="M",
+        method="forward",
+        calls_per_sample=[1, 1],
+        inside_compiled_part=True,
+    )
+    assert TimingRecorder(CallTree(nodes={node.path: node})).depths_per_sample() == []
+
+
 def test_the_pass_writes_each_nodes_measured_time(mocker):
     mocker.patch("aitune.torch.call_tree.recording.timing_recorder.torch.cuda.is_available", return_value=False)
     # root calls take 2, 6 and 5 ms; the child calls 1, 3, 4 and 7 ms over the three samples
@@ -179,7 +192,7 @@ def test_the_pass_writes_each_nodes_measured_time(mocker):
     model = nn.Linear(2, 2)
 
     with TimingRecorder(tree) as timer:
-        for i in range(tree.number_of_samples):
+        for i in range(len(tree.nodes[root_path].calls_per_sample)):
             with timer.time_replay(1):  # times the root; the deeper child calls are skipped
                 timer.end_call(timer.begin_call("root.forward", model, "forward", ()))
             with timer.time_replay(2):  # times the children

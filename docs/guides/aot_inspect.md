@@ -317,7 +317,6 @@ The exported data has this structure:
 ```json
 {
   "schema_version": 1,
-  "number_of_samples": 2,
   "total_time_ms": 30.0,
   "nodes": [
     {"call_path": "forward", "owner_class": "Vla", "total_calls": 2, "total_time_ms": 30.0, ...},
@@ -348,9 +347,8 @@ The exported data has this structure:
 }
 ```
 
-`number_of_samples` is the number of recorded samples; `total_calls`, `total_time_ms`, `total_bytes_in` and
-`total_bytes_out` are totals over all calls and samples; divide by `total_calls` for per-call values and by
-`number_of_samples` for per-sample values. `total_time_ms` is `null` when the timing pass never timed the node.
+`total_calls`, `total_time_ms`, `total_bytes_in` and `total_bytes_out` are totals over all calls and samples;
+divide by `total_calls` for per-call values. `total_time_ms` is `null` when the timing pass never timed the node.
 `inside_compiled_part` is true for calls inside a compiled part: they run inside the compiled code in the timing
 pass, so their `total_time_ms` is `null`; the compiled part's own call is timed.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
@@ -360,7 +358,8 @@ Every leaf has `type`, tensors also `dtype` and exact `shape`; `outputs` is null
 A leaf with a `source` names where its object was last seen: `call_path`, `side` and the leaf `name` there, which can
 be in any of that node's signatures. In the example, `dit.forward` received `hidden_states` as `dit_forward`'s own
 argument of that name.
-`calls_per_sample` gives how many of the node's calls each sample made; they add up to `total_calls`.
+`calls_per_sample` gives how many of the node's calls each sample made, one entry per recorded sample; they add
+up to `total_calls`.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:
 

@@ -92,12 +92,6 @@ class CallTree:
     modules: list[tuple[str, nn.Module]] = field(default_factory=list)
 
     @property
-    def number_of_samples(self) -> int:
-        """Number of recorded samples: the length of every node's ``calls_per_sample``; 0 for a tree without nodes."""
-        node = next(iter(self.nodes.values()), None)
-        return 0 if node is None else len(node.calls_per_sample)
-
-    @property
     def roots(self) -> list[CallNode]:
         """Outermost nodes in first-call order."""
         return sorted((n for n in self.nodes.values() if len(n.path) == 1), key=lambda n: n.first_seen)
@@ -186,15 +180,14 @@ class CallTree:
     def to_dict(self) -> dict[str, Any]:
         """The call tree as plain JSON data, for tools that read it without torch or aitune.
 
-        Node values are totals over all calls and ``number_of_samples``: divide by ``total_calls`` for per call, by
-        ``number_of_samples`` for per sample.
+        Node values are totals over all calls and samples: divide by ``total_calls`` for per call;
+        ``calls_per_sample`` gives the per-sample counts.
 
         Returns:
             A dict of str, int, float, list and dict values with these keys:
 
             - ``schema_version``: format version. Fields may be added under the same version, so readers should
               ignore keys they don't know; it changes when a field is removed, renamed or changes meaning.
-            - ``number_of_samples``: number of recorded samples.
             - ``total_time_ms``: time of the outermost calls over all samples (``CallTree.total_time_ms``).
             - ``nodes``: one dict per node, in first-call order, with ``call_path`` (``CallNode.path_str``, which
               identifies the node), ``owner_class``, ``total_calls``, ``total_time_ms`` (the total measured time of the
@@ -263,7 +256,6 @@ class CallTree:
                 }
         return {
             "schema_version": SCHEMA_VERSION,
-            "number_of_samples": self.number_of_samples,
             "total_time_ms": self.total_time_ms,
             "nodes": [
                 {

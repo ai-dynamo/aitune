@@ -32,7 +32,8 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
     Updates ``tree`` in place and returns it.
 
     Every rank must have recorded the same tree: the same call paths (adapter names), with the same owner class,
-    call count and ``CallNode.calls_per_sample`` per node, so each node's calls fall into the same samples on
+    call count and ``CallNode.calls_per_sample`` per node, so each node's calls fall into the same samples — and
+    the same number of samples — on
     every rank. The measured times, tensor bytes and the per-node signatures are taken
     from rank zero, so every rank reports the same values; the bytes and signatures are not compared, because
     tensor-parallel ranks can hold differently sized shards. ``.to()`` callers and recorded weight
@@ -48,32 +49,28 @@ def synchronize_call_tree(tree: CallTree) -> CallTree:
     Raises:
         RuntimeError: If the local tree differs from rank zero's.
     """
-    local = (
-        tree.number_of_samples,
-        tuple(
-            _NodeRecord(
-                path,
-                node.owner_class,
-                node.total_calls,
-                list(node.calls_per_sample),
-                node.total_time_ms,
-                node.total_bytes_in,
-                node.total_bytes_out,
-                node.signatures,
-            )
-            for path, node in tree.nodes.items()
-        ),
+    local = tuple(
+        _NodeRecord(
+            path,
+            node.owner_class,
+            node.total_calls,
+            list(node.calls_per_sample),
+            node.total_time_ms,
+            node.total_bytes_in,
+            node.total_bytes_out,
+            node.signatures,
+        )
+        for path, node in tree.nodes.items()
     )
-    rank_zero_number_of_samples, rank_zero_records = coordinator.broadcast_from_rank0(local)
+    rank_zero_records = coordinator.broadcast_from_rank0(local)
 
     with coordinator.raise_if_any_rank_fails("Synchronizing call tree"):
         rank_zero_paths = {record.path for record in rank_zero_records}
-        if set(tree.nodes) != rank_zero_paths or tree.number_of_samples != rank_zero_number_of_samples:
+        if set(tree.nodes) != rank_zero_paths:
             missing = sorted(rank_zero_paths - set(tree.nodes))
             unexpected = sorted(set(tree.nodes) - rank_zero_paths)
             raise RuntimeError(
-                f"Local call tree differs from rank zero: missing={missing!r}, unexpected={unexpected!r}, "
-                f"number of samples local={tree.number_of_samples} rank zero={rank_zero_number_of_samples}"
+                f"Local call tree differs from rank zero: missing={missing!r}, unexpected={unexpected!r}"
             )
         for record in rank_zero_records:
             node = tree.nodes[record.path]

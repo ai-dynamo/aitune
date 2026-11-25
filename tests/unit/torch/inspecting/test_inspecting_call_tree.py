@@ -59,7 +59,7 @@ def test_call_tree_leaves_legacy_output_unchanged(dataset):
 
     assert _legacy(with_graph) == _legacy(without)
     tree = _tree(with_graph)
-    assert tree.number_of_samples == ITERATIONS
+    assert all(len(node.calls_per_sample) == ITERATIONS for node in tree.nodes.values())
     assert tree.nodes[("root.forward",)].total_calls == ITERATIONS
     assert tree.nodes[("root.forward", "root.dit_forward")].total_calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes
@@ -91,8 +91,8 @@ def test_call_tree_adds_one_broadcast(mocker, dataset):
     # warmup, per-module and structure passes run number_of_iterations; the timing pass one inference per planned depth
     assert barrier.call_count == 2 * (2 + 3 + 3 + sum(map(len, TimingRecorder(_tree(info)).depths_per_sample())))
     assert broadcast.call_count == 2
-    number_of_samples, records = broadcast.call_args_list[1].args[0]
-    assert number_of_samples == 3
+    records = broadcast.call_args_list[1].args[0]
+    assert all(len(record.calls_per_sample) == 3 for record in records)
     assert {path for path, *_ in records} == set(_tree(info).nodes)
 
 
@@ -677,6 +677,8 @@ def test_forward_is_not_recorded_while_compiling(mocker, dataset):
             return real_record_call_tree(*args, **kwargs)
 
     mocker.patch("aitune.torch.inspecting.inspecting._record_call_tree", side_effect=record_while_compiling)
+    warning = mocker.patch("aitune.torch.inspecting.inspecting.logger.warning")
+    replay = mocker.spy(TimingRecorder, "time_replay")
 
     info = inspect(
         model, dataset, inference_function=fn, number_of_iterations=ITERATIONS, warmup_iterations=1, call_tree=True
@@ -684,6 +686,24 @@ def test_forward_is_not_recorded_while_compiling(mocker, dataset):
 
     assert _tree(info).nodes == {}
     assert _legacy(info) == _legacy(without)
+    assert "recorded no calls" in warning.call_args.args[0]
+    replay.assert_not_called()
+
+
+def test_the_timing_pass_is_skipped_when_no_node_is_timeable(mocker, dataset):
+    """When the replay plan is empty for every sample, the pass replays nothing and logs the skip."""
+    model, fn = _vla()
+    mocker.patch.object(TimingRecorder, "_is_timeable", return_value=False)
+    replay = mocker.spy(TimingRecorder, "time_replay")
+    info_log = mocker.spy(inspecting_module.logger, "info")
+
+    info = inspect(
+        model, dataset, inference_function=fn, number_of_iterations=ITERATIONS, warmup_iterations=1, call_tree=True
+    )
+
+    assert _tree(info).nodes
+    replay.assert_not_called()
+    assert "timing pass is skipped" in str(info_log.call_args_list)
 
 
 def test_event_resolution_failure_is_raised_through_the_rank_failure_context(mocker, dataset):

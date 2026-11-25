@@ -159,9 +159,8 @@ class CallNode:
         method: Name of the called method (``forward`` for module calls).
         module: Module the method belongs to, or None for methods of plain objects.
         calls_per_sample: Number of the node's calls in each recorded sample, recorded by the structure pass,
-            one entry per sample (``CallTree.number_of_samples`` entries, 0 for a sample that made no call of the
-            node); ``total_calls`` is their sum. ``CallSignature.call_indices`` count the node's calls across samples in
-            this order.
+            one entry per recorded sample (0 for a sample that made no call of the node); ``total_calls`` is
+            their sum. ``CallSignature.call_indices`` count the node's calls across samples in this order.
         total_time_ms: Total time of the node's calls in milliseconds over all calls and recorded samples;
             None when the node was never timed (inside a compiled part or deeper than ``max_timing_depth``).
             Time per call: ``total_time_ms / total_calls``.
