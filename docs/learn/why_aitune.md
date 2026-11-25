@@ -8,7 +8,7 @@ Accelerating a PyTorch application on NVIDIA GPUs often means answering a series
 spend time? Which parts can run independently? Which compiler, runtime, or optimization works for each part? Does the
 result meet the application's performance and quality requirements?
 
-We develop AITune to make this work repeatable. The same pipeline can contain modules with different input shapes,
+AITune makes this work repeatable. The same pipeline can contain modules with different input shapes,
 execution patterns, and GPU placement. AITune observes the running application, isolates selected module calls, and
 gives tuning strategies a common way to evaluate different implementations. The application can then run with the
 selected implementations in place.
