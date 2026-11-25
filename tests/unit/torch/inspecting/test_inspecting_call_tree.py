@@ -1148,5 +1148,32 @@ def test_input_comparison_failure_goes_through_the_rank_failure_context(mocker, 
     with pytest.raises(RuntimeError, match="bad comparison"):
         inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
-    spy.assert_any_call("Comparing a call tree sample's inputs")
+    spy.assert_any_call("Timing a call tree replay")
     assert nn.Module._apply is original_apply
+
+
+def test_an_inference_changing_its_inputs_in_place_warns(mocker):
+    """Mutating an input in place between replays is caught: the comparison runs before every replay."""
+    warning = mocker.patch("aitune.torch.inspecting.inspecting.logger.warning")
+    model, _ = _vla()
+    calls = itertools.count()
+
+    def inference(x):
+        tokens, image = vla_inputs()
+        if next(calls) > 0:  # let the structure pass describe x first, then grow it for later replays
+            x.resize_(2, 1, 8)
+        return model(tokens, image)
+
+    info = inspect(
+        model,
+        [torch.randn(1, 8)],
+        inference_function=inference,
+        number_of_iterations=1,
+        warmup_iterations=0,
+        call_tree=True,
+    )
+    assert max(len(path) for path in _tree(info).nodes) >= 2  # the sample is replayed more than once
+
+    call = next((c for c in warning.call_args_list if "different inputs" in str(c.args)), None)
+    assert call is not None
+    assert call.args[1:] == (1, 1, 0)

@@ -214,26 +214,26 @@ def _time_call_tree(
         sum(map(len, depths_per_sample)),
     )
     samples = samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations)
-    different_inputs: list[int] = []
+    different_inputs: set[int] = set()
     with _pass_on_all_ranks(timer, "call tree timing pass"):
         for sample_index, (depths, (_, args, kwargs)) in enumerate(zip(depths_per_sample, samples, strict=True)):
-            # describing runs before the replays' barriers, so its failure must reach every rank
-            with coordinator.raise_if_any_rank_fails("Comparing a call tree sample's inputs"):
-                if describe_sample_inputs(args, kwargs) != timer.tree.samples[sample_index].inputs:
-                    different_inputs.append(sample_index)
             for depth in depths:
                 with coordinator.raise_if_any_rank_fails("Timing a call tree replay"):
+                    # checked before every replay: the inference can change its inputs in place; not timed
+                    if describe_sample_inputs(args, kwargs) != timer.tree.samples[sample_index].inputs:
+                        different_inputs.add(sample_index)
                     with timer.time_replay(depth, sample_index):
                         _run_inference(inference_function, args, kwargs)
     if different_inputs:
         logger.warning(
             "The timing pass read different inputs than the structure pass for %d of %d samples (first: sample "
-            "%d), as a shuffling DataLoader or a shape-changing augmentation does. Their per-sample times can "
-            "belong to other inputs than CallTree.samples describes. Use a dataset that returns the same samples "
-            "in the same order on every read.",
+            "%d), as a shuffling DataLoader, a shape-changing augmentation or an inference that changes its "
+            "inputs in place does. Their per-sample times can belong to other inputs than CallTree.samples "
+            "describes. Use a dataset that returns the same samples in the same order on every read, and an "
+            "inference that leaves its inputs unchanged.",
             len(different_inputs),
             number_of_iterations,
-            different_inputs[0],
+            min(different_inputs),
         )
 
 

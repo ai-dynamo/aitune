@@ -296,7 +296,8 @@ class Sample:
 
     Attributes:
         inputs: The sample's argument leaves by ``Leaf.name``, described when the sample started. ``inspect`` warns
-            when the timing pass reads different inputs for a sample, for example from a shuffling ``DataLoader``.
+            when the timing pass reads different inputs for a sample, for example from a shuffling ``DataLoader``;
+            the check runs before every replay, so it also catches an inference that changes its inputs in place.
             Inputs that differ only in their values, not in types, dtypes or shapes, are not detected.
         calls: Number of calls per node in this sample, by call path, written by the structure pass. A missing
             node made no call.

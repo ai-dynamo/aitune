@@ -425,10 +425,11 @@ neither the dataset nor its order. The structure pass records each sample once, 
 sample once per depth, timing each node in the replay at its depth. So `time_ms_per_sample[i]` is a node's time
 on sample `i`, whatever shapes the node's calls had inside that sample.
 
-The timing pass reads the dataset again, so it needs the same samples in the same order. If it reads different
-inputs, for example from a shuffling `DataLoader`, `inspect` warns: those per-sample times can belong to other
-inputs than `samples[i]` describes. Inputs that differ only in their values, not in types, dtypes or shapes, are
-not detected.
+The timing pass reads the dataset again and replays each sample several times, so it needs the same samples in
+the same order, and an inference that leaves its inputs unchanged. Before every replay, `inspect` compares the
+sample's inputs with `samples[i]` and warns when they differ, for example with a shuffling `DataLoader` or an
+inference that changes its inputs in place: those per-sample times can belong to other inputs. Inputs that differ
+only in their values, not in types, dtypes or shapes, are not detected.
 
 The following script inspects the eager and the tuned model on the same dataset, joins the two trees by call path,
 and prints each node's eager and tuned time on every sample, labeled with the sample's shape:
