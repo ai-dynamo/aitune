@@ -42,28 +42,27 @@ def test_onnx_module_simple_inference(onnx_add_path, device):
 
 def test_onnx_module_cpu_bfloat16_output(tmp_path):
     path = tmp_path / "mixed_outputs.onnx"
+    # Expose the FP32 input directly as a graph output.
+    fp32 = helper.make_tensor_value_info("fp32", TensorProto.FLOAT, [4])
     graph = helper.make_graph(
-        [
-            helper.make_node("Identity", ["x"], ["bf16"]),
-            helper.make_node("Cast", ["x"], ["fp32"], to=TensorProto.FLOAT),
-        ],
+        [helper.make_node("Identity", ["x_bf16"], ["bf16"])],
         "mixed_outputs",
-        [helper.make_tensor_value_info("x", TensorProto.BFLOAT16, [4])],
-        [
-            helper.make_tensor_value_info("bf16", TensorProto.BFLOAT16, [4]),
-            helper.make_tensor_value_info("fp32", TensorProto.FLOAT, [4]),
-        ],
+        [helper.make_tensor_value_info("x_bf16", TensorProto.BFLOAT16, [4]), fp32],
+        [helper.make_tensor_value_info("bf16", TensorProto.BFLOAT16, [4]), fp32],
     )
     onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], ir_version=8), path)
     source = OnnxModule(path)
-    x = torch.tensor([1.5, -2.5, -0.0, 1.0e10], dtype=torch.bfloat16)
+    x_bf16 = torch.tensor([1.5, -2.5, -0.0, 1.0e10], dtype=torch.bfloat16)
+    x_fp32 = torch.tensor([0.25, 2.0, -3.5, 4.5], dtype=torch.float32)
+    expected_fp32 = x_fp32.clone()
 
-    outputs = source(x)
+    outputs = source(x_bf16, x_fp32)
+    x_fp32.zero_()
 
     assert set(outputs) == {"bf16", "fp32"}
     assert outputs["bf16"].dtype == torch.bfloat16
-    torch.testing.assert_close(outputs["bf16"].view(torch.int16), x.view(torch.int16))
-    torch.testing.assert_close(outputs["fp32"], x.float())
+    torch.testing.assert_close(outputs["bf16"].view(torch.int16), x_bf16.view(torch.int16))
+    torch.testing.assert_close(outputs["fp32"], expected_fp32)
 
 
 def test_onnx_module_record_and_tune(onnx_add_path):
