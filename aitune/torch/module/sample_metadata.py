@@ -496,6 +496,9 @@ class SampleMetadata:
         The getter reads tensors in recorded order and holds no sample values. Checkpoints store
         the locators, which are used to rebuild the getter on first use after loading.
         """
+        # itemgetter requires at least one index or key and reads directly from the root object
+        # using value[index_or_key]. A root tensor has an empty path. Nested paths and attribute
+        # access also require the general locator path, so one such tensor rules out the shortcut.
         if not self._tensor_data or any(
             locator.depth != 1 or next(locator.path_iter())[1] not in (ObjectType.SEQUENCE, ObjectType.DICT)
             for locator, _ in self._tensor_data
