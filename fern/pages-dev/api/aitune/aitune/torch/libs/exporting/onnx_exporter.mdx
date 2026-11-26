@@ -14,6 +14,12 @@ Export modules to ONNX through a flat tensor interface.
 |------|-------------|
 | [`ONNXExporter`](#aitune-torch-libs-exporting-onnx_exporter-ONNXExporter) | Export a module to ONNX through AITune's flat tensor interface. |
 
+### Functions
+
+| Name | Description |
+|------|-------------|
+| [`_lower_bf16_einsum_permutations`](#aitune-torch-libs-exporting-onnx_exporter-_lower_bf16_einsum_permutations) | Use a lossless Transpose for unary axis permutations unsupported by Einsum-12. |
+
 ### Data
 
 [`logger`](#aitune-torch-libs-exporting-onnx_exporter-logger)
@@ -232,6 +238,26 @@ Validate an ONNX artifact.
 
 
 </Indent>
+</Indent>
+
+<Anchor id="aitune-torch-libs-exporting-onnx_exporter-_lower_bf16_einsum_permutations">
+
+<CodeBlock showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.libs.exporting.onnx_exporter._lower_bf16_einsum_permutations(
+    model: onnx_ir.Model
+) -> None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Use a lossless Transpose for unary axis permutations unsupported by Einsum-12.
+
+
 </Indent>
 
 <Anchor id="aitune-torch-libs-exporting-onnx_exporter-logger">

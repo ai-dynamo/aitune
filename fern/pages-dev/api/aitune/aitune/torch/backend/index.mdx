@@ -1798,6 +1798,26 @@ Export a Torch module through the recorded flat tensor contract.
 
 
 </Indent>
+<Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_export_opset">
+
+<CodeBlock links={{"aitune.torch.module.graph_spec.GraphSpec":"../module/graph_spec.mdx#aitune-torch-module-graph_spec-GraphSpec"}} showLineNumbers={false} wordWrap={true}>
+
+```python
+aitune.torch.backend.ONNXRuntimeBackend._export_opset(
+    module: torch.nn.Module,
+    graph_spec: aitune.torch.module.graph_spec.GraphSpec
+) -> int | None
+```
+
+</CodeBlock>
+</Anchor>
+
+<Indent>
+
+Select a BF16-capable Conv schema without changing explicit requests.
+
+
+</Indent>
 <Anchor id="aitune-torch-backend-onnx_runtime_backend-ONNXRuntimeBackend-_get_execution_providers">
 
 <CodeBlock showLineNumbers={false} wordWrap={true}>
@@ -2070,7 +2090,8 @@ the backend defaults to `ONNXExecutionProvider.CUDA`. Only
 
 <ParamField path="opset_version" type="int | None" default="None">
 ONNX opset version passed to ``torch.onnx.export``.
-``None`` uses the torch default.
+With ``None``, Dynamo exports use opset 22 for BF16 inputs, outputs, or
+module state; other exports use the Torch default.
 </ParamField>
 
 
