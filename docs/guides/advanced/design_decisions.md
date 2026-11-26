@@ -9,16 +9,17 @@ Start with [Why AITune](../../learn/why_aitune.md) for the motivation and
 AOT and JIT workflows. This guide explains the reasons behind those choices.
 
 AITune's design makes it possible to optimize individual parts of an inference application and add custom backends
-and tuning strategies in the user's environment. A backend defines how an implementation is built and run, such as
-building and running a TensorRT engine. A tuning strategy defines how candidates are evaluated and selected.
+and tuning strategies in the user's environment. A backend defines how a module is compiled or otherwise optimized
+and executed, such as by building and running a TensorRT engine. A tuning strategy defines how candidates are
+evaluated and selected.
 For example, it can compare candidates and select the one with the lowest measured latency, or try them in order
 and accept the first that passes the configured correctness and
 performance checks. Teams can implement either interface in their own code and use it in the existing tuning workflow.
 
 ## Observe execution before choosing tuning boundaries
 
-Runtime behavior exposes which modules actually run, their inputs, and relationships such as a caller
-reading a module's weights. When wrapping a module selected from a call tree, AITune can keep weights on the device
+Running inference on a model or pipeline reveals which modules execute, their inputs, and relationships such as a
+caller reading a module's weights. When wrapping a module selected from a call tree, AITune can keep weights on the device
 if it observed code outside the module using them.
 
 Inspection takes an additional application run, and its findings reflect the inputs supplied.
@@ -30,9 +31,14 @@ different backends while the surrounding application keeps its existing executio
 
 ## Keep backends and tuning strategies separate
 
-Backends build and run implementations. Tuning strategies evaluate candidates and select an implementation.
-Teams can develop and combine both locally, which shortens the path from an idea to a measured result and keeps
-upstream contributions focused.
+A backend defines how a module is compiled or otherwise optimized and executed. It handles the compiler or runtime,
+resources, and state needed to run that module. A tuning strategy defines which backend candidates to evaluate,
+which checks and measurements to apply, and which candidate to select. For example, it can compare measured latency
+or accept the first candidate that passes the configured checks.
+
+Keeping these responsibilities separate lets a custom backend use an existing strategy, or a custom strategy
+evaluate existing backends. Teams can develop and combine both locally, which shortens the path from an idea to a
+measured result and keeps upstream contributions focused.
 
 See the [Backend Catalog](../backends/overview.md) for supported implementations and
 [Tuning Strategies](../tune_strategies/tune_strategies.md) for evaluation and selection options.
@@ -80,7 +86,12 @@ AITune assumes that one thread executes a given model's calls at a time. Recordi
 rely on this assumption when managing model state. The application must serialize calls to the same model rather
 than rely on AITune to add locks around concurrent calls.
 
-The application owns the request and its performance and quality targets. It also owns distributed setup, model
-sharding, and the inference collectives that the model requires. AITune coordinates tuning within that environment
-and evaluates module candidates compatible with it. See [Multi-GPU Integration](../multi_gpu.md) and
+The application supplies representative inference inputs and defines requirements such as maximum latency or
+minimum throughput. It also evaluates whether the tuned model preserves acceptable task quality, such as
+classification accuracy or generated-image quality. AITune's built-in correctness checks do not measure these
+application quality metrics.
+
+The application also manages distributed setup, model sharding, and the inference collectives that the model
+requires. AITune coordinates tuning within that environment and evaluates module candidates compatible with it.
+See [Multi-GPU Integration](../multi_gpu.md) and
 [Deployment Overview](../deployment/deployment.md).

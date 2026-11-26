@@ -91,13 +91,24 @@ Conversion timings measure Python overhead only; they do not establish end-to-en
 
 ## Mutable inputs and caches
 
+Some models retain intermediate results between inference calls so they can process new data without recomputing
+earlier work. For example, a streaming audio model can cache features from previous audio chunks, while a video
+model can retain features from earlier frames to provide temporal context for the next frame.
+
+When the application passes this cache into a module, the forward call may update its tensors or replace entries
+in the cache container. These are changes to mutable inputs: part of the result is stored in an object supplied by
+the caller, rather than only in the return value. Later calls depend on those updates, so an optimized backend must
+preserve them along with the module's outputs.
+
 For backends that support restoring changes to mutable inputs, AITune records what the original forward call
 changes and applies supported changes to the caller's objects after inference. This can include tensor updates,
 replacing a tensor in a container, or returning the same container that the caller passed in. Support depends on
 the backend and the kind of state the model changes. Keep input-dependent updates to ordinary Python counters
 or similar non-tensor values outside the compiled module.
 
-For Transformers, AITune tracks tensors and selected initialization fields in `StaticCache`. The compiled path
+An autoregressive language model uses a similar pattern: its KV cache stores attention keys and values from earlier
+tokens and is updated as generation proceeds. For Transformers, AITune tracks tensors and selected initialization
+fields in `StaticCache`. The compiled path
 must preserve updates across consecutive decode calls. `DynamicCache` is excluded from this traversal, and
 the LLM recipe uses Torch eager for that configuration. See the [LLM recipe](../../../examples/LLM/README.md)
 for cache configurations and [Known Issues](../../known_issues.md) for backend-specific limitations.

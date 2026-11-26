@@ -21,6 +21,10 @@ also use a custom backend and strategy together, as shown below.
 This example uses a pretransposed weight and a matrix multiply to implement a plain `nn.Linear`. It illustrates the
 interface and lifecycle. Measure it on your workload before selecting it for performance.
 
+The class implements the `Backend` interface in two groups: public methods for identification and checkpoint
+persistence, followed by private build, inference, and lifecycle hooks. The main computation is in `_build()` and
+`_infer()`.
+
 Save the following as `my_backend.py` in your application:
 
 ```python
@@ -34,31 +38,7 @@ class MatmulLinearBackend(Backend):
     _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
     _build_mode = BuildMode.AHEAD_OF_TIME
 
-    def _build(self, module, graph_spec, samples, cache_dir):
-        if type(module) is not nn.Linear:
-            raise TypeError("MatmulLinearBackend requires a plain nn.Linear")
-        self.weight_t = module.weight.detach().T.contiguous().clone()
-        self.bias = None if module.bias is None else module.bias.detach().clone()
-        self._activate()
-        return self
-
-    def _infer(self, input):
-        output = input @ self.weight_t
-        return output if self.bias is None else output + self.bias
-
-    def _activate(self):
-        self.weight_t = self.weight_t.to(self.device)
-        if self.bias is not None:
-            self.bias = self.bias.to(self.device)
-
-    def _deactivate(self):
-        self.weight_t = self.weight_t.cpu()
-        if self.bias is not None:
-            self.bias = self.bias.cpu()
-
-    def _deploy(self):
-        self._activate()
-
+    # Backend interface: identification and checkpoint persistence.
     def key(self):
         return "matmul-linear-v1"
 
@@ -81,6 +61,33 @@ class MatmulLinearBackend(Backend):
         backend._set_device(state_dict["device"])
         backend.state = BackendState.CHECKPOINT_LOADED
         return backend
+
+    # Backend interface: build and inference hooks.
+    def _build(self, module, graph_spec, samples, cache_dir):
+        if type(module) is not nn.Linear:
+            raise TypeError("MatmulLinearBackend requires a plain nn.Linear")
+        self.weight_t = module.weight.detach().T.contiguous().clone()
+        self.bias = None if module.bias is None else module.bias.detach().clone()
+        self._activate()
+        return self
+
+    def _infer(self, input):
+        output = input @ self.weight_t
+        return output if self.bias is None else output + self.bias
+
+    # Backend interface: lifecycle hooks.
+    def _activate(self):
+        self.weight_t = self.weight_t.to(self.device)
+        if self.bias is not None:
+            self.bias = self.bias.to(self.device)
+
+    def _deactivate(self):
+        self.weight_t = self.weight_t.cpu()
+        if self.bias is not None:
+            self.bias = self.bias.cpu()
+
+    def _deploy(self):
+        self._activate()
 ```
 
 AITune calls the public lifecycle methods, and the backend implements the corresponding hooks. Return an inference-ready
