@@ -16,25 +16,24 @@ from torch.utils import _pytree
 from aitune.torch.module.locator import ObjectType
 from aitune.torch.module.sample_metadata import SampleMetadata
 
-# Exact types exclude subclasses with mutable instance state or custom copy behavior.
+# Match these types exactly so subclasses with instance state or custom copy hooks
+# go through general reconstruction, which preserves their copy behavior.
 _IMMUTABLE_LEAF_TYPES = (type(None), bool, int, float, complex, str, bytes, torch.dtype, torch.device)
 
 
 class OutputReconstruction:
-    """A reusable mapping from flat backend tensor results to one graph's Python output structure.
+    """Rebuild a module's Python output structure around flat backend tensor results.
 
-    Use prepare() to check compatibility and construct the recipe. GraphSpec caches the result for
-    its fixed output template. On inference, exported backends call GraphSpec.restore_outputs();
-    ForwardEffectsSpec applies input mutations, removes internal mutation results from the user
-    output sequence, and delegates container reconstruction to unflatten_tensors(). Backends do
-    not need to select or call this recipe directly.
+    GraphSpec caches a recipe for the graph's output template so inference can reuse the
+    tensor positions and rebuild containers with PyTree. Supported templates use built-in
+    dict, list, and tuple containers, including nested combinations, with tensor slots and
+    supported immutable values. Each call creates fresh mutable containers and inserts the
+    current tensors by reference. The recipe retains neither sample tensors nor previous results.
 
-    Preparation accepts exact built-in dict, list, and tuple containers with immutable non-tensor
-    leaves. Each call creates fresh mutable containers and installs the current tensor references
-    without copying tensor data. The recipe retains neither sample tensors nor previous results.
-    Shared containers and custom objects keep the general SampleMetadata reconstruction path so
-    their identity relationships and copy behavior remain intact. GraphSpec also excludes outputs
-    with preserved input aliases, which must resolve caller-owned objects on each inference call.
+    Backends use GraphSpec.restore_outputs(). ForwardEffectsSpec applies input updates and
+    removes internal mutation results before rebuilding the user output. Custom objects,
+    shared containers, and outputs that alias caller-owned inputs use general reconstruction
+    to preserve copy behavior and object identity.
     """
 
     # Previously pickled recipes have no collapsed scalar containers. An immutable class default

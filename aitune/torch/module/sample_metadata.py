@@ -235,7 +235,7 @@ class SampleMetadata:
         Top-level indexed paths use a prepared itemgetter; nested and attribute paths retain locator
         traversal. Neither path copies tensor data, so cost depends on path count and depth, not tensor size.
         """
-        getter = self._tensor_itemgetter
+        getter = self._top_level_tensor_itemgetter
         if getter is None:
             tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
         elif len(self._tensor_data) == 1:
@@ -490,17 +490,18 @@ class SampleMetadata:
         return all(tensor_spec.has_batch_axis() for tensor_spec in self.tensor_specs)
 
     @cached_property
-    def _tensor_itemgetter(self) -> itemgetter | None:
-        """Prepare top-level indexed reads in recorded order, independent of runtime key order.
+    def _top_level_tensor_itemgetter(self) -> itemgetter | None:
+        """Cache an itemgetter when all recorded tensors are at top-level indices or keys.
 
-        Attribute access and nested paths retain locator traversal. Store only accessors, so the
-        getter keeps no sample values and can be recreated from metadata restored from checkpoints.
+        The getter reads tensors in recorded order and holds no sample values. Checkpoints store
+        the locators, which are used to rebuild the getter on first use after loading.
         """
         if not self._tensor_data or any(
             locator.depth != 1 or next(locator.path_iter())[1] not in (ObjectType.SEQUENCE, ObjectType.DICT)
             for locator, _ in self._tensor_data
         ):
             return None
+        # Each locator has exactly one step, so accessor_at(0) is the index or key on the root.
         return itemgetter(*(locator.accessor_at(0) for locator, _ in self._tensor_data))
 
     @cached_property

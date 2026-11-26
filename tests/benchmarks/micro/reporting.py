@@ -13,6 +13,20 @@ import torch
 
 
 def record_timings(operations, gc_enabled, record_property):
+    """Measure CPU microbenchmark operations and record per-call timings.
+
+    Warm up each operation, then time repeated batches of calls. Each sample is the
+    batch's average time per call in microseconds. Record the individual samples,
+    their median, and the benchmark environment as pytest properties. Also print
+    the results for inspection. Timings are informational and have no pass/fail threshold.
+
+    Args:
+        operations: Mapping from operation names to zero-argument callables. Each callable
+            is reused throughout warmup and measurement.
+        gc_enabled: Whether to enable garbage collection during warmup and measurement.
+            The caller's original GC state is restored even if an operation fails.
+        record_property: Pytest fixture that records a named value in the test report.
+    """
     iterations, repeats, warmup = 100, 5, 20
     processor = platform.processor()
     cpuinfo = Path("/proc/cpuinfo")
