@@ -100,7 +100,7 @@ jobs:
             selection+=(--test-id "$SELECTED_TEST_ID")
           fi
           uv run --script tests/functional/scripts/generate.py \
-            --default-docker-image "$PYTORCH_CI_IMAGE" \
+            --default-docker-image "${{ env.PYTORCH_CI_IMAGE }}" \
             --projects-path examples \
             "${selection[@]}" \
             --github-output "$GITHUB_OUTPUT" \
