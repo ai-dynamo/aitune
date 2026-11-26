@@ -4,8 +4,13 @@
 title: "Architecture"
 ---
 
-Before reading this guide, start with [Why AITune](../../learn/why_aitune.md) for the motivation and
-[Core Concepts](../../learn/concepts.md) for the terms and workflows used here.
+Before reading this architecture overview, read these guides in order:
+
+1. [Why AITune](../../learn/why_aitune.md) explains the problems AITune addresses.
+2. [Core Concepts](../../learn/concepts.md) introduces tuning boundaries, backends, strategies, and tuning workflows.
+3. [Design Decisions](design_decisions.md) explains the reasons behind the design.
+
+These guides provide the foundation for understanding how the components described here fit together.
 
 AITune runs alongside your model in your Python environment. Your code calls the model or pipeline with
 representative inputs. AITune observes those calls and uses them to tune selected modules. During inference,

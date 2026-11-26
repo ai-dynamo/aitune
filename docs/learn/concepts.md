@@ -60,10 +60,10 @@ A **strategy** owns how candidates are evaluated and which one is selected. An i
 prioritize latency, while a service processing a queue of requests might prioritize images per second. Under those objectives, the same candidates may result in different selections. Other strategies can try candidates in order
 or use a specified backend. Once selected, the backend serves subsequent calls that match the tuned graph.
 
-Both are plugin interfaces. You can implement the full backend or strategy in your application package and pass
+Both are interfaces for extending AITune. You can implement the full backend or strategy in your application package and pass
 it to the normal tuning workflow. A custom backend can run under a built-in strategy, and a custom strategy can
 evaluate built-in backends. See the [Backend Catalog](../guides/backends/overview.md) for built-in options and
-[Extending AITune](../guides/advanced/extending_aitune.md) for the plugin interfaces.
+[Extending AITune](../guides/advanced/extending_aitune.md) for how to implement these interfaces.
 
 ## When to use AOT or JIT
 

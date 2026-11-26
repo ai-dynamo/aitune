@@ -5,16 +5,16 @@ title: "Extending AITune"
 ---
 
 Implement a backend to integrate a new compiler, runtime, or optimization. Implement a strategy to define how
-candidates are evaluated and selected. Either plugin can live entirely in your application package. Pass the
+candidates are evaluated and selected. Either implementation can live entirely in your application package. Pass the
 instances to the normal tuning workflow and AITune supplies the recorded module, graph specification, and samples.
 
-| Plugin | What your code owns |
+| Interface | What your implementation owns |
 | --- | --- |
 | `Backend` | Supported execution and build modes, inference behavior, resource lifecycle, and serialized state. |
 | `TuneStrategy` | Candidate order, validation, measurement, failure behavior, and the decision to return a ready backend. |
 
 A custom strategy can evaluate built-in backends, and built-in strategies can evaluate a custom backend. You can
-also use the two custom plugins together, as shown below.
+also use a custom backend and strategy together, as shown below.
 
 ## Implement a backend in your package
 
@@ -150,9 +150,9 @@ class OrderedValidationStrategy(TuneStrategy):
         raise RuntimeError(f"No backend passed validation for {name}/{graph_spec.name}")
 ```
 
-## Use the plugins together
+## Use the custom backend and strategy together
 
-The example uses a small CPU workload to show how to wire the plugins. The same interfaces apply when tuning GPU
+The example uses a small CPU workload to show how to use both implementations. The same interfaces apply when tuning GPU
 modules. In an application, supply inputs from your workload and evaluate numerical agreement and end-to-end
 performance before deploying.
 
