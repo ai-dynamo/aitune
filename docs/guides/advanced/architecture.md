@@ -4,6 +4,9 @@
 title: "Architecture"
 ---
 
+Before reading this guide, start with [Why AITune](../../learn/why_aitune.md) for the motivation and
+[Core Concepts](../../learn/concepts.md) for the terms and workflows used here.
+
 AITune runs alongside your model in your Python environment. Your code calls the model or pipeline with
 representative inputs. AITune observes those calls and uses them to tune selected modules. During inference,
 your code calls the same model or pipeline and the wrapped modules run their selected backends.

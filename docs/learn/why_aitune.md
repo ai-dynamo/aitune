@@ -29,10 +29,18 @@ backends such as TensorRT.
 
 ## Start with how the application runs
 
-An image generation pipeline might encode a prompt once, call a denoiser repeatedly, then decode the result. AITune
-inspection shows which modules ran, how often they ran, and where time went. Its optional call tree adds calling
-relationships, tensor flow, and observed uses of weights outside a module. That context helps engineers decide where
-to tune and which dependencies to preserve.
+An image generation pipeline typically contains a text encoder, a denoiser, and a decoder. The text encoder converts
+the prompt into conditioning tensors. The denoiser progressively removes noise from a latent representation, and
+the decoder converts the resulting latent representation into an image.
+
+During a request, the pipeline encodes the prompt, then repeatedly calls the denoiser according to a scheduler that
+controls the denoising steps. After the final step, it calls the decoder. These components have different input
+shapes, memory requirements, and call frequencies, so they can benefit from different optimizations.
+
+AITune inspection shows which modules ran, how often they ran, and how much time each component contributes to the
+request. This helps identify where optimization will have the greatest effect. Its optional call tree adds calling
+relationships, tensor flow, and observed uses of weights outside a module. That context helps engineers preserve
+dependencies when choosing which modules to tune.
 
 If the denoiser takes 80 ms of a 100 ms sequential request, halving its time brings the request to 60 ms when the rest
 of the request takes the same time. That is a 2× speedup for the denoiser and about 1.67× for the request. Measure the
@@ -100,5 +108,6 @@ outputs, or unexpected changes to inputs. Teams still validate numerical agreeme
 performance on the requests they intend to serve. They also own request scheduling, concurrency, distributed setup,
 and production operations.
 
-See [Core Concepts](concepts.md) for the interfaces and workflows and the
-[Architecture](../guides/advanced/architecture.md) for how the components fit together.
+Continue with [Core Concepts](concepts.md) to learn the terms, interfaces, and workflows, then read
+[Design Decisions](../guides/advanced/design_decisions.md) for the rationale and tradeoffs behind AITune's design.
+The [Architecture](../guides/advanced/architecture.md) explains how the components fit together.
