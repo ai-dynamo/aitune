@@ -130,6 +130,16 @@ $ make lint  # pre-commit, pyrefly, and functional-test metadata validation
 $ make test  # unit tests and doctests in the active virtual environment
 ```
 
+Unit tests and `tests/functional_ci/` share the `test` dependency group, including
+Transformers 5. The `functional_ci` suite requires CUDA and runs against real
+backends with small local models.
+
+The legacy `tests/functional/` catalog uses the independent `functional-test`
+dependency group, with Transformers 4 by default. Scripts that require newer
+versions declare them in their own dependency metadata. Install the two groups in
+separate environments; they cannot be selected together. Add new small-model GPU
+coverage to `tests/functional_ci/` as the legacy catalog is retired.
+
 Functional tests under `tests/functional/` run separately and require an NVIDIA
 GPU, Docker, and the NVIDIA Container Toolkit. Build the test image, then select
 a functional test with the current Makefile targets:
