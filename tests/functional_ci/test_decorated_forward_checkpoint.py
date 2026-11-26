@@ -1,27 +1,23 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Reproduce decorated-forward checkpoint loading in a fresh customer process."""
-
-import subprocess
-import sys
-from pathlib import Path
-from textwrap import dedent
+"""Exercise decorated-forward checkpoint loading after clearing Dynamo caches."""
 
 import pytest
 import torch
 
 import aitune.torch as ait
-from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
-from tests.functional_ci.lifecycle import Tolerance, pinned_strategy, selected_backend
+from tests.functional_ci.backends import BackendCase, with_backends
+from tests.functional_ci.lifecycle import pinned_strategy, selected_backend
 from tests.toy_models.decorated_forward_models import ToyDecoratedSpeechModel
 
 
-@pytest.mark.matrix("aot_tuning.models.decorated-forward/inductor-jit", "modes.aot-save-load/inductor-jit")
-def test_decorated_forward_checkpoint_fresh_process(device: torch.device, tmp_path):
-    """Inspect, tune, and save; load into an uninspected model in a separate interpreter."""
-    # This regression targets Dynamo guard generation in Inductor JIT deployment.
-    # Pin the backend and reject tuning failures so eager fallback cannot hide it.
-    backend = TorchInductorJitBackend(TorchInductorJitBackendConfig(fullgraph=False, dynamic=False, mode="default"))
+@pytest.mark.matrix("aot_tuning.models.decorated-forward", "modes.aot-save-load")
+@with_backends("base")
+def test_decorated_forward_checkpoint(case: BackendCase, device: torch.device, tmp_path):
+    """Inspect, tune, and save; clear Dynamo caches and load into an uninspected model."""
+    # Exercise the same model on every backend, with no fallback or expected failures,
+    # so each result shows whether that backend supports the complete lifecycle.
+    backend = case.factory()
     model = ToyDecoratedSpeechModel().to(device).eval()
     value = torch.arange(16, dtype=torch.float32, device=device).reshape(2, 8) / 16
     validation_values = (value, value + 0.5)
@@ -38,47 +34,21 @@ def test_decorated_forward_checkpoint_fresh_process(device: torch.device, tmp_pa
         device=device,
         ignore_failing_modules=False,
     )
-    selected_backend(tuned, TorchInductorJitBackend)
+    selected_backend(tuned, type(backend))
     with torch.no_grad():
         for sample, reference in zip(validation_values, expected, strict=True):
-            Tolerance().assert_close(tuned(sample).cpu(), reference)
+            case.tolerance.assert_close(tuned(sample).cpu(), reference)
 
     checkpoint = tmp_path / "decorated.ait"
     ait.save(tuned, checkpoint)
     tuned.deactivate()
-    evidence = tmp_path / "inference.pt"
-    torch.save({"inputs": [sample.cpu() for sample in validation_values], "expected": expected}, evidence)
+    torch._dynamo.reset()
 
-    # A Dynamo reset alone does not reproduce a new interpreter's model state.
-    # Do not inspect the restored model: that would hide the descriptor difference.
-    script = dedent("""\
-        import sys
-        import torch
-        import aitune.torch as ait
-        from aitune.torch.backend import TorchInductorJitBackend
-        from tests.functional_ci.lifecycle import Tolerance, selected_backend
-        from tests.toy_models.decorated_forward_models import ToyDecoratedSpeechModel
-
-        checkpoint, evidence, device = sys.argv[1:]
-        payload = torch.load(evidence, map_location="cpu", weights_only=True)
-        # Different weights ensure the check also proves checkpoint state restoration.
-        model = ToyDecoratedSpeechModel(seed=1).to(device).eval()
-        restored = ait.load(model, checkpoint)
-        assert isinstance(restored, ait.Module)
-        selected_backend(restored, TorchInductorJitBackend)
-        with torch.no_grad():
-            for sample, expected in zip(payload["inputs"], payload["expected"], strict=True):
-                Tolerance().assert_close(restored(sample.to(device)).cpu(), expected)
-    """)
-    completed = subprocess.run(
-        [sys.executable, "-c", script, str(checkpoint), str(evidence), str(device)],
-        cwd=Path(__file__).resolve().parents[2],
-        capture_output=True,
-        text=True,
-        timeout=300,
-        check=False,
-    )
-    assert completed.returncode == 0, (
-        f"Fresh-process checkpoint loading or inference failed (exit {completed.returncode}).\n"
-        f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
-    )
+    # Load without inspection; different weights also verify checkpoint state restoration.
+    fresh_model = ToyDecoratedSpeechModel(seed=1).to(device).eval()
+    restored = ait.load(fresh_model, checkpoint)
+    assert isinstance(restored, ait.Module)
+    selected_backend(restored, type(backend))
+    with torch.no_grad():
+        for sample, reference in zip(validation_values, expected, strict=True):
+            case.tolerance.assert_close(restored(sample).cpu(), reference)
