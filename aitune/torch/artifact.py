@@ -21,6 +21,7 @@ _TORCH_DTYPE_TO_RECORD = {
     torch.int16: DType.INT16,
     torch.int32: DType.INT32,
     torch.int64: DType.INT64,
+    torch.bfloat16: DType.BFLOAT16,
     torch.float16: DType.FLOAT16,
     torch.float32: DType.FLOAT32,
     torch.float64: DType.FLOAT64,

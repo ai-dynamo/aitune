@@ -5,6 +5,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
+from itertools import chain
 from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, Self, cast
@@ -52,6 +53,7 @@ _ORT_TYPE_TO_DTYPE = {
     "tensor(int16)": DType.INT16,
     "tensor(int32)": DType.INT32,
     "tensor(int64)": DType.INT64,
+    "tensor(bfloat16)": DType.BFLOAT16,
     "tensor(float16)": DType.FLOAT16,
     "tensor(float)": DType.FLOAT32,
     "tensor(double)": DType.FLOAT64,
@@ -91,7 +93,8 @@ class ONNXRuntimeBackendConfig(BackendConfig):
             :attr:`ONNXExecutionProvider.CUDA` and
             :attr:`ONNXExecutionProvider.TENSORRT` are supported.
         opset_version: ONNX opset version passed to ``torch.onnx.export``.
-            ``None`` uses the torch default.
+            With ``None``, Dynamo exports use opset 22 for BF16 inputs, outputs, or
+            module state; other exports use the Torch default.
     """
 
     use_dynamo: bool = True
@@ -296,6 +299,22 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
             for location in sorted(locations)
         ]
 
+    def _export_opset(self, module: nn.Module, graph_spec: GraphSpec) -> int | None:
+        """Select a BF16-capable Conv schema without changing explicit requests."""
+        requested = self._config.opset_version
+        if not self._config.use_dynamo:
+            if requested is not None and requested > 21:
+                raise ValueError("ONNX opset 22 or later requires use_dynamo=True, not legacy tracing")
+            return requested
+        if requested is not None:
+            return requested
+        tensors = chain(graph_spec.input_spec.tensor_specs, graph_spec.output_spec.tensor_specs)
+        if any(spec.dtype == torch.bfloat16 for spec in tensors) or any(
+            tensor.dtype == torch.bfloat16 for tensor in chain(module.parameters(), module.buffers())
+        ):
+            return 22
+        return None
+
     def _export_onnx(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> None:
         """Export a Torch module through the recorded flat tensor contract."""
         module = module.eval().to(self.device)
@@ -303,7 +322,7 @@ class ONNXRuntimeBackend(Backend[ONNXRuntimeBackendConfig]):
         onnx_exporter = ONNXExporter(
             output_path=self._onnx_model_artifact.path,
             use_dynamo=self._config.use_dynamo,
-            opset_version=self._config.opset_version,
+            opset_version=self._export_opset(module, graph_spec),
         )
         onnx_exporter.export(
             module=module,

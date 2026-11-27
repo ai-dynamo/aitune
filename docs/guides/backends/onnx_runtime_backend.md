@@ -66,7 +66,14 @@ Selects the ONNX Runtime execution provider. Use `CUDA` for standard GPU executi
 
 ### opset_version
 
-Passes an explicit ONNX opset version to `torch.onnx.export`. Leave it as `None` to use the PyTorch default.
+An explicit opset is passed through unchanged. With `None`, Dynamo export selects opset 22 if recorded inputs,
+outputs, parameters, or buffers contain BF16, so `Conv` can accept BF16 without a cast. Other exports keep the
+PyTorch default. For modules that use BF16 only in intermediate tensors, set the opset explicitly.
+Legacy tracing does not support opset 22 or later.
+
+For BF16 equations that only permute explicitly named axes (such as `nchpwq->nhwcpq`), Dynamo export uses
+`Transpose` rather than `Einsum` at opsets 13–27. General BF16 contractions are not supported by the
+`Einsum` schema at those opsets. Operator schema support does not guarantee a CUDA kernel.
 
 ## Runtime Behavior
 
