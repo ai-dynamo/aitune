@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="840" height="652" viewBox="0 0 840 652"
      role="img" aria-labelledby="title description">
-  <title id="title">AITune in the user's Python environment</title>
+  <title id="title">AITune in the local Python environment</title>
   <desc id="description">User code calls the PyTorch model with representative inputs. In the same environment,
     AITune uses those calls to inspect execution and record calls to the modules the user wraps. A strategy
     evaluates and selects a backend for each recorded graph. Users can supply their own strategy or backend
@@ -33,7 +33,7 @@ SPDX-License-Identifier: Apache-2.0
   </defs>
 
   <rect class="environment" x="12" y="12" width="816" height="628" rx="16" />
-  <text class="heading" x="40" y="46">User’s Python environment</text>
+  <text class="heading" x="40" y="46">Local Python environment</text>
 
   <rect class="card" x="40" y="70" width="760" height="64" rx="9" />
   <text class="title" x="420" y="96">User code</text>

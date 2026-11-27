@@ -20,7 +20,7 @@ The diagram shows the explicit AOT workflow. You can use built-in backends and s
 own implementations of either interface. See the [AOT and JIT comparison](../../learn/concepts.md#when-to-use-aot-or-jit)
 for how each workflow starts and records calls.
 
-<img src="../../assets/aitune_architecture.svg" alt="User code calls the model in the user's Python environment. AITune inspects execution, records calls to wrapped modules, and tunes each graph. User-provided backend and strategy implementations can take part in tuning. The same user code then runs inference with the selected backends." width="840" />
+<img src="../../assets/aitune_architecture.svg" alt="User code calls the model in the local Python environment. AITune inspects execution, records calls to wrapped modules, and tunes each graph. User-provided backend and strategy implementations can take part in tuning. The same user code then runs inference with the selected backends." width="840" />
 
 ## From an application call to an isolated module
 

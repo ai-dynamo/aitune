@@ -4,11 +4,9 @@
 title: "Why AITune"
 ---
 
-Moving a trained model into production means meeting latency, throughput, GPU memory, and output quality requirements
-on the hardware that will serve requests. New compilers, runtimes, and optimization techniques offer ways to improve
-performance, but evaluating them has a cost. Each integration requires engineering work to prepare inputs, adapt
-execution, validate results, and maintain compatibility as the application changes. Teams may keep an existing
-implementation because the migration and ongoing maintenance effort outweigh the performance benefit they expect.
+How much faster could your PyTorch model run on the GPUs you already use? TensorRT and Torch Inductor can help,
+but comparing them means capturing representative inputs, adapting execution, and checking that outputs still
+meet your requirements. Each integration also needs maintenance as the model or application changes.
 
 AITune reduces the cost of exploring and adopting these technologies. It provides a shared workflow for evaluating
 supported backends with actual module inputs and running selected implementations through existing application code.
@@ -29,13 +27,21 @@ backends such as TensorRT.
 
 ## Start with how the application runs
 
-An image generation pipeline typically contains a text encoder, a denoiser, and a decoder. The text encoder converts
+Start by finding where your application spends its time. In language, speech, and vision workloads, modules can
+run at different rates, receive different inputs, and have different memory requirements. Knowing those differences
+helps you decide which modules to tune and which optimizations to try.
+
+Consider an image generation pipeline with a text encoder, a denoiser, and a decoder. The text encoder converts
 the prompt into conditioning tensors. The denoiser progressively removes noise from a latent representation, and
 the decoder converts the resulting latent representation into an image.
 
 During a request, the pipeline encodes the prompt, then repeatedly calls the denoiser according to a scheduler that
 controls the denoising steps. After the final step, it calls the decoder. These components have different input
 shapes, memory requirements, and call frequencies, so they can benefit from different optimizations.
+
+The same high-level flow applies to text-to-video generation, where the decoder produces a sequence of frames.
+
+<img src="../assets/diffusion_pipeline.svg" alt="The text encoder supplies conditioning to the denoising loop, which starts from noise and runs the denoiser and scheduler at each step. The decoder turns the final latent into an image or video frames." width="640" />
 
 AITune inspection shows which modules ran, how often they ran, and how much time each component contributes to the
 request. This helps identify where optimization will have the greatest effect. Its optional call tree adds calling
@@ -108,6 +114,7 @@ outputs, or unexpected changes to inputs. Teams still validate numerical agreeme
 performance on the requests they intend to serve. They also own request scheduling, concurrency, distributed setup,
 and production operations.
 
-Continue with [Core Concepts](concepts.md) to learn the terms, interfaces, and workflows, then read
-[Design Decisions](../guides/advanced/design_decisions.md) for the rationale and tradeoffs behind AITune's design.
+Continue with [Core Concepts](concepts.md) to see how tuning boundaries, graph specifications, and strategies
+apply to the same image generation example. [Design Decisions](../guides/advanced/design_decisions.md) explains
+the rationale and tradeoffs behind AITune's design.
 The [Architecture](../guides/advanced/architecture.md) explains how the components fit together.

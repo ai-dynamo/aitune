@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420"
+     role="img" aria-labelledby="title description">
+  <title id="title">Text-to-image or text-to-video diffusion pipeline</title>
+  <desc id="description">The text encoder turns a prompt into conditioning tensors. The denoising loop uses
+    those tensors and initial noise. At every step, the denoiser predicts an update and the scheduler updates
+    the latent. The decoder turns the final latent into an image or video frames.</desc>
+  <style>
+    text { font-family: system-ui, sans-serif; fill: #17200e; text-anchor: middle; }
+    .title { font-size: 19px; font-weight: 700; }
+    .detail { font-size: 16px; }
+    .background { fill: #f7faf4; stroke: #899080; }
+    .card { fill: #fff; stroke: #65705d; stroke-width: 1.5; }
+    .loop { fill: #edf4e5; stroke: #538000; stroke-width: 1.5; }
+    .arrow { fill: none; stroke: #538000; stroke-width: 2; marker-end: url(#arrowhead); }
+  </style>
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#538000" />
+    </marker>
+  </defs>
+
+  <rect class="background" x="1" y="1" width="638" height="418" rx="16" />
+
+  <text class="title" x="182" y="38">Text prompt</text>
+  <path class="arrow" d="M 182 48 V 68" />
+  <rect class="card" x="62" y="70" width="240" height="60" rx="9" />
+  <text class="title" x="182" y="107">Text encoder</text>
+  <path class="arrow" d="M 182 131 V 177" />
+  <text class="detail" x="261" y="156">Conditioning</text>
+
+  <rect class="card" x="350" y="70" width="228" height="60" rx="9" />
+  <text class="title" x="464" y="107">Initial noise</text>
+  <path class="arrow" d="M 464 131 V 177" />
+
+  <rect class="loop" x="62" y="179" width="516" height="90" rx="9" />
+  <text class="title" x="320" y="211">Denoising loop</text>
+  <text class="detail" x="320" y="240">Repeat the denoiser and scheduler at each step</text>
+  <path class="arrow" d="M 320 270 V 314" />
+  <text class="detail" x="373" y="295">Final latent</text>
+
+  <rect class="card" x="200" y="316" width="240" height="44" rx="9" />
+  <text class="title" x="320" y="345">Decoder</text>
+  <path class="arrow" d="M 320 361 V 382" />
+  <text class="title" x="320" y="405">Image or video frames</text>
+</svg>
