@@ -225,7 +225,7 @@ modules_info = ait.inspect(model, input_data, inference_function=run_chunk, min_
 tree = modules_info.call_tree
 
 for node in tree.find("dit"):    # recorded calls whose label contains "dit"
-    print(node.path_str, node.calls, node.total_time_ms, node.total_bytes_in, node.total_bytes_out)
+    print(node.path_str, node.total_calls, node.total_time_ms, node.total_bytes_in, node.total_bytes_out)
 # forward > dit_forward 10 ...
 # forward > dit_forward > dit.forward 10 ...
 ```
@@ -271,7 +271,7 @@ What is recorded:
    runs in Python and would distort times, so the structure pass records none.
 2. **The timing pass** replays the same samples in the same order, with all tracking off and compiled parts
    compiled. Each sample is replayed once per call-path depth its calls reach, so every call is timed exactly once
-   on the sample the structure pass recorded it on, and no timed call runs inside another. The number of iterations —
+   on the sample the structure pass recorded it on, and no timed call runs inside another. The number of replays —
    at most `number_of_iterations` times the number of call-path depths — is logged before the pass starts.
 
 Some nodes get no time (`total_time_ms` is `null`):
@@ -282,7 +282,7 @@ Some nodes get no time (`total_time_ms` is `null`):
   `max_timing_depth=0` skips the timing pass entirely — a structure pass only (calls, bytes, signatures, sources,
   weights), saving its `number_of_iterations` × depths inferences.
 
-`max_timing_depth` bounds the timing cost: fewer depths per sample means fewer iterations. It counts call-path depths,
+`max_timing_depth` bounds the timing cost: fewer depths per sample means fewer replays. It counts call-path depths,
 with the root call at depth 1, not the attribute depths that `max_depth` counts. The deep leaf levels (linear
 layers, norms) are rarely worth timing, and their calls and weight accesses are still recorded.
 
@@ -317,12 +317,15 @@ The exported data has this structure:
 ```json
 {
   "schema_version": 1,
-  "iterations": 2,
   "total_time_ms": 30.0,
+  "samples": [
+    {"inputs": {"args[0]": {"type": "torch.Tensor", "dtype": "torch.int64", "shape": [1, 220]}}},
+    {"inputs": {"args[0]": {"type": "torch.Tensor", "dtype": "torch.int64", "shape": [1, 220]}}}
+  ],
   "nodes": [
-    {"call_path": "forward", "owner_class": "Vla", "calls": 2, "total_time_ms": 30.0, ...},
+    {"call_path": "forward", "owner_class": "Vla", "total_calls": 2, "total_time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
-     "calls": 10, "inside_compiled_part": false, "total_time_ms": 25.0,
+     "total_calls": 10, "inside_compiled_part": false, "total_time_ms": 25.0,
      "total_bytes_in": 3670056, "total_bytes_out": 3670016,
      "signatures": [
          {"call_indices": [0, 5],
@@ -339,7 +342,7 @@ The exported data has this structure:
                      "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
           "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
                                  "shape": [1, 1, 4096]}}}],
-     "calls_per_iteration": [5, 5]}
+     "calls_per_sample": [5, 5]}
   ],
   "modules": {"dit": {"class": "my_pkg.Dit",
                       "parameters": {"weight": {"dtype": "torch.float32", "shape": [4, 4]}},
@@ -348,9 +351,8 @@ The exported data has this structure:
 }
 ```
 
-`iterations` is the number of recorded iterations; `total_time_ms`, `total_bytes_in` and `total_bytes_out` are
-totals over all calls and iterations; divide by `calls` for per-call values and by `iterations` for per-iteration
-values. `total_time_ms` is `null` when the timing pass never timed the node.
+`total_calls`, `total_time_ms`, `total_bytes_in` and `total_bytes_out` are totals over all calls and samples;
+divide by `total_calls` for per-call values. `total_time_ms` is `null` when the timing pass never timed the node.
 `inside_compiled_part` is true for calls inside a compiled part: they run inside the compiled code in the timing
 pass, so their `total_time_ms` is `null`; the compiled part's own call is timed.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
@@ -360,7 +362,11 @@ Every leaf has `type`, tensors also `dtype` and exact `shape`; `outputs` is null
 A leaf with a `source` names where its object was last seen: `call_path`, `side` and the leaf `name` there, which can
 be in any of that node's signatures. In the example, `dit.forward` received `hidden_states` as `dit_forward`'s own
 argument of that name.
-`calls_per_iteration` gives how many of the node's calls each iteration made; they add up to `calls`.
+`calls_per_sample` gives how many of the node's calls each sample made, one entry per recorded sample; they add
+up to `total_calls`.
+`samples` lists the recorded samples in order, so entry `i` of `calls_per_sample` is for `samples[i]`. Each
+sample's `inputs` describes the arguments the inference function received, in the same format as a signature's
+inputs: `args[0]` is the first positional argument, and keyword arguments keep their names.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:
 

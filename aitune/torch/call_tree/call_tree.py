@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The context-keyed call tree recorded by the call recorder."""
 
-from collections import Counter
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -13,6 +12,7 @@ from aitune.torch.call_tree.nodes import (
     CallNode,
     CallPath,
     Leaf,
+    Sample,
     TensorLeaf,
     format_call_path,
 )
@@ -46,25 +46,30 @@ def _object_path(label_prefix: str) -> str:
 
 @dataclass
 class CallTree:
-    """Call tree of one recording.
+    """Call tree of one recording: the instrumented calls, grouped into nodes by call path, and the samples they ran on.
+
+    A sample is one inference the structure pass records; for ``inspect``, one item of its dataset. Each ``Sample``
+    holds its own calls, and every node reads its ``calls_per_sample`` from them: entry ``i`` is for
+    ``samples[i]``.
 
     Attributes:
         nodes: All nodes by call path.
-        iterations: Number of recorded iterations (the length of ``sequences``).
-        sequences: Per iteration, the call paths of the entered nodes in the order the calls started.
         weight_accesses: For each parameter or buffer (by weight name: its object path, e.g.
             ``vlm.lm_head.weight``; a tied weight appears under each of its names), the ``WeightAccess`` records of
             accesses to it: reads, device checks and moves. Names stay valid when ``.to()`` or casts replace the
             tensors.
         modules: Label prefix and module for every instrumented module, used for parameter names and sizes.
+        samples: The recorded samples in order, filled by the structure pass. The constructor gives every node this
+            list, so modify it in place rather than reassigning it; a node added to ``nodes`` later does not see it.
 
     Example:
+        Two samples, in each of which ``root.forward`` calls the DiT five times:
+
         >>> outer = CallNode(
         ...     path=("root.forward",),
         ...     label="root.forward",
         ...     owner_class="Vla",
         ...     method="forward",
-        ...     calls=2,
         ...     total_time_ms=30.0,
         ... )
         >>> dit_module = nn.Linear(2, 2)
@@ -74,32 +79,33 @@ class CallTree:
         ...     owner_class="Dit",
         ...     method="forward",
         ...     module=dit_module,
-        ...     calls=10,
         ...     total_time_ms=25.0,
         ...     first_seen=1,
         ... )
         >>> outer.children.append(dit.path)
-        >>> one_iteration = [outer.path] + [dit.path] * 5
-        >>> tree = CallTree(nodes={n.path: n for n in (outer, dit)}, sequences=[one_iteration, one_iteration])
+        >>> samples = [Sample(calls={outer.path: 1, dit.path: 5}) for _ in range(2)]
+        >>> tree = CallTree(nodes={n.path: n for n in (outer, dit)}, samples=samples)
         >>> [n.path_str for n in tree.roots], tree.total_time_ms
         (['forward'], 30.0)
         >>> [n.path_str for n in tree.descendants(outer)]
         ['forward > dit.forward']
-        >>> [(n.path_str, n.calls) for n in tree.find("dit")]
+        >>> dit.calls_per_sample
+        [5, 5]
+        >>> [(n.path_str, n.total_calls) for n in tree.find("dit")]
         [('forward > dit.forward', 10)]
         >>> [n.path_str for n in tree.nodes_of(dit_module)]
         ['forward > dit.forward']
     """
 
     nodes: dict[CallPath, CallNode] = field(default_factory=dict)
-    sequences: list[list[CallPath]] = field(default_factory=list)
+    samples: list[Sample] = field(default_factory=list)
     weight_accesses: dict[str, set[WeightAccess]] = field(default_factory=dict)
     modules: list[tuple[str, nn.Module]] = field(default_factory=list)
 
-    @property
-    def iterations(self) -> int:
-        """Number of recorded iterations: inference calls of the structure pass, one per sample from the dataset."""
-        return len(self.sequences)
+    def __post_init__(self) -> None:
+        """Give every node the tree's ``samples`` list, from which it reads its per-sample values."""
+        for node in self.nodes.values():
+            node._samples = self.samples
 
     @property
     def roots(self) -> list[CallNode]:
@@ -108,7 +114,7 @@ class CallTree:
 
     @property
     def total_time_ms(self) -> float:
-        """Time of all outermost calls over all recorded iterations; nodes with no timed calls do not count."""
+        """Time of all outermost calls over all recorded samples; nodes with no timed calls do not count."""
         return sum(n.total_time_ms for n in self.roots if n.total_time_ms is not None)
 
     def descendants(self, node: CallNode) -> list[CallNode]:
@@ -146,26 +152,27 @@ class CallTree:
     def copy(self) -> "CallTree":
         """A snapshot of the tree: mutable containers are copied, immutable values shared.
 
-        Each node is replaced by a copy whose ``children`` and ``signatures`` are new — each signature
-        with copied ``inputs``/``outputs`` dicts and ``call_indices`` list — so later writes into them (a timing
-        pass's times, a ``synchronize_call_tree``'s values) don't reach this tree. ``sequences`` and the
-        per-weight ``WeightAccess`` sets are copied too, and the ``modules`` list. Shared: the ``nn.Module``s
-        (in ``modules`` and on the nodes), the signature leaves (``Leaf``/``TensorLeaf``
-        are frozen dataclasses) and the ``WeightAccess`` records (``NamedTuple``s).
+        The copy has new nodes reading new ``Sample`` objects, so later writes, such as a timing pass's times or
+        ``synchronize_call_tree``'s values, don't reach this tree. Copied: each node's ``children`` and
+        ``signatures`` (with their ``inputs``/``outputs`` dicts and ``call_indices``), each sample's ``inputs``
+        and ``calls``, the per-weight ``WeightAccess`` sets and the ``modules`` list. Shared: the
+        ``nn.Module``s, the leaves (``Leaf``/``TensorLeaf`` are frozen) and the ``WeightAccess`` records
+        (``NamedTuple``s).
 
         Example:
             >>> node = CallNode(path=("m.forward",), label="m.forward", owner_class="M", method="forward")
-            >>> tree = CallTree(nodes={("m.forward",): node})
+            >>> tree = CallTree(nodes={("m.forward",): node}, samples=[Sample()])
             >>> copied = tree.copy()
             >>> copied.nodes[("m.forward",)].total_time_ms = 1.0
-            >>> tree.nodes[("m.forward",)].total_time_ms is None
-            True
+            >>> copied.nodes[("m.forward",)].total_time_ms, tree.nodes[("m.forward",)].total_time_ms
+            (1.0, None)
         """
         return CallTree(
             nodes={
                 path: replace(
                     node,
                     children=list(node.children),
+                    _samples=None,
                     signatures=[
                         replace(
                             sig,
@@ -178,7 +185,7 @@ class CallTree:
                 )
                 for path, node in self.nodes.items()
             },
-            sequences=[list(seq) for seq in self.sequences],
+            samples=[Sample(inputs=dict(sample.inputs), calls=dict(sample.calls)) for sample in self.samples],
             weight_accesses={name: set(records) for name, records in self.weight_accesses.items()},
             modules=list(self.modules),
         )
@@ -187,56 +194,30 @@ class CallTree:
         """Nodes whose label contains ``text``, in first-call order."""
         return sorted((n for n in self.nodes.values() if text in n.label), key=lambda n: n.first_seen)
 
-    def calls_per_iteration(self) -> dict[CallPath, list[int]]:
-        """For each node, how many of its calls each iteration made.
-
-        ``calls_per_iteration()[path]`` has one entry per iteration (``len(...) == iterations``, zeros for
-        iterations that do not call the node), and ``sum(...) == node.calls``. It maps a call index from
-        ``CallSignature.call_indices`` to its iteration: with ``counts = calls_per_iteration()[path]``,
-        ``offsets = list(itertools.accumulate(counts, initial=0))`` and
-        ``iteration = bisect.bisect_right(offsets, call_index) - 1``. It assumes that all calls are recorded
-        inside iterations, as ``inspect`` does.
-
-        Example:
-            >>> outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
-            >>> step = CallNode(path=("root.forward", "root.step"), label="root.step", owner_class="Vla", method="step")
-            >>> tree = CallTree(
-            ...     nodes={n.path: n for n in (outer, step)},
-            ...     sequences=[[outer.path, step.path, step.path], [outer.path, step.path]],
-            ... )
-            >>> tree.calls_per_iteration()[step.path]
-            [2, 1]
-        """
-        counts: dict[CallPath, list[int]] = {path: [] for path in self.nodes}
-        for sequence in self.sequences:
-            made = Counter(sequence)
-            for path in self.nodes:
-                counts[path].append(made[path])
-        return counts
-
     def to_dict(self) -> dict[str, Any]:
         """The call tree as plain JSON data, for tools that read it without torch or aitune.
 
-        Node values are totals over all calls and ``iterations``: divide by ``calls`` for per call, by
-        ``iterations`` for per iteration.
+        Node values are totals over all calls and samples: divide by ``total_calls`` for per call;
+        ``calls_per_sample`` gives the per-sample counts.
 
         Returns:
             A dict of str, int, float, list and dict values with these keys:
 
             - ``schema_version``: format version. Fields may be added under the same version, so readers should
               ignore keys they don't know; it changes when a field is removed, renamed or changes meaning.
-            - ``iterations``: number of recorded iterations.
-            - ``total_time_ms``: time of the outermost calls over all iterations (``CallTree.total_time_ms``).
+            - ``total_time_ms``: time of the outermost calls over all samples (``CallTree.total_time_ms``).
+            - ``samples``: one dict per sample, in order, with ``inputs``: the sample's argument leaves
+              (``Sample.inputs``), in the same format as the signatures' leaves below.
             - ``nodes``: one dict per node, in first-call order, with ``call_path`` (``CallNode.path_str``, which
-              identifies the node), ``owner_class``, ``calls``, ``total_time_ms`` (the total measured time of the
+              identifies the node), ``owner_class``, ``total_calls``, ``total_time_ms`` (the total measured time of the
               node's calls, null when never timed), ``total_bytes_in``, ``total_bytes_out`` and
               ``signatures``: the node's distinct ``CallSignature``s in first-seen order, each with its
               ``call_indices`` (the indices of the calls that had it) and ``inputs``/``outputs`` dicts of leaves
               by path — ``outputs`` is null for a signature whose calls raised. Every leaf has ``type``; tensors
               also ``dtype`` and ``shape``. A leaf whose object a recorded call had before also has ``source``:
               ``{"call_path": ..., "side": ..., "name": ...}``, where it was last seen (``Leaf.source``).
-              ``calls_per_iteration``: ``calls_per_iteration[i]`` is how many of the node's calls iteration ``i``
-              made (``CallTree.calls_per_iteration``).
+              ``calls_per_sample``: ``calls_per_sample[i]`` is how many of the node's calls sample ``i``
+              made (``CallNode.calls_per_sample``).
             - ``modules``: for each instrumented module, by object path, its ``class`` (qualified name),
               ``parameters`` and ``parameter_bytes``. ``parameters`` maps the local name of each of the module's own
               parameters and buffers — not its submodules', which have their own entries if instrumented — to its
@@ -267,7 +248,7 @@ class CallTree:
             ...     first_seen=1,
             ... )
             >>> outer = CallNode(path=("root.forward",), label="root.forward", owner_class="Vla", method="forward")
-            >>> tree = CallTree(nodes={n.path: n for n in (outer, node)}, sequences=[[], []])
+            >>> tree = CallTree(nodes={n.path: n for n in (outer, node)})
             >>> exported = tree.to_dict()["nodes"][1]
             >>> exported["call_path"], exported["owner_class"]
             ('forward > dit.forward', 'Dit')
@@ -292,16 +273,15 @@ class CallTree:
                         for t in {id(t): t for t in (*module.parameters(), *module.buffers())}.values()
                     ),
                 }
-        calls_per_iteration = self.calls_per_iteration()
         return {
             "schema_version": SCHEMA_VERSION,
-            "iterations": self.iterations,
             "total_time_ms": self.total_time_ms,
+            "samples": [{"inputs": _leaves_dict(sample.inputs)} for sample in self.samples],
             "nodes": [
                 {
                     "call_path": node.path_str,
                     "owner_class": node.owner_class,
-                    "calls": node.calls,
+                    "total_calls": node.total_calls,
                     "inside_compiled_part": node.inside_compiled_part,
                     "total_time_ms": node.total_time_ms,
                     "total_bytes_in": node.total_bytes_in,
@@ -314,7 +294,7 @@ class CallTree:
                         }
                         for sig in node.signatures
                     ],
-                    "calls_per_iteration": calls_per_iteration[node.path],
+                    "calls_per_sample": list(node.calls_per_sample),
                 }
                 for node in sorted(self.nodes.values(), key=lambda n: n.first_seen)
             ],

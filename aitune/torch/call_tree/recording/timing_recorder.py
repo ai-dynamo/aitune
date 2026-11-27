@@ -1,11 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""The timing pass of the call tree: the recorder that times one call-path depth per iteration."""
+"""The timing pass of the call tree: the recorder that times one call-path depth per replay."""
 
 from __future__ import annotations
 
 import itertools
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from logging import getLogger
 from typing import Any
@@ -27,7 +29,7 @@ class TimingRecorder(CallRecorder):
     """Time the calls of the nodes a ``StructureRecorder`` recorded: the timing pass of the call tree.
 
     The pass replays each sample of the structure pass once per call-path depth its calls reach
-    (``depths_per_sample``). Each replay is one iteration (``begin_iteration``): it runs the whole sample but
+    (``depths_per_sample``). Each replay (``time_replay``) runs the whole sample but
     times only the calls at its depth. Deeper calls run inside a timed call and are ignored (see ``_skips_calls``);
     shallower calls are only tracked to know each call's path. Together, the replays time every call once, except
     calls inside a compiled part and calls deeper than ``max_depth``.
@@ -48,16 +50,16 @@ class TimingRecorder(CallRecorder):
       even if the call switches streams or devices. Work the call queues on another device, or on a stream that
       this stream does not wait for, is not measured, so such a call is timed too short.
 
-    Results: when the ``with`` block ends normally, the pass writes each node's measured ``total_time_ms`` into the
-    tree in place. Entering the pass resets it, so a pass replaces earlier times. ``total_time_ms`` None means the
-    node was not timed in this pass, for example a call inside a compiled part, never that it took no time.
-    To keep several timed trees, time a ``tree.copy()`` each.
+    Results: when the ``with`` block ends normally and no ``time_replay`` block raised, the pass writes each
+    node's measured ``total_time_ms`` into the tree in place. Entering the pass resets it, so a pass replaces
+    earlier times. ``total_time_ms`` None means the node was not timed in this pass, for example a call inside a
+    compiled part, never that it took no time. To keep several timed trees, time a ``tree.copy()`` each.
 
     Diagnostics: when the timing pass replays different calls than the structure pass saw, for example a
     non-deterministic inference such as sampling in ``generate``, some nodes end up timed for a different number
     of calls than they made. When the ``with`` block ends, one warning names the count and up to three example
-    paths; their ``total_time_ms`` only counts the calls that were timed. Calls inside a compiled part and nodes deeper
-    than ``max_depth`` are never timed and never counted.
+    paths; their ``total_time_ms`` only counts the calls that were timed. Calls inside a compiled part and nodes
+    deeper than ``max_depth`` are never timed and never counted.
 
     Example:
         An inference function whose calls report to the active recorder, as ``inspect``'s wrappers make them:
@@ -83,18 +85,16 @@ class TimingRecorder(CallRecorder):
         >>> structure = StructureRecorder()
         >>> with structure:
         ...     for x in samples:
-        ...         structure.begin_iteration()
-        ...         _ = infer(x)
-        ...         structure.end_iteration()
+        ...         with structure.record_sample():
+        ...             _ = infer(x)
         >>> timer = TimingRecorder(structure.result())
         >>> timer.depths_per_sample()
         [[1, 2], [1, 2]]
         >>> with timer:
         ...     for depths, x in zip(timer.depths_per_sample(), samples, strict=True):
         ...         for depth in depths:
-        ...             timer.begin_iteration(depth)
-        ...             _ = infer(x)
-        ...             timer.end_iteration()
+        ...             with timer.time_replay(depth):
+        ...                 _ = infer(x)
         >>> [(node.path_str, node.total_time_ms is not None) for node in timer.tree.nodes.values()]
         [('model.forward', True), ('model.forward > model.lin.forward', True)]
     """
@@ -111,6 +111,7 @@ class TimingRecorder(CallRecorder):
         self._max_depth = max_depth
         self._use_cuda = False
         self._depth: int | None = None
+        self._failed = False
         self._stack: list[_TimedCall] = []
         self._times: dict[CallPath, list[float]] = {}
         self._events: list[tuple[CallNode, Any, Any, int]] = []
@@ -132,13 +133,17 @@ class TimingRecorder(CallRecorder):
         Only reads the tree, so it can be called before entering the ``with`` block.
 
         Returns:
-            One sorted list of depths per sample, indexed like ``CallTree.sequences``, for example
-            ``[[1, 2, 3], [1, 2]]``.
+            One sorted list of depths per recorded sample, ``depths_per_sample()[i]`` belonging to sample ``i``,
+            for example ``[[1, 2, 3], [1, 2]]``; empty when no node is timeable.
 
         Example:
-            The first sample is replayed twice, timing depth 1 and then depth 2. The second sample never calls the
-            child, so it is replayed once:
+            Two samples, a long and a short one. Both call the root once; only the long one calls the child. The
+            long sample is replayed twice, timing depth 1 and then depth 2; the short one only once, at depth 1:
 
+            >>> import torch
+            >>> from aitune.torch.call_tree.nodes import Sample, TensorLeaf
+            >>> def inputs(*shape):
+            ...     return {"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, shape)}
             >>> root = CallNode(path=("m.forward",), label="m.forward", owner_class="M", method="forward")
             >>> child = CallNode(
             ...     path=("m.forward", "m.child.forward"),
@@ -146,39 +151,56 @@ class TimingRecorder(CallRecorder):
             ...     owner_class="C",
             ...     method="forward",
             ... )
-            >>> first_sample = [root.path, child.path]
-            >>> second_sample = [root.path]
-            >>> tree = CallTree(nodes={root.path: root, child.path: child}, sequences=[first_sample, second_sample])
+            >>> long = Sample(inputs=inputs(1, 512), calls={root.path: 1, child.path: 1})
+            >>> short = Sample(inputs=inputs(1, 64), calls={root.path: 1})
+            >>> tree = CallTree(nodes={root.path: root, child.path: child}, samples=[long, short])
             >>> TimingRecorder(tree).depths_per_sample()
             [[1, 2], [1]]
         """
         return [
             sorted({
                 len(path)
-                for path in sequence
-                if (node := self._tree.nodes.get(path)) is not None and self._is_timeable(node)
+                for path, calls in sample.calls.items()
+                if calls > 0 and self._is_timeable(self._tree.nodes[path])
             })
-            for sequence in self._tree.sequences
+            for sample in self._tree.samples
         ]
 
-    def begin_iteration(self, depth: int) -> None:
-        """Start a timing iteration: time calls at ``depth``.
+    @contextmanager
+    def time_replay(self, depth: int) -> Generator[None]:
+        """Time one replay inside the ``with`` block: the calls at ``depth``.
+
+        An exception inside the block invalidates the pass: it writes no times, as when the pass itself raises.
 
         Args:
-            depth: The call-path depth this iteration times.
+            depth: The call-path depth this replay times.
         """
         self._depth = depth
+        try:
+            yield
+        except BaseException:
+            self._failed = True
+            self._depth = None
+            self._events.clear()  # drop the interrupted replay's pending event pairs
+            raise
+        self._resolve_events()
 
     def begin_call(
         self, label: str, obj: Any, method: str, args: tuple[Any, ...], kwargs: dict[str, Any] | None = None
     ) -> _TimedCall:
-        """Look up a timing-pass call in the recorded nodes; time it when it is at the depth this iteration times."""
+        """Look up a timing-pass call in the recorded nodes; time it when it is at the depth this replay times."""
         path = (*self._stack[-1].path, label) if self._stack else (label,)
         node = self._tree.nodes.get(path)
         start = device = stream = None
         if node is not None and not node.inside_compiled_part and len(path) == self._depth:
             start, device, stream = self._start_timer()
-        call = _TimedCall(path=path, node=node, start=start, device=device, stream=stream)
+        call = _TimedCall(
+            path=path,
+            node=node,
+            start=start,
+            device=device,
+            stream=stream,
+        )
         self._stack.append(call)
         return call
 
@@ -191,10 +213,10 @@ class TimingRecorder(CallRecorder):
         if self._stack and self._stack[-1] is frame:
             self._stack.pop()
 
-    def end_iteration(self) -> None:
-        """End an iteration, resolving its pending CUDA event pairs into call times.
+    def _resolve_events(self) -> None:
+        """Resolve the current replay's pending CUDA event pairs into call times.
 
-        Adapters call it once per iteration; pending events stay bounded by one iteration. Each end event is
+        ``time_replay`` calls it once per replay; pending events stay bounded by one replay. Each end event is
         synchronized on its own, so pairs recorded on any device resolve without a device-wide synchronization.
         """
         if not self._events:
@@ -230,6 +252,7 @@ class TimingRecorder(CallRecorder):
         for node in self._tree.nodes.values():
             node.total_time_ms = None
         self._depth = None
+        self._failed = False
         self._stack.clear()
         self._times.clear()
         self._events.clear()
@@ -238,11 +261,12 @@ class TimingRecorder(CallRecorder):
         """End the timing pass, writing the measured times into the nodes and warning on a normal exit.
 
         Each node the pass timed gets ``total_time_ms``, the sum of its measured calls (``CallNode``). When the
-        block raised (``completed`` False), nothing is written: the nodes keep the None ``_start`` set.
+        block raised (``completed`` False) or a replay raised inside it, nothing is written: the nodes keep the
+        None ``_start`` set.
         """
-        if not completed:
+        if not completed or self._failed:
             return
-        self.end_iteration()
+        self._resolve_events()
         self._warn_about_diverged_replay()
         for path, times in self._times.items():
             self._tree.nodes[path].total_time_ms = sum(times)
@@ -260,17 +284,17 @@ class TimingRecorder(CallRecorder):
         return not node.inside_compiled_part and (self._max_depth is None or len(node.path) <= self._max_depth)
 
     def _warn_about_diverged_replay(self) -> None:
-        """Warn once when the replay timed a different number of calls for a node than the structure pass recorded.
+        """Warn once when the replays timed a different number of calls for a node than the structure pass recorded.
 
         The timing pass replays each sample once per timeable depth, so a complete pass times every call. A
-        node with a different number of timed calls means the replay behaved differently than the recorded
+        node with a different number of timed calls means the replays behaved differently than the recorded
         samples, for example a non-deterministic inference such as sampling in ``generate``. Nodes inside a
         compiled part or deeper than ``max_depth`` are never timed and never counted.
         """
         diverged = [
             node
             for node in self._tree.nodes.values()
-            if self._is_timeable(node) and len(self._times.get(node.path, ())) != node.calls
+            if self._is_timeable(node) and len(self._times.get(node.path, ())) != node.total_calls
         ]
         if diverged:
             examples = sorted(node.path_str for node in diverged)
@@ -304,7 +328,7 @@ class TimingRecorder(CallRecorder):
         return time.perf_counter(), None, None
 
     def _stop_timer(self, node: CallNode, call: _TimedCall) -> None:
-        """Stop timing ``node``'s call: queue the CUDA event pair for ``end_iteration``, or record the CPU time."""
+        """Stop timing ``node``'s call: queue the CUDA event pair for the end of the replay, or record the CPU time."""
         if call.device is not None:  # set exactly when the start is a CUDA event
             end = self._record_event(call.device, call.stream)
             self._events.append((node, call.start, end, call.device))

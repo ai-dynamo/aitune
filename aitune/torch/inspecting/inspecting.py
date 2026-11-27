@@ -47,19 +47,20 @@ def inspect(
         dataset: List of tuples with batch size and input.
         inference_function: Custom inference function to use for inspection, obj is used by default.
         number_of_iterations: Number of samples from the dataset to inspect, run once per pass. The call tree's
-            timing pass runs each sample once per call-path depth. The call tree reports it as ``CallTree.iterations``.
+            timing pass runs each sample once per call-path depth; each node's ``calls_per_sample`` has one entry
+            per inspected sample.
         warmup_iterations: Number of iterations to run for warmup.
         min_depth: Minimum depth of the modules to inspect, if root level modules is not working, try to increase this value
         max_depth: Maximum depth of the modules to inspect
         call_tree: Also record the call tree (``InspectedModulesInfo.call_tree``): which calls ran inside which,
             with each node's time, tensor bytes, argument signatures and weight accesses. Adds a structure pass and
-            a timing pass, which logs its number of iterations before it starts. Calls inside parts compiled with
+            a timing pass, which logs its number of replays before it starts. Calls inside parts compiled with
             ``torch.compile`` get no time. For deep models the walk must reach the linear layers, for example
             ``max_depth=8``. Details are in ``docs/guides/aot_inspect.md``.
         max_timing_depth: Deepest call-path depth the timing pass times, with the root call at depth 1; None times
             every depth, and 0 skips the timing pass, so every node keeps ``total_time_ms`` None. Deeper nodes are
             still recorded but keep ``total_time_ms`` None. Limits the timing pass to at most ``max_timing_depth``
-            iterations per sample.
+            replays per sample.
 
     Returns:
         InspectedModulesInfo object.
@@ -141,6 +142,12 @@ def _record_call_tree(
 ) -> CallTree:
     """Record the call tree without times, then time it in a second pass, each sample once per depth it reaches."""
     tree = _record_structure(recorder, inference_function, dataset, number_of_iterations)
+    if not tree.nodes:
+        logger.warning(
+            "The call tree recorded no calls: no instrumented module or method ran during the structure pass, "
+            "for example because the inference function does not call the inspected object or inspect runs "
+            "inside torch.compile. The returned call tree is empty."
+        )
     if max_timing_depth == 0:
         logger.info("Skipping the call tree's timing pass (max_timing_depth=0); node times stay None.")
     else:
@@ -167,14 +174,16 @@ def _record_structure(
     dataset: DatasetLike | DataLoaderFactory | torch.Tensor,
     number_of_iterations: int,
 ) -> CallTree:
-    """Record the call tree's structure, one iteration per sample."""
+    """Record the call tree's structure, one inference per sample."""
     logger.info("Recording the call tree's structure.")
     # Recording reads each weight access eagerly; Dynamo cannot trace the TorchFunctionMode.
     with _pass_on_all_ranks(recorder, "call tree's structure pass"), torch.compiler.set_stance("force_eager"):
         for _, args, kwargs in samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations):
-            recorder.begin_iteration()
-            _run_inference(inference_function, args, kwargs)
-            recorder.end_iteration()
+            with contextlib.ExitStack() as stack:
+                # describing runs before ``_run_inference``'s barrier, so its failure must reach every rank
+                with coordinator.raise_if_any_rank_fails("Describing a call tree sample"):
+                    stack.enter_context(recorder.record_sample(args, kwargs))
+                _run_inference(inference_function, args, kwargs)
     with coordinator.raise_if_any_rank_fails("Reading the call tree's structure"):
         return recorder.result()
 
@@ -189,10 +198,13 @@ def _time_call_tree(
     depths_per_sample = timer.depths_per_sample()
     # Ranks must run the same number of inferences or the barriers in _run_inference deadlock.
     coordinator.verify_equal(depths_per_sample, "call tree timing depths")
+    if not any(depths_per_sample):
+        logger.info("Timing the call tree: no call is timeable, so the timing pass is skipped.")
+        return
     logger.info(
-        "Timing the call tree: %d samples, %d call-path depths, %d iterations "
+        "Timing the call tree: %d samples, %d call-path depths, %d replays "
         "(each sample once per depth its calls reach).",
-        len(timer.tree.sequences),
+        number_of_iterations,
         len(set(itertools.chain.from_iterable(depths_per_sample))),
         sum(map(len, depths_per_sample)),
     )
@@ -200,10 +212,9 @@ def _time_call_tree(
     with _pass_on_all_ranks(timer, "call tree timing pass"):
         for depths, (_, args, kwargs) in zip(depths_per_sample, samples, strict=True):
             for depth in depths:
-                timer.begin_iteration(depth)
-                _run_inference(inference_function, args, kwargs)
-                with coordinator.raise_if_any_rank_fails("Resolving call tree timings"):
-                    timer.end_iteration()
+                with coordinator.raise_if_any_rank_fails("Timing a call tree replay"):
+                    with timer.time_replay(depth):
+                        _run_inference(inference_function, args, kwargs)
 
 
 def _reset_total_execution_time(inspector: ModuleInspector):

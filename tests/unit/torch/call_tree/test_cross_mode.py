@@ -20,7 +20,12 @@ ITERATIONS = 2
 
 
 def _canonical(tree: CallTree, node: CallNode) -> tuple:
-    return (node.owner_class, node.method, node.calls, tuple(_canonical(tree, tree.nodes[p]) for p in node.children))
+    return (
+        node.owner_class,
+        node.method,
+        node.total_calls,
+        tuple(_canonical(tree, tree.nodes[p]) for p in node.children),
+    )
 
 
 def _structure(tree: CallTree) -> list[tuple]:
@@ -48,9 +53,8 @@ def _jit_tree(tokens, image) -> CallTree:
         model(tokens, image)  # warmup, not recorded
         with recorder, torch.no_grad():
             for _ in range(ITERATIONS):
-                recorder.begin_iteration()
-                model(tokens, image)
-                recorder.end_iteration()
+                with recorder.record_sample():
+                    model(tokens, image)
     return recorder.result()
 
 

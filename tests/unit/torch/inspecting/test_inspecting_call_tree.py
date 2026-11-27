@@ -59,9 +59,9 @@ def test_call_tree_leaves_legacy_output_unchanged(dataset):
 
     assert _legacy(with_graph) == _legacy(without)
     tree = _tree(with_graph)
-    assert tree.iterations == ITERATIONS
-    assert tree.nodes[("root.forward",)].calls == ITERATIONS
-    assert tree.nodes[("root.forward", "root.dit_forward")].calls == 5 * ITERATIONS
+    assert all(len(node.calls_per_sample) == ITERATIONS for node in tree.nodes.values())
+    assert tree.nodes[("root.forward",)].total_calls == ITERATIONS
+    assert tree.nodes[("root.forward", "root.dit_forward")].total_calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes
 
 
@@ -91,8 +91,8 @@ def test_call_tree_adds_one_broadcast(mocker, dataset):
     # warmup, per-module and structure passes run number_of_iterations; the timing pass one inference per planned depth
     assert barrier.call_count == 2 * (2 + 3 + 3 + sum(map(len, TimingRecorder(_tree(info)).depths_per_sample())))
     assert broadcast.call_count == 2
-    iterations, records = broadcast.call_args_list[1].args[0]
-    assert iterations == 3
+    records = broadcast.call_args_list[1].args[0]
+    assert all(len(record.calls_per_sample) == 3 for record in records)
     assert {path for path, *_ in records} == set(_tree(info).nodes)
 
 
@@ -182,15 +182,17 @@ def test_every_timeable_node_is_timed(mocker, dataset):
     tree = _tree(info)
     assert max(len(path) for path in tree.nodes) > 2
     assert all(
-        node.total_time_ms is not None for node in tree.nodes.values() if node.calls and not node.inside_compiled_part
+        node.total_time_ms is not None
+        for node in tree.nodes.values()
+        if node.total_calls and not node.inside_compiled_part
     )
     warning.assert_not_called()
 
 
 def test_the_timing_pass_runs_each_sample_once_per_its_depths(mocker, dataset):
-    """``begin_iteration`` is called once per depth of ``TimingRecorder.depths_per_sample()``, in order."""
+    """``time_replay`` is entered once per depth of ``TimingRecorder.depths_per_sample()``, in order."""
     model, fn = _vla()
-    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    begin = mocker.spy(TimingRecorder, "time_replay")
 
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
@@ -246,9 +248,8 @@ def test_calls_that_only_some_samples_make_are_timed(mocker):
     tree = _tree(info)
     branch = ("root.forward", "root.sometimes.forward")
     deep = (*branch, "root.sometimes.lin.forward")
-    assert branch in tree.sequences[0] and branch in tree.sequences[2]
-    assert branch not in tree.sequences[1] and branch not in tree.sequences[3]
-    # only the branch reaches depth 3, so only samples 0 and 2 get an iteration at that depth
+    assert tree.nodes[branch].calls_per_sample == [1, 0, 1, 0]
+    # only the branch reaches depth 3, so only samples 0 and 2 get a replay at that depth
     assert TimingRecorder(tree).depths_per_sample() == [[1, 2, 3], [1, 2], [1, 2, 3], [1, 2]]
     assert tree.nodes[branch].total_time_ms is not None
     assert tree.nodes[deep].total_time_ms is not None
@@ -646,11 +647,11 @@ def test_a_torch_compiled_child_that_recurses_records_the_nested_call(mocker, da
 
 def test_timing_pass_ends_every_run(mocker, dataset):
     model, fn = _vla()
-    spy = mocker.spy(TimingRecorder, "end_iteration")
+    spy = mocker.spy(TimingRecorder, "_resolve_events")
 
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
 
-    # once per timing iteration, plus one when the timing pass ends
+    # once per timing replay, plus one when the timing pass ends
     assert spy.call_count == sum(map(len, TimingRecorder(_tree(info)).depths_per_sample())) + 1
 
 
@@ -676,6 +677,8 @@ def test_forward_is_not_recorded_while_compiling(mocker, dataset):
             return real_record_call_tree(*args, **kwargs)
 
     mocker.patch("aitune.torch.inspecting.inspecting._record_call_tree", side_effect=record_while_compiling)
+    warning = mocker.patch("aitune.torch.inspecting.inspecting.logger.warning")
+    replay = mocker.spy(TimingRecorder, "time_replay")
 
     info = inspect(
         model, dataset, inference_function=fn, number_of_iterations=ITERATIONS, warmup_iterations=1, call_tree=True
@@ -683,29 +686,47 @@ def test_forward_is_not_recorded_while_compiling(mocker, dataset):
 
     assert _tree(info).nodes == {}
     assert _legacy(info) == _legacy(without)
+    assert "recorded no calls" in warning.call_args.args[0]
+    replay.assert_not_called()
 
 
-def test_end_iteration_failure_is_raised_through_the_rank_failure_context(mocker, dataset):
+def test_the_timing_pass_is_skipped_when_no_node_is_timeable(mocker, dataset):
+    """When the replay plan is empty for every sample, the pass replays nothing and logs the skip."""
+    model, fn = _vla()
+    mocker.patch.object(TimingRecorder, "_is_timeable", return_value=False)
+    replay = mocker.spy(TimingRecorder, "time_replay")
+    info_log = mocker.spy(inspecting_module.logger, "info")
+
+    info = inspect(
+        model, dataset, inference_function=fn, number_of_iterations=ITERATIONS, warmup_iterations=1, call_tree=True
+    )
+
+    assert _tree(info).nodes
+    replay.assert_not_called()
+    assert "timing pass is skipped" in str(info_log.call_args_list)
+
+
+def test_event_resolution_failure_is_raised_through_the_rank_failure_context(mocker, dataset):
     model, fn = _vla()
     spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
 
     def fail_in_the_timing_pass(self):
         raise RuntimeError("bad events")
 
-    mocker.patch.object(TimingRecorder, "end_iteration", new=fail_in_the_timing_pass)
+    mocker.patch.object(TimingRecorder, "_resolve_events", new=fail_in_the_timing_pass)
     original_apply = nn.Module._apply
 
     with pytest.raises(RuntimeError, match="bad events"):
         inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
-    spy.assert_any_call("Resolving call tree timings")
+    spy.assert_any_call("Timing a call tree replay")
     assert nn.Module._apply is original_apply
 
 
 def test_timing_pass_entry_failure_goes_through_the_rank_failure_context(mocker, dataset):
     model, fn = _vla()
     spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
-    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    begin = mocker.spy(TimingRecorder, "time_replay")
     mocker.patch.object(TimingRecorder, "_start", side_effect=RuntimeError("bad start"))
     original_apply = nn.Module._apply
 
@@ -720,7 +741,7 @@ def test_timing_pass_entry_failure_goes_through_the_rank_failure_context(mocker,
 def test_timing_pass_entry_peer_failure_exits_the_recorder(mocker, dataset):
     model, fn = _vla()
     real_guard = coordinator.raise_if_any_rank_fails
-    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    begin = mocker.spy(TimingRecorder, "time_replay")
     stop = mocker.spy(TimingRecorder, "_stop")
     original_apply = nn.Module._apply
 
@@ -767,6 +788,22 @@ def test_structure_result_failure_goes_through_the_rank_failure_context(mocker, 
         inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
     spy.assert_any_call("Reading the call tree's structure")
+    assert nn.Module._apply is original_apply
+
+
+def test_sample_description_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    mocker.patch(
+        "aitune.torch.call_tree.recording.structure_recorder.describe_sample_inputs",
+        side_effect=RuntimeError("bad description"),
+    )
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad description"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Describing a call tree sample")
     assert nn.Module._apply is original_apply
 
 
@@ -836,7 +873,7 @@ def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(datase
         call_tree=True,
     )
 
-    paths = {n.path_str: n.calls for n in _tree(info).nodes.values()}
+    paths = {n.path_str: n.total_calls for n in _tree(info).nodes.values()}
     assert paths == {
         "forward": ITERATIONS,
         "forward > child.forward": ITERATIONS,
@@ -875,7 +912,7 @@ def test_module_compiled_child_is_recorded_once_and_counts_stay_unchanged(datase
 
     assert _legacy(info) == without_tree
     nodes = _tree(info).nodes
-    assert nodes[("root.forward", "root.child.forward")].calls == ITERATIONS
+    assert nodes[("root.forward", "root.child.forward")].total_calls == ITERATIONS
     assert ("root.forward", "root.child.forward", "root.child.lin.forward") in nodes
 
 
@@ -960,9 +997,9 @@ def test_max_timing_depth_leaves_deep_nodes_untimed_without_a_warning(mocker, da
     tree = _tree(info)
     assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
     deep = [node for node in tree.nodes.values() if len(node.path) > 2]
-    assert all(node.calls > 0 for node in deep)
+    assert all(node.total_calls > 0 for node in deep)
     assert all(node.total_time_ms is None for node in deep)
-    shallow = [node for node in tree.nodes.values() if node.calls and len(node.path) <= 2]
+    shallow = [node for node in tree.nodes.values() if node.total_calls and len(node.path) <= 2]
     assert shallow and all(node.total_time_ms is not None for node in shallow)
     warning.assert_not_called()
 
@@ -993,5 +1030,21 @@ def test_max_timing_depth_zero_skips_the_timing_pass(mocker, dataset):
     timing.assert_not_called()
     tree = _tree(info)
     assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
-    assert all(node.calls > 0 for node in tree.nodes.values())
+    assert all(node.total_calls > 0 for node in tree.nodes.values())
     assert all(node.total_time_ms is None for node in tree.nodes.values())
+
+
+def test_samples_are_recorded_with_the_dataset_wraparound():
+    """``tree.samples[i]`` describes sample ``i``: with more iterations than samples, the dataset restarts."""
+    model = nn.Linear(8, 8)
+    s0, s1 = torch.randn(1, 8), torch.randn(3, 8)
+
+    info = inspect(model, [s0, s1], number_of_iterations=3, warmup_iterations=0, call_tree=True)
+
+    tree = _tree(info)
+    assert [tuple(sample.inputs["args[0]"].shape) for sample in tree.samples] == [
+        tuple(s0.unsqueeze(0).shape),
+        tuple(s1.unsqueeze(0).shape),
+        tuple(s0.unsqueeze(0).shape),
+    ]
+    assert all(len(node.calls_per_sample) == 3 for node in tree.nodes.values())
