@@ -254,6 +254,7 @@ class Backend(ABC, Generic[ConfigType]):
 
         from aitune.torch.tune_data.reporting import report_backend_build
 
+        self._assert_external_device_management(module)
         with release_transient_memory():
             with report_backend_build(self, log_file=log_file):
                 try:
@@ -287,6 +288,15 @@ class Backend(ABC, Generic[ConfigType]):
         execution_mode = ExecutionMode.MULTI_GPU if is_distributed_module(module) else ExecutionMode.SINGLE_GPU
         if execution_mode not in self._execution_modes:
             raise RuntimeError(f"Backend {self.name} does not support {execution_mode.value} execution")
+
+    def _assert_external_device_management(self, module: nn.Module) -> None:
+        """Qualify externally placed sources before backend build can mutate them."""
+        from aitune.torch.utils.module import is_externally_managed_module, validate_external_backend
+
+        if is_externally_managed_module(module):
+            validate_external_backend(self)
+        elif any(is_externally_managed_module(child) for child in module.modules()):
+            raise RuntimeError("Cannot build an unmarked ancestor of an externally managed subtree")
 
     @annotate(color="cyan")
     def activate(self):

@@ -764,13 +764,6 @@
       "severity": "error"
     },
     {
-      "column": 94,
-      "path": "aitune/torch/jit/patched_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `aitune.torch.module.passthrough_module.PassthroughModule.__init__`",
-      "severity": "error"
-    },
-    {
       "column": 20,
       "path": "aitune/torch/kernel_forge/kernel_utils.py",
       "name": "bad-return",
@@ -852,13 +845,6 @@
       "path": "aitune/torch/module/wrapper_module.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `device`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/module/wrapper_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `aitune.torch.module.passthrough_module.PassthroughModule.__init__`",
       "severity": "error"
     },
     {
