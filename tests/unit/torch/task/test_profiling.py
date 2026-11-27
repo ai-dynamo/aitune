@@ -4,6 +4,7 @@
 import time
 
 import pytest
+import torch
 
 from aitune.torch import Module
 from aitune.torch.backend import TorchEagerBackend
@@ -19,7 +20,7 @@ from aitune.torch.task.profiling.profiling_stop_strategy import (
     ThroughputSaturatedProfilingStopStrategy,
 )
 from tests.toy_models.torch_models import ToyTorchModel
-from tests.utilities.helpers import make_sample_store
+from tests.utilities.helpers import make_graph_spec, make_sample_store, update_input_spec
 
 
 def new_event(
@@ -540,3 +541,29 @@ def test_profile_backend_excludes_sample_store_load_from_measurements(mocker, tm
     assert result.status == ProfilingStatus.Status.SUCCESS
     assert call_order == ["load", "infer", "infer"]
     assert [entry.execution_time for entry in result.results.entries] == [100, 100]
+
+
+@pytest.mark.parametrize("boundary,expected_size", [("min_shape", 8), ("max_shape", 16)])
+def test_profile_backend_resizes_one_sample_to_requested_boundary(mocker, tmp_path, boundary, expected_size):
+    model = torch.nn.Identity()
+    sample = ((torch.zeros(1, 4, 12, 12),), {})
+    graph_spec = make_graph_spec(model.forward, sample, batch_size=1)
+    for size in (8, 16):
+        update_input_spec(graph_spec, ((torch.zeros(1, 4, size, size),), {}), batch_size=1)
+    samples = make_sample_store([sample], tmp_path)
+    observed_shapes = []
+    backend = mocker.Mock(spec=TorchEagerBackend)
+    backend.describe.return_value = "boundary-backend"
+    backend.infer.side_effect = lambda x: observed_shapes.append(tuple(x.shape))
+    config = ProfilingConfig(
+        batch_sizes=[1],
+        shape_boundary=boundary,
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1, warmup_samples=1),
+    )
+
+    result = profile_backend(backend, "spatial-model", graph_spec, samples, config)
+
+    assert result.status is ProfilingStatus.Status.SUCCESS
+    assert observed_shapes == [(1, 4, expected_size, expected_size)] * 2
+    assert len(samples) == 1
+    assert samples[0][0][0].shape == (1, 4, 12, 12)

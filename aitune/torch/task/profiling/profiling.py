@@ -23,6 +23,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inference_events
+from aitune.torch.utils.shape_samples import resize_sample_to_shape
 
 logger = logging.getLogger(__name__)
 
@@ -98,14 +99,18 @@ def profile_backend(
         ProfilingStatus: Status of the profiling.
 
     Note:
-        The first recorded sample is loaded and expanded to each requested batch
-        size before :class:`ModelExecutionTimeMeasuringStrategy` starts its timer.
+        The first recorded sample is optionally resized to ``shape_boundary``
+        and expanded to each requested batch size before
+        :class:`ModelExecutionTimeMeasuringStrategy` starts its timer.
         This keeps ``SampleStore`` disk I/O and batch construction out of reported
         inference latency and throughput.
     """
 
     def generator():
-        base_args, base_kwargs = samples[0]
+        sample = samples[0]
+        if profiling_config.shape_boundary is not None:
+            sample = resize_sample_to_shape(sample, graph_spec, profiling_config.shape_boundary)
+        base_args, base_kwargs = sample
         if profiling_config.batching:
             for batch_size in profiling_config.batch_sizes:
                 args, kwargs = graph_spec.make_batch(base_args, base_kwargs, batch_size)
@@ -131,6 +136,8 @@ def _profile(
 ):
     """Profile a model."""
     profiling_stop_strategy = deepcopy(profiling_config.profiling_stop_strategy)
+    if profiling_stop_strategy is None:
+        raise RuntimeError("Profiling stop strategy was not initialized")
     profiling_results = ProfilingResults()
     try:
         for batch_size, args, kwargs in samples:
@@ -171,6 +178,9 @@ def _run_profiling_batch_size(
 ) -> list[ProfilingResultEvent] | None:
     entries = []
     measurement_stop_strategy = deepcopy(profiling_config.measurement_stop_strategy)
+    measuring_strategy = profiling_config.measuring_strategy
+    if measurement_stop_strategy is None or measuring_strategy is None:
+        raise RuntimeError("Profiling measurement strategies were not initialized")
     coordinator.barrier()
     while True:
         local_error: Exception | None = None
@@ -178,10 +188,11 @@ def _run_profiling_batch_size(
         new_entries: list[ProfilingResultEvent] | None = None
         try:
             # make call idempotent (no side effects) since model can be stateful like LLM KV cache
-            new_entries = profiling_config.measuring_strategy.do_measurement(
+            measured_entries = measuring_strategy.do_measurement(
                 batch_size, model, deepcopy(sample), backend_details=backend_details, model_name=model_name
             )
-            local_should_stop = measurement_stop_strategy.should_stop(get_inference_events(new_entries))
+            new_entries = measured_entries
+            local_should_stop = measurement_stop_strategy.should_stop(get_inference_events(measured_entries))
         except torch.OutOfMemoryError as error:
             local_error = error
             logger.warning(

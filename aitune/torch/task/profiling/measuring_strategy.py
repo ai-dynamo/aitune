@@ -17,7 +17,7 @@ class MeasuringStrategy(ABC):
 
     @abstractmethod
     def do_measurement(
-        self, batch_size: int, model: Callable, sample: tuple[list, dict], **kwargs
+        self, batch_size: int, model: Callable, sample: tuple[list | tuple, dict], **kwargs
     ) -> list[ProfilingResultEvent]:
         """Do the measurement and create a ProfilingResultEvent(s).
 
@@ -41,7 +41,7 @@ class ModelExecutionTimeMeasuringStrategy(MeasuringStrategy):
         """Initialize the measuring strategy."""
 
     def do_measurement(
-        self, batch_size: int, model: Callable, sample: tuple[list, dict], **measurement_kwargs
+        self, batch_size: int, model: Callable, sample: tuple[list | tuple, dict], **measurement_kwargs
     ) -> list[ProfilingResultEvent]:
         """Do the measurement and create a ProfilingResultEvent(s) for the model."""
         args, kwargs = sample

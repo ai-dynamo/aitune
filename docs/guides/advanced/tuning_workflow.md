@@ -208,9 +208,45 @@ For `OneBackendStrategy` and `FirstWinsStrategy`, `ENABLED` rejects a correctnes
 does not exceed the eager baseline by the configured threshold. The default threshold is 1%, controlled by
 `min_speedup_threshold_percent`.
 
-For `MaxThroughputStrategy`, `MinLatencyStrategy`, and `LatencyBudgetStrategy`, `ENABLED` includes eager in the final
-selection decision. `DIAGNOSTIC` records the eager comparison but selects the best successful user backend.
-`DISABLED` skips eager profiling and also selects among successful user backends only.
+For `MaxThroughputStrategy`, `MinLatencyStrategy`, and `LatencyBudgetStrategy`, each backend is profiled at the
+minimum and maximum recorded shapes. Inputs are generated from one stored sample with the same slicing and
+repetition used by dynamic-shape correctness checks. Identical boundaries are measured once. Batch sweeps run
+separately within each boundary; changing only batch bounds does not repeat an identical sweep.
+
+Selection uses the means returned by the configured profiler. For example, `StableWindowMeasuringStopStrategy`
+continues measuring until its window is stable and returns the final window for mean calculation. Selection does
+not introduce additional measurement blocks or statistical confidence calculations. The existing default
+fixed-step measurement strategy remains unchanged.
+
+In `ENABLED` mode, normalize each boundary's metric against the matching eager metric:
+
+- Latency speedup: `eager_latency / backend_latency`.
+- Throughput speedup: `backend_throughput / eager_throughput`.
+
+Reject a candidate if either boundary speedup is below `min_boundary_speedup`, which defaults to **0.95**.
+Rank eligible candidates by the geometric mean of their boundary speedups. Eager scores **1.0** and wins ties,
+so a candidate must improve the overall score even when a small boundary regression is allowed. The threshold is
+a performance ratio, not a statistical confidence level. Both boundaries have equal weight; this does not assume
+a workload frequency distribution or guarantee performance at intermediate shapes.
+
+```python
+from aitune.torch.tune_strategy import MinLatencyStrategy
+
+strategy = MinLatencyStrategy(backends=backends, min_boundary_speedup=0.95)
+```
+
+`DIAGNOSTIC` reports the same comparisons but ranks all successful candidates without the threshold or eager gate.
+`DISABLED` skips eager profiling and ranks successful candidates by the geometric mean of their boundary metrics,
+using the strategy's optimization direction. `LatencyBudgetStrategy` requires each boundary to satisfy the latency
+budget. It can fall back to eager after rejecting candidates only when eager also satisfied the budget.
+
+Tuning telemetry stores profiler metrics and selected batch sizes in `strategy_results[].shape_boundaries`, eager
+metrics in `baseline_boundaries`, ratios in `boundary_speedups`, and the combined score in `speedup`.
+`performance_passed` records whether every boundary met the threshold. These settings apply to AOT and JIT
+profiling strategies; they do not change `OneBackendStrategy` or `FirstWinsStrategy`.
+The summary latency, throughput, and selected batch size report the maximum-shape profile. When both boundaries
+produce the same workload, its single profile supplies the summary. The combined selection score still uses both
+distinct boundary results.
 
 In `DIAGNOSTIC` mode, profiling strategies can still use eager as a fallback when no user backend succeeds. The mode
 prevents performance comparison from affecting selection; it does not remove the available fallback.

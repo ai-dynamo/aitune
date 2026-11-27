@@ -974,34 +974,6 @@
       "severity": "error"
     },
     {
-      "column": 37,
-      "path": "aitune/torch/task/profiling/profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `should_stop`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "aitune/torch/task/profiling/profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `do_measurement`",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/task/profiling/profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `should_stop`",
-      "severity": "error"
-    },
-    {
-      "column": 92,
-      "path": "aitune/torch/task/profiling/profiling.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[ProfilingResultEvent] | None` is not assignable to parameter `events` with type `list[ProfilingResultEvent]` in function `aitune.torch.task.profiling.events.get_inference_events`",
-      "severity": "error"
-    },
-    {
       "column": 51,
       "path": "aitune/torch/tune_data/reporting.py",
       "name": "bad-argument-type",
@@ -1067,55 +1039,6 @@
     {
       "column": 28,
       "path": "aitune/torch/tune_strategy/mixin/performance_validation_mixin.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Backend[Unknown] | None` is not assignable to parameter `backend` with type `Backend[Unknown]` in function `aitune.torch.tune_strategy.tune_strategy.TuneStrategy._post_tune`",
-      "severity": "error"
-    },
-    {
-      "column": 41,
-      "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `BackendProfilingResult` has no attribute `throughput`",
-      "severity": "error"
-    },
-    {
-      "column": 38,
-      "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `BackendProfilingResult` has no attribute `latency`",
-      "severity": "error"
-    },
-    {
-      "column": 17,
-      "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
-      "name": "unsupported-operation",
-      "concise_description": "`None` is not subscriptable",
-      "severity": "error"
-    },
-    {
-      "column": 34,
-      "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `BackendProfilingResult | None` is not assignable to parameter `result` with type `BackendProfilingResult` in function `ProfilingTuneStrategy._fmt_result`",
-      "severity": "error"
-    },
-    {
-      "column": 24,
-      "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `BackendProfilingResult | None` is not assignable to parameter `result` with type `BackendProfilingResult` in function `_TuneCandidate.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Backend[Unknown] | None` is not assignable to parameter `backend` with type `Backend[Unknown]` in function `_TuneCandidate.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "aitune/torch/tune_strategy/profiling_tune_strategy.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `Backend[Unknown] | None` is not assignable to parameter `backend` with type `Backend[Unknown]` in function `aitune.torch.tune_strategy.tune_strategy.TuneStrategy._post_tune`",
       "severity": "error"

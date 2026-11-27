@@ -15,6 +15,7 @@ from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStr
 from aitune.torch.task.profiling.metrics import get_latency, get_throughput
 from aitune.torch.task.profiling.profiling import ProfilingStatus, profile_backend
 from aitune.torch.task.profiling.profiling_stop_strategy import ProfilingStopStrategy
+from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.torch.tune_strategy.profiling_tune_strategy import (
     BackendProfilingResult,
     ProfilingTuneStrategy,
@@ -63,8 +64,9 @@ class LatencyBudgetStrategy(ProfilingTuneStrategy):
     Each backend is profiled across the configured batch-size sweep. For each backend,
     the strategy keeps only batch sizes whose mean latency is less than or equal to
     ``latency_budget_ms``, then uses the highest-throughput remaining batch size as
-    that backend's score. The selected backend is the one with maximum throughput
-    among all latency-compliant candidates.
+    that boundary's score. All shape boundaries must satisfy the budget. Selection
+    compares geometric-mean boundary throughput, applying the shared eager gate
+    when performance validation is enabled.
 
     TorchEager is profiled as a performance-validation baseline when validation is enabled.
     If no user-provided backend satisfies the latency budget, the strategy raises.
@@ -132,7 +134,13 @@ class LatencyBudgetStrategy(ProfilingTuneStrategy):
         )
 
     def _resolve_winner(self, best: _TuneCandidate | None) -> _TuneCandidate:
-        if best is None:
+        rejected_by_performance = any(not result.passed for result in self.perf_validation_results)
+        can_use_baseline = (
+            self.performance_validation_mode is PerformanceValidationMode.ENABLED
+            and self._baseline_result is not None
+            and rejected_by_performance
+        )
+        if best is None and not can_use_baseline:
             raise RuntimeError(f"No backend satisfied latency budget {self.latency_budget_ms:.3f} ms")
         return super()._resolve_winner(best)
 

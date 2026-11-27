@@ -5,7 +5,7 @@
 import copy
 import math
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import torch
@@ -14,6 +14,7 @@ from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.locator import Locator
 from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.utils.shape_samples import dynamic_shape_boundary_samples as _dynamic_shape_boundary_samples
 
 
 class CorrectnessValueError(ValueError):
@@ -121,21 +122,6 @@ def check_inference_output_correctness(
                 name,
                 ignored_input_paths=graph_spec.forward_effects_spec.ignored_input_paths,
             )
-
-
-def _dynamic_shape_boundary_samples(sample: tuple[tuple, dict], graph_spec: GraphSpec) -> list[tuple[tuple, dict]]:
-    """Create min/max input samples for dynamic-shape correctness checks.
-
-    Note: These samples are intended only for validating min and max shapes. Their tensor values may be
-    numerically invalid and can produce NaN or Inf outputs.
-    """
-    if not graph_spec.input_spec.detected_dynamic_axis():
-        return []
-
-    return [
-        _resize_sample_to_shape(sample, graph_spec, shape_attr="min_shape"),
-        _resize_sample_to_shape(sample, graph_spec, shape_attr="max_shape"),
-    ]
 
 
 def _check_output_correctness(output: Any, name: str = "output", depth: int = 0):  # noqa: C901
@@ -265,53 +251,3 @@ def _check_post_input_metadata(
             f"Input mutations after executing {name} do not match eager execution. "
             f"Expected post-call values {expected_other!r}, got {actual_other!r}."
         )
-
-
-def _resize_sample_to_shape(
-    sample: tuple[tuple, dict],
-    graph_spec: GraphSpec,
-    *,
-    shape_attr: str,
-) -> tuple[tuple, dict]:
-    """Resize each tensor input in a sample to the requested TensorSpec shape attribute.
-
-    Note: These samples are intended only for validating min and max shapes. Their tensor values may be
-    numerically invalid and can produce NaN or Inf outputs.
-    """
-    args, kwargs = copy.deepcopy(sample)
-    call_layout = graph_spec.forward_signature.capture_call_layout(args, kwargs)
-    forward_inputs = graph_spec.forward_signature.normalize(args, kwargs)
-    for locator, tensor_spec in graph_spec.input_spec.tensor_data:
-        target_shape = getattr(tensor_spec, shape_attr)
-        forward_inputs.arguments = cast(
-            dict[str, Any],
-            locator.set_value(
-                forward_inputs.arguments,
-                _resize_tensor(cast(torch.Tensor, locator.get_value(forward_inputs.arguments)), target_shape),
-            ),
-        )
-    return call_layout.restore(forward_inputs.arguments)
-
-
-def _resize_tensor(tensor: torch.Tensor, target_shape: list[int]) -> torch.Tensor:
-    """Resize a tensor by slicing or repeating each axis to match a target shape.
-
-    Note: These samples are intended only for validating min and max shapes. Their tensor values may be
-    numerically invalid and can produce NaN or Inf outputs.
-    """
-    for axis, target_size in enumerate(target_shape):
-        current_size = tensor.shape[axis]
-        if current_size == target_size:
-            continue
-        slice_indices = [slice(None)] * tensor.ndim
-        if current_size > target_size:
-            slice_indices[axis] = slice(target_size)
-            tensor = tensor[tuple(slice_indices)]
-            continue
-
-        slice_indices[axis] = slice(1)
-        tensor = tensor[tuple(slice_indices)]
-        repeat_indices = [1] * tensor.ndim
-        repeat_indices[axis] = target_size
-        tensor = tensor.repeat(repeat_indices)
-    return tensor

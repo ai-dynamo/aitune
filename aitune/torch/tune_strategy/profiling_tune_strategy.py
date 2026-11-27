@@ -10,16 +10,19 @@ class attributes and implementing a small set of hooks; ``MaxThroughputStrategy`
 """
 
 import logging
+import math
 import shutil
 import traceback
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from statistics import geometric_mean
+from typing import Any, Literal
 
 import torch
 import torch.nn as nn
 
+from aitune.exceptions import AITuneUserInputError
 from aitune.torch.backend import Backend
 from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
@@ -27,7 +30,7 @@ from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
-from aitune.torch.tune_strategy.formatting import fmt_speedup_comparison, fmt_speedup_msg
+from aitune.torch.tune_strategy.formatting import fmt_speedup_msg
 from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.torch.utils.module import get_default_backend_for_module
@@ -38,6 +41,8 @@ from aitune.utils.logging import log
 class _TuneCandidate:
     backend: Backend
     result: "BackendProfilingResult"
+    boundary_results: dict[str, "BackendProfilingResult"] = field(default_factory=dict)
+    speedup: float | None = None
 
 
 @dataclass(kw_only=True)
@@ -69,6 +74,7 @@ class BackendPerfResult:
     baseline_metric: float
     speedup: float
     passed: bool
+    boundary_speedups: dict[str, float] = field(default_factory=dict)
 
 
 class ProfilingTuneStrategy(MultiBackendStrategy):
@@ -80,9 +86,10 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
 
     TorchEager is profiled in ``_pre_tune`` as a baseline (not injected into the backends
     list) unless performance validation is disabled. In enabled mode (default), the
-    strategy falls back to TorchEager when no user-provided backend beats it. In diagnostic
-    mode, the eager comparison is reported but does not affect selection. In disabled mode,
-    eager profiling and comparison are skipped.
+    strategy rejects candidates below ``min_boundary_speedup`` at either boundary,
+    then selects the highest geometric-mean speedup, with eager scoring 1.0.
+    Diagnostic mode ranks all measured candidates without the eager gate. Disabled
+    mode skips eager profiling and ranks candidates by their boundary metrics.
     """
 
     _title: str = ""
@@ -95,6 +102,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         self,
         backends: list[Backend],
         profiling_config: ProfilingConfig | None = None,
+        min_boundary_speedup: float = 0.95,
         **kwargs: Any,
     ):
         """Initializes strategy.
@@ -102,14 +110,19 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         Args:
             backends: List of backends to tune.
             profiling_config: Profiling configuration shared by strategy profiling tasks.
+            min_boundary_speedup: Minimum allowed speedup against eager at each shape boundary.
             kwargs: Additional arguments passed to the parent class (e.g. ``sink``).
         """
         super().__init__(backends=backends, profiling_config=profiling_config, **kwargs)
         self._performance_validation_mode = PerformanceValidationMode.ENABLED
+        if not math.isfinite(min_boundary_speedup) or min_boundary_speedup <= 0:
+            raise AITuneUserInputError("min_boundary_speedup must be finite and positive")
+        self.min_boundary_speedup = min_boundary_speedup
 
         self.perf_validation_results: list[BackendPerfResult] = []
         self._baseline_backend: Backend | None = None
         self._baseline_result: BackendProfilingResult | None = None
+        self._baseline_boundary_results: dict[str, BackendProfilingResult] = {}
 
     def enable_performance_validation(
         self, mode: PerformanceValidationMode | str | bool = PerformanceValidationMode.ENABLED
@@ -137,6 +150,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             "backends": [b.describe() for b in self._backends],
             "performance_validation_mode": self._performance_validation_mode.value,
             "profiling_config": self._profiling_config_to_json_dict(),
+            "min_boundary_speedup": self.min_boundary_speedup,
         }
 
     @abstractmethod
@@ -185,12 +199,13 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             raise RuntimeError(f"Distributed selected profiling batch size differs across ranks: {details}")
 
         updates = {}
-        if hasattr(result, "throughput"):
-            updates["throughput"] = min(candidate.throughput for candidate in gathered_results)
-        if hasattr(result, "latency"):
-            updates["latency"] = max(candidate.latency for candidate in gathered_results)
+        metrics = [candidate.to_json_dict(self._metric_label) for candidate in gathered_results]
+        if "throughput" in metrics[0]:
+            updates["throughput"] = min(candidate["throughput"] for candidate in metrics)
+        if "latency" in metrics[0]:
+            updates["latency"] = max(candidate["latency"] for candidate in metrics)
         if updates:
-            return replace(result, **updates)
+            return replace(result, selected_batch_size=result.selected_batch_size, **updates)
 
         worst = gathered_results[0]
         for candidate in gathered_results[1:]:
@@ -235,6 +250,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         self.perf_validation_results = []
         self._baseline_backend = None
         self._baseline_result = None
+        self._baseline_boundary_results = {}
 
         if self._performance_validation_mode is PerformanceValidationMode.DISABLED:
             log("⚠️ Performance validation against TorchEager baseline is disabled.", sink=self._sink)
@@ -259,7 +275,10 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         try:
             with coordinator.raise_if_any_rank_fails("Building TorchEager baseline"):
                 backend = backend.build(module, graph_spec, samples, device, baseline_cache_dir)
-            result = self._measure(backend, name, graph_spec, samples, profiling_cfg)
+            self._baseline_boundary_results = self._measure_boundaries(
+                backend, name, graph_spec, samples, profiling_cfg
+            )
+            result = self._baseline_boundary_results.get("max_shape", self._baseline_boundary_results["min_shape"])
         except Exception as e:
             local_error = e
             error_log = self._log_file(baseline_cache_dir, "error.log")
@@ -271,7 +290,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
 
         if not outcome.succeeded:
             log(
-                "⚠️ %s baseline failed (log: %s), performance check skipped",
+                "⚠️ %s baseline failed (log: %s), performance comparison unavailable",
                 module_type,
                 self._log_file(baseline_cache_dir, "error.log"),
                 sink=self._sink,
@@ -346,79 +365,82 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         batching: bool,
         max_batch_size: int,
     ) -> _TuneCandidate | None:
-        """Builds, validates, and profiles each backend; returns the best candidate but inactive."""
+        """Profile each candidate at both boundaries and retain the best eligible backend."""
         best: _TuneCandidate | None = None
-
+        profiling_config = self._get_profiling_config(batching, max_batch_size)
         for backend in self._backends:
-            log_file = self._log_file(cache_dir / backend.key(), "build.log")
             built = self._build_and_validate_backend(backend, module, name, graph_spec, samples, device, cache_dir)
             if built is None:
                 continue
-            result = self._measure_distributed(
-                built,
-                name,
-                graph_spec,
-                samples,
-                self._get_profiling_config(batching, max_batch_size),
-            )
-            if built.is_active:
-                built.deactivate()
-
-            if result is None:
-                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
-                continue
-
             try:
-                metrics = result.to_json_dict(self._metric_label)
-                self.backend_results[-1].update(metrics)
-                self._report_backend_metrics(built.describe(), metrics)
-                batch_size = result.selected_batch_size
-                perf_result = self._record_perf_result(built, result)
-                speedup = (
-                    fmt_speedup_comparison(perf_result.speedup, perf_result.passed)
-                    if perf_result is not None
-                    else "n/a"
-                )
-                log(
-                    "✅ backend profiled - %s: %s, speedup=%s, batch size: %s",
-                    self._metric_label,
-                    self._fmt_result(result),
-                    speedup,
-                    batch_size,
-                    depth=2,
-                    sink=self._sink,
-                )
-                if best is None or self._is_better(result, best.result):
-                    log(
-                        "🎯 new best %s for %s is %s, speedup=%s, batch size: %s",
-                        self._metric_label,
-                        built.describe(),
-                        self._fmt_result(result),
-                        speedup,
-                        batch_size,
-                        depth=2,
-                        sink=self._sink,
-                    )
-                    best = _TuneCandidate(backend=built, result=result)
-            except Exception:
-                log("❌ backend failed (log file: %s)", log_file, depth=2, sink=self._sink)
+                boundaries = self._measure_boundaries(built, name, graph_spec, samples, profiling_config)
+            except Exception as error:
+                log("❌ Boundary profiling failed for %s: %s", built.describe(), error, sink=self._sink)
+                if self.backend_results:
+                    self.backend_results[-1]["profiling_error"] = str(error)
+                continue
+            finally:
+                if built.is_active:
+                    built.deactivate()
+            result = boundaries.get("max_shape", boundaries["min_shape"])
+            self._record_boundary_metrics(built, result, boundaries)
+            comparison = self._record_perf_result(built, result, boundaries)
+            if self._performance_validation_mode is PerformanceValidationMode.ENABLED:
+                if comparison is not None and not comparison.passed:
+                    continue
+            candidate = _TuneCandidate(
+                backend=built,
+                result=result,
+                boundary_results=boundaries,
+                speedup=comparison.speedup if comparison is not None else None,
+            )
+            if best is None or self._is_better_candidate(candidate, best):
+                best = candidate
         return best
 
-    def _record_perf_result(self, backend: Backend, result: BackendProfilingResult) -> BackendPerfResult | None:
-        """Records and returns the eager comparison so profiling logs use the same speedup."""
-        metric = result.metric
-        if self._baseline_result is None or self._baseline_result.metric <= 0 or metric <= 0:
+    def _record_perf_result(
+        self,
+        backend: Backend,
+        result: BackendProfilingResult,
+        boundary_results: dict[str, BackendProfilingResult] | None = None,
+    ) -> BackendPerfResult | None:
+        """Compare profiler means; stability remains the profiler's responsibility."""
+        baseline = self._baseline_result
+        if baseline is None or baseline.metric <= 0 or result.metric <= 0:
             return None
-        speedup = self._speedup(result, self._baseline_result)
-        perf_result = BackendPerfResult(
+        boundary_speedups = {}
+        if boundary_results:
+            for boundary, measured in boundary_results.items():
+                boundary_speedups[boundary] = self._speedup(measured, self._baseline_boundary_results[boundary])
+        speedup = geometric_mean(boundary_speedups.values()) if boundary_speedups else self._speedup(result, baseline)
+        passed = all(value >= self.min_boundary_speedup for value in boundary_speedups.values())
+        if not boundary_speedups:
+            passed = speedup >= self.min_boundary_speedup
+        comparison = BackendPerfResult(
             backend_description=backend.describe(),
-            metric=metric,
-            baseline_metric=self._baseline_result.metric,
+            metric=result.metric,
+            baseline_metric=baseline.metric,
             speedup=speedup,
-            passed=speedup >= 1.0,
+            passed=passed,
+            boundary_speedups=boundary_speedups,
         )
-        self.perf_validation_results.append(perf_result)
-        return perf_result
+        self.perf_validation_results.append(comparison)
+        if self.backend_results:
+            self.backend_results[-1].update({
+                "baseline_boundaries": self._boundary_metrics(self._baseline_boundary_results),
+                "boundary_speedups": boundary_speedups,
+                "speedup": speedup,
+                "performance_passed": passed,
+            })
+        log(
+            "📊 %s: boundary speedups=%s, geometric-mean speedup=%.3fx, passed=%s",
+            backend.describe(),
+            boundary_speedups,
+            speedup,
+            passed,
+            sink=self._sink,
+        )
+        return comparison
 
     def _resolve_winner(self, best: _TuneCandidate | None) -> _TuneCandidate:
         """Returns the winning candidate, falling back to the TorchEager baseline when appropriate."""
@@ -430,17 +452,21 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                 best is None
                 or (
                     self._performance_validation_mode is PerformanceValidationMode.ENABLED
-                    and not self._is_better(best.result, self._baseline_result)
+                    and (
+                        best.speedup <= 1.0
+                        if best.speedup is not None
+                        else not self._is_better(best.result, self._baseline_result)
+                    )
                 )
             )
         )
-        if use_baseline:
+        if use_baseline and self._baseline_backend is not None and self._baseline_result is not None:
             if best is not None and best.backend.is_active:
                 best.backend.deactivate()
             reason = (
-                "no user backend succeeded"
+                "no user backend passed profiling and performance validation"
                 if best is None
-                else f"best user backend ({self._fmt_result(best.result)}) did not beat baseline"
+                else "best user backend did not improve the aggregate boundary score"
             )
             log(
                 "ℹ️ Falling back to TorchEager baseline (%s): %s",
@@ -451,6 +477,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             return _TuneCandidate(
                 backend=self._baseline_backend,
                 result=self._baseline_result,
+                boundary_results=self._baseline_boundary_results,
+                speedup=1.0,
             )
         if best is None:
             log(
@@ -463,9 +491,9 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
 
     def _post_tune(self, backend: Backend | None, name: str, graph_spec: GraphSpec, samples: SampleStore):
         """Emits a speedup line after tuning completes."""
-        super()._post_tune(backend, name, graph_spec, samples)
         if backend is None:
             return
+        super()._post_tune(backend, name, graph_spec, samples)
         result = next(
             (r for r in self.perf_validation_results if r.backend_description == backend.describe()),
             None,
@@ -475,6 +503,8 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                 self._log_baseline_selected(backend)
             return
         detail = f"{format(result.baseline_metric, self._value_fmt)} → {self._fmt(result.metric)}"
+        if result.boundary_speedups:
+            detail = ", ".join(f"{boundary}={speedup:.3f}x" for boundary, speedup in result.boundary_speedups.items())
         msg_short = fmt_speedup_msg(result.speedup, detail, name, backend.describe())
         if self._logger.isEnabledFor(logging.INFO):
             log(msg_short, sink=self._sink)
@@ -509,3 +539,58 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             "backends:",
             *[f"  {backend.describe()}" for backend in self._backends],
         ]
+
+    def _measure_boundaries(
+        self,
+        backend: Backend,
+        name: str,
+        graph_spec: GraphSpec,
+        samples: SampleStore,
+        profiling_config: ProfilingConfig,
+    ) -> dict[str, BackendProfilingResult]:
+        """Use the configured profiler once per distinct spatial/sequence boundary."""
+        boundaries = self._get_shape_boundaries(graph_spec, profiling_config)
+        coordinator.verify_equal(boundaries, "profiling shape boundaries")
+        results: dict[str, BackendProfilingResult] = {}
+        for boundary in boundaries:
+            result = self._measure_distributed(
+                backend, name, graph_spec, samples, replace(profiling_config, shape_boundary=boundary)
+            )
+            if result is None or not math.isfinite(result.metric) or result.metric <= 0:
+                raise RuntimeError(f"No valid {self._metric_label} for {backend.describe()} at {boundary}")
+            results[boundary] = result
+            log("📊 %s %s: %s", backend.describe(), boundary, self._fmt_result(result), sink=self._sink)
+        return results
+
+    def _get_shape_boundaries(
+        self, graph_spec: GraphSpec, profiling_config: ProfilingConfig
+    ) -> list[Literal["min_shape", "max_shape"]]:
+        # Batch sweeps replace batch axes, so differing batch bounds alone would
+        # otherwise repeat the same profiling workload twice.
+        for spec in graph_spec.input_spec.tensor_specs:
+            batch_axes = spec.get_batch_axis_multipliers() if profiling_config.batching else {}
+            for axis, minimum in enumerate(spec.min_shape):
+                if axis not in batch_axes and minimum != spec.max_shape[axis]:
+                    return ["min_shape", "max_shape"]
+        return ["min_shape"]
+
+    def _record_boundary_metrics(
+        self, backend: Backend, result: BackendProfilingResult, boundaries: dict[str, BackendProfilingResult]
+    ) -> None:
+        metrics = result.to_json_dict(self._metric_label)
+        if self.backend_results:
+            self.backend_results[-1].update(metrics)
+            self.backend_results[-1]["shape_boundaries"] = self._boundary_metrics(boundaries)
+        self._report_backend_metrics(backend.describe(), metrics)
+
+    def _is_better_candidate(self, candidate: _TuneCandidate, other: _TuneCandidate) -> bool:
+        if not candidate.boundary_results or not other.boundary_results:
+            return self._is_better(candidate.result, other.result)
+        speedups = [
+            self._speedup(result, other.boundary_results[boundary])
+            for boundary, result in candidate.boundary_results.items()
+        ]
+        return geometric_mean(speedups) > 1.0
+
+    def _boundary_metrics(self, results: dict[str, BackendProfilingResult]) -> dict[str, dict[str, int | float]]:
+        return {boundary: result.to_json_dict(self._metric_label) for boundary, result in results.items()}

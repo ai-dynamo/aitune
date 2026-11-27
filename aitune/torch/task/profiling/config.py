@@ -4,6 +4,7 @@
 
 from collections.abc import Generator
 from dataclasses import dataclass
+from typing import Literal
 
 from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStrategy, NumStepsMeasuringStopStrategy
 from aitune.torch.task.profiling.measuring_strategy import MeasuringStrategy, ModelExecutionTimeMeasuringStrategy
@@ -25,6 +26,7 @@ class ProfilingConfig:
         measuring_strategy: Strategy to measure the model.
         measurement_stop_strategy: Strategy to stop collecting measurements.
         profiling_stop_strategy: Strategy to stop profiling.
+        shape_boundary: Resize the recorded input to this graph boundary before the batch sweep.
     """
 
     batch_sizes: list[int] | Generator[int, None, None]
@@ -33,6 +35,7 @@ class ProfilingConfig:
     measuring_strategy: MeasuringStrategy | None = None
     measurement_stop_strategy: MeasuringStopStrategy | None = None
     profiling_stop_strategy: ProfilingStopStrategy | None = None
+    shape_boundary: Literal["min_shape", "max_shape"] | None = None
 
     def __post_init__(self):
         """Post-init."""
