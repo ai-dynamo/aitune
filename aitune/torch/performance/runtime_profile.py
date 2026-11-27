@@ -211,21 +211,20 @@ class _RuntimeProfile:
 
             profiler_kwargs["on_trace_ready"] = export_trace
 
-        with _RegionInstaller(aot_targets + untuned_targets):  # noqa: PLR1702  # No safe autofix.
-            with torch.profiler.profile(**profiler_kwargs) as profiler:
-                with torch.no_grad():
-                    for step in range(total_steps):
-                        if step < first_measured_step:
+        with _RegionInstaller(aot_targets + untuned_targets):
+            with torch.profiler.profile(**profiler_kwargs) as profiler, torch.no_grad():
+                for step in range(total_steps):
+                    if step < first_measured_step:
+                        inference_function(*args, **kwargs)
+                        cuda_synchronize()
+                    else:
+                        cuda_synchronize()
+                        start_ns = time.perf_counter_ns()
+                        with torch.profiler.record_function(PROFILED_RUN_REGION_NAME):
                             inference_function(*args, **kwargs)
-                            cuda_synchronize()
-                        else:
-                            cuda_synchronize()
-                            start_ns = time.perf_counter_ns()
-                            with torch.profiler.record_function(PROFILED_RUN_REGION_NAME):
-                                inference_function(*args, **kwargs)
-                            cuda_synchronize()
-                            run_wall_times_us.append((time.perf_counter_ns() - start_ns) / 1_000)
-                        profiler.step()
+                        cuda_synchronize()
+                        run_wall_times_us.append((time.perf_counter_ns() - start_ns) / 1_000)
+                    profiler.step()
 
             profiler_events = profiler.events() or EventList()
             key_averages = profiler.key_averages() or EventList()
