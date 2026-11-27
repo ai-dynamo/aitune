@@ -42,7 +42,6 @@ def test_call_tree_copy_is_independent_of_the_original():
         owner_class="Root",
         method="forward",
         module=module,
-        total_time_ms=3.0,
         signatures=[CallSignature(inputs={"x": Leaf("x", "int")}, outputs={}, call_indices=[0, 1])],
         children=[("root.forward", "root.child.forward")],
     )
@@ -54,7 +53,10 @@ def test_call_tree_copy_is_independent_of_the_original():
     )
     tree = CallTree(
         nodes={root.path: root, child.path: child},
-        samples=[Sample(calls={root.path: 1, child.path: 1}), Sample(calls={root.path: 1, child.path: 1})],
+        samples=[
+            Sample(calls={root.path: 1, child.path: 1}, time_ms={root.path: 1.0}),
+            Sample(calls={root.path: 1, child.path: 1}, time_ms={root.path: 2.0}),
+        ],
         weight_accesses={"weight": {WeightAccess("root.forward", "move")}},
         modules=[("root", module)],
     )
@@ -62,7 +64,7 @@ def test_call_tree_copy_is_independent_of_the_original():
 
     copied = tree.copy()
     copied_root = copied.nodes[root.path]
-    copied_root.total_time_ms = 9.0
+    copied.samples[0].time_ms[root.path] = 9.0
     copied_root.children.clear()
     copied_root.signatures[0].call_indices.append(2)
     copied_root.signatures[0].inputs["x"] = TensorLeaf("x", "torch.Tensor", dtype=torch.float16, shape=(1,))
@@ -72,6 +74,7 @@ def test_call_tree_copy_is_independent_of_the_original():
     copied.samples.clear()
 
     assert root.total_time_ms == 3.0
+    assert root.time_ms_per_sample == [1.0, 2.0]
     assert root.children == [child.path]
     assert root.signatures[0].call_indices == [0, 1]
     assert isinstance(root.signatures[0].inputs["x"], Leaf)

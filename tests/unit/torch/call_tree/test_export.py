@@ -7,10 +7,10 @@ import pytest
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.nodes import CallNode, Sample, TensorLeaf
+from aitune.torch.call_tree.nodes import CallNode, CallSignature, Sample, TensorLeaf
 from aitune.torch.call_tree.recording import StructureRecorder
 from tests.toy_models.call_tree_models import TwoRoleToy, VlaToy, vla_inputs
-from tests.unit.torch.call_tree.helpers import instrumented, record
+from tests.unit.torch.call_tree.helpers import instrumented, record, tree_of
 
 
 def _object_path(call_path):
@@ -48,6 +48,7 @@ def test_to_dict_exports_the_whole_tree():
         assert exported["total_calls"] == node.total_calls
         assert exported["inside_compiled_part"] == node.inside_compiled_part
         assert exported["total_time_ms"] == node.total_time_ms
+        assert exported["time_ms_per_sample"] == node.time_ms_per_sample
         assert exported["total_bytes_in"] == node.total_bytes_in
         assert exported["total_bytes_out"] == node.total_bytes_out
         assert set(exported) == {
@@ -60,6 +61,7 @@ def test_to_dict_exports_the_whole_tree():
             "total_bytes_out",
             "signatures",
             "calls_per_sample",
+            "time_ms_per_sample",
         }
         parent = exported["call_path"].rpartition(" > ")[0]
         assert not parent or parent in paths
@@ -220,6 +222,32 @@ def test_to_dict_exports_object_entries_as_type_only_and_stays_strict_json():
     assert "flag" not in inputs
     assert signatures[0]["call_indices"] == [0, 1]
     json.dumps(tree.to_dict(), allow_nan=False)
+
+
+def test_to_dict_exports_times_per_sample():
+    node = CallNode(
+        path=("m.forward",),
+        label="m.forward",
+        owner_class="M",
+        method="forward",
+        signatures=[
+            CallSignature(call_indices=[0, 2]),
+            CallSignature(call_indices=[1]),
+        ],
+    )
+    tree = tree_of(
+        [node],
+        calls_per_sample={node.path: [2, 1]},
+        time_ms_per_sample={node.path: [4.0, 2.0]},
+    )
+
+    (exported,) = tree.to_dict()["nodes"]
+    assert exported["total_time_ms"] == 6.0
+    assert exported["time_ms_per_sample"] == [4.0, 2.0]
+
+    exported["time_ms_per_sample"][0] = 100.0  # the export is a copy: changing it leaves the node alone
+    assert node.time_ms_per_sample == [4.0, 2.0]
+    assert node.total_time_ms == 6.0
 
 
 def test_to_dict_exports_signatures_and_calls_per_sample():

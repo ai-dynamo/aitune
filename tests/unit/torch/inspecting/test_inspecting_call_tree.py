@@ -13,6 +13,7 @@ from torch import nn
 import aitune.torch.inspecting.inspecting as inspecting_module
 from aitune.torch.call_tree import WeightAccess
 from aitune.torch.call_tree.recording import StructureRecorder, TimingRecorder
+from aitune.torch.dataloader import DataLoaderFactory
 from aitune.torch.distributed import coordinator
 from aitune.torch.inspecting import inspect
 from aitune.torch.inspecting.module_inspector import ModuleInspector
@@ -1034,6 +1035,40 @@ def test_max_timing_depth_zero_skips_the_timing_pass(mocker, dataset):
     assert all(node.total_time_ms is None for node in tree.nodes.values())
 
 
+def test_times_are_reported_per_sample():
+    """Two samples of different shapes give the root two signatures, each with its own timed total."""
+    model = nn.Linear(8, 8)
+    samples = [torch.randn(1, 8), torch.randn(3, 8)]
+
+    info = inspect(model, samples, number_of_iterations=2, warmup_iterations=0, call_tree=True)
+
+    tree = _tree(info)
+    timed = [node for node in tree.nodes.values() if node.total_time_ms is not None]
+    assert timed
+    for node in timed:
+        assert node.time_ms_per_sample is not None
+        assert len(node.time_ms_per_sample) == 2
+        assert sum(node.time_ms_per_sample) == pytest.approx(node.total_time_ms)
+
+
+def test_max_timing_depth_zero_leaves_all_detailed_times_none(dataset):
+    model, fn = _vla()
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=1,
+        call_tree=True,
+        max_timing_depth=0,
+    )
+
+    tree = _tree(info)
+    assert all(node.total_time_ms is None for node in tree.nodes.values())
+    assert all(node.time_ms_per_sample is None for node in tree.nodes.values())
+
+
 def test_samples_are_recorded_with_the_dataset_wraparound():
     """``tree.samples[i]`` describes sample ``i``: with more iterations than samples, the dataset restarts."""
     model = nn.Linear(8, 8)
@@ -1048,3 +1083,97 @@ def test_samples_are_recorded_with_the_dataset_wraparound():
         tuple(s0.unsqueeze(0).shape),
     ]
     assert all(len(node.calls_per_sample) == 3 for node in tree.nodes.values())
+    assert all(len(node.time_ms_per_sample) == 3 for node in tree.nodes.values() if node.time_ms_per_sample)
+
+
+class _ReversingFactory(DataLoaderFactory):
+    """A "shuffling" factory: it yields its samples in order on odd reads, reversed on even reads."""
+
+    def __init__(self, samples):
+        super().__init__(samples)
+        self._samples = samples
+        self._reads = 0
+
+    def create_dataloader(self, batch_size):
+        self._reads += 1
+        samples = self._samples if self._reads % 2 else self._samples[::-1]
+        return torch.utils.data.DataLoader(samples, batch_size=batch_size)
+
+
+def test_different_inputs_between_the_passes_warn(mocker):
+    """The timing pass re-reads the dataset; different inputs mean the per-sample times belong to other inputs."""
+    warning = mocker.patch("aitune.torch.inspecting.inspecting.logger.warning")
+    model, fn = _vla()
+    dataset = _ReversingFactory([torch.randn(1, 8), torch.randn(3, 8)])
+
+    inspect(
+        model,
+        dataset,
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=0,
+        call_tree=True,
+    )
+
+    call = next((c for c in warning.call_args_list if "different inputs" in str(c.args)), None)
+    assert call is not None
+    assert call.args[1:] == (2, 2, 0)
+
+
+def test_same_inputs_between_the_passes_do_not_warn(mocker):
+    warning = mocker.patch("aitune.torch.inspecting.inspecting.logger.warning")
+    model, fn = _vla()
+
+    inspect(
+        model,
+        [torch.randn(1, 8), torch.randn(3, 8)],
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=0,
+        call_tree=True,
+    )
+
+    assert not any("different inputs" in str(c.args) for c in warning.call_args_list)
+
+
+def test_input_comparison_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    mocker.patch(
+        "aitune.torch.inspecting.inspecting.describe_sample_inputs",
+        side_effect=RuntimeError("bad comparison"),
+    )
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad comparison"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Timing a call tree replay")
+    assert nn.Module._apply is original_apply
+
+
+def test_an_inference_changing_its_inputs_in_place_warns(mocker):
+    """Mutating an input in place between replays is caught: the comparison runs before every replay."""
+    warning = mocker.patch("aitune.torch.inspecting.inspecting.logger.warning")
+    model, _ = _vla()
+    calls = itertools.count()
+
+    def inference(x):
+        tokens, image = vla_inputs()
+        if next(calls) > 0:  # let the structure pass describe x first, then grow it for later replays
+            x.resize_(2, 1, 8)
+        return model(tokens, image)
+
+    info = inspect(
+        model,
+        [torch.randn(1, 8)],
+        inference_function=inference,
+        number_of_iterations=1,
+        warmup_iterations=0,
+        call_tree=True,
+    )
+    assert max(len(path) for path in _tree(info).nodes) >= 2  # the sample is replayed more than once
+
+    call = next((c for c in warning.call_args_list if "different inputs" in str(c.args)), None)
+    assert call is not None
+    assert call.args[1:] == (1, 1, 0)

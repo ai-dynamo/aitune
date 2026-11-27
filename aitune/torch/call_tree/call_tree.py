@@ -49,8 +49,8 @@ class CallTree:
     """Call tree of one recording: the instrumented calls, grouped into nodes by call path, and the samples they ran on.
 
     A sample is one inference the structure pass records; for ``inspect``, one item of its dataset. Each ``Sample``
-    holds its own calls, and every node reads its ``calls_per_sample`` from them: entry ``i`` is for
-    ``samples[i]``.
+    holds its own calls and times, and every node reads its per-sample values from them: entry ``i`` of
+    ``calls_per_sample`` and ``time_ms_per_sample`` is for ``samples[i]``.
 
     Attributes:
         nodes: All nodes by call path.
@@ -70,7 +70,6 @@ class CallTree:
         ...     label="root.forward",
         ...     owner_class="Vla",
         ...     method="forward",
-        ...     total_time_ms=30.0,
         ... )
         >>> dit_module = nn.Linear(2, 2)
         >>> dit = CallNode(
@@ -79,11 +78,13 @@ class CallTree:
         ...     owner_class="Dit",
         ...     method="forward",
         ...     module=dit_module,
-        ...     total_time_ms=25.0,
         ...     first_seen=1,
         ... )
         >>> outer.children.append(dit.path)
-        >>> samples = [Sample(calls={outer.path: 1, dit.path: 5}) for _ in range(2)]
+        >>> samples = [
+        ...     Sample(calls={outer.path: 1, dit.path: 5}, time_ms={outer.path: 15.0, dit.path: 12.5})
+        ...     for _ in range(2)
+        ... ]
         >>> tree = CallTree(nodes={n.path: n for n in (outer, dit)}, samples=samples)
         >>> [n.path_str for n in tree.roots], tree.total_time_ms
         (['forward'], 30.0)
@@ -154,8 +155,8 @@ class CallTree:
 
         The copy has new nodes reading new ``Sample`` objects, so later writes, such as a timing pass's times or
         ``synchronize_call_tree``'s values, don't reach this tree. Copied: each node's ``children`` and
-        ``signatures`` (with their ``inputs``/``outputs`` dicts and ``call_indices``), each sample's ``inputs``
-        and ``calls``, the per-weight ``WeightAccess`` sets and the ``modules`` list. Shared: the
+        ``signatures`` (with their ``inputs``/``outputs`` dicts and ``call_indices``), each sample's ``inputs``,
+        ``calls`` and ``time_ms``, the per-weight ``WeightAccess`` sets and the ``modules`` list. Shared: the
         ``nn.Module``s, the leaves (``Leaf``/``TensorLeaf`` are frozen) and the ``WeightAccess`` records
         (``NamedTuple``s).
 
@@ -163,7 +164,7 @@ class CallTree:
             >>> node = CallNode(path=("m.forward",), label="m.forward", owner_class="M", method="forward")
             >>> tree = CallTree(nodes={("m.forward",): node}, samples=[Sample()])
             >>> copied = tree.copy()
-            >>> copied.nodes[("m.forward",)].total_time_ms = 1.0
+            >>> copied.samples[0].time_ms[("m.forward",)] = 1.0
             >>> copied.nodes[("m.forward",)].total_time_ms, tree.nodes[("m.forward",)].total_time_ms
             (1.0, None)
         """
@@ -185,7 +186,10 @@ class CallTree:
                 )
                 for path, node in self.nodes.items()
             },
-            samples=[Sample(inputs=dict(sample.inputs), calls=dict(sample.calls)) for sample in self.samples],
+            samples=[
+                Sample(inputs=dict(sample.inputs), calls=dict(sample.calls), time_ms=dict(sample.time_ms))
+                for sample in self.samples
+            ],
             weight_accesses={name: set(records) for name, records in self.weight_accesses.items()},
             modules=list(self.modules),
         )
@@ -217,7 +221,9 @@ class CallTree:
               also ``dtype`` and ``shape``. A leaf whose object a recorded call had before also has ``source``:
               ``{"call_path": ..., "side": ..., "name": ...}``, where it was last seen (``Leaf.source``).
               ``calls_per_sample``: ``calls_per_sample[i]`` is how many of the node's calls sample ``i``
-              made (``CallNode.calls_per_sample``).
+              made (``CallNode.calls_per_sample``). ``time_ms_per_sample`` splits ``total_time_ms`` by
+              sample, one entry per recorded sample (``CallNode.time_ms_per_sample``); it is null when the
+              node was never timed. A diverged replay keeps the times it measured.
             - ``modules``: for each instrumented module, by object path, its ``class`` (qualified name),
               ``parameters`` and ``parameter_bytes``. ``parameters`` maps the local name of each of the module's own
               parameters and buffers — not its submodules', which have their own entries if instrumented — to its
@@ -295,6 +301,7 @@ class CallTree:
                         for sig in node.signatures
                     ],
                     "calls_per_sample": list(node.calls_per_sample),
+                    "time_ms_per_sample": None if node.time_ms_per_sample is None else list(node.time_ms_per_sample),
                 }
                 for node in sorted(self.nodes.values(), key=lambda n: n.first_seen)
             ],

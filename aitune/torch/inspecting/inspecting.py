@@ -12,7 +12,12 @@ from typing import Any
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder, TimingRecorder
+from aitune.torch.call_tree.recording import (
+    CallRecorder,
+    StructureRecorder,
+    TimingRecorder,
+    describe_sample_inputs,
+)
 from aitune.torch.call_tree.sync import synchronize_call_tree
 from aitune.torch.dataloader import DataLoaderFactory, DatasetLike, ensure_enough_samples, samples_generator
 from aitune.torch.distributed import coordinator
@@ -209,12 +214,27 @@ def _time_call_tree(
         sum(map(len, depths_per_sample)),
     )
     samples = samples_generator(dataset, [1], max_num_batches_per_batch_size=number_of_iterations)
+    different_inputs: set[int] = set()
     with _pass_on_all_ranks(timer, "call tree timing pass"):
-        for depths, (_, args, kwargs) in zip(depths_per_sample, samples, strict=True):
+        for sample_index, (depths, (_, args, kwargs)) in enumerate(zip(depths_per_sample, samples, strict=True)):
             for depth in depths:
                 with coordinator.raise_if_any_rank_fails("Timing a call tree replay"):
-                    with timer.time_replay(depth):
+                    # checked before every replay: the inference can change its inputs in place; not timed
+                    if describe_sample_inputs(args, kwargs) != timer.tree.samples[sample_index].inputs:
+                        different_inputs.add(sample_index)
+                    with timer.time_replay(depth, sample_index):
                         _run_inference(inference_function, args, kwargs)
+    if different_inputs:
+        logger.warning(
+            "The timing pass read different inputs than the structure pass for %d of %d samples (first: sample "
+            "%d), as a shuffling DataLoader, a shape-changing augmentation or an inference that changes its "
+            "inputs in place does. Their per-sample times can belong to other inputs than CallTree.samples "
+            "describes. Use a dataset that returns the same samples in the same order on every read, and an "
+            "inference that leaves its inputs unchanged.",
+            len(different_inputs),
+            number_of_iterations,
+            min(different_inputs),
+        )
 
 
 def _reset_total_execution_time(inspector: ModuleInspector):
