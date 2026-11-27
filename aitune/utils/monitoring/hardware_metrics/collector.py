@@ -62,11 +62,10 @@ class HardwareMetricsCollector(NoOpHardwareMetricsCollector):
             if self.timer is None:
                 # start a polling
                 self._poll_stats()
-            else:
-                if self.previous_polled_scope != name:
-                    # timer is polling at its pace, if it has not yet polled the current scope, queue metrics immediately
-                    # so that short lived scopes are not missed
-                    self._queue_metrics()
+            elif self.previous_polled_scope != name:
+                # timer is polling at its pace, if it has not yet polled the current scope, queue metrics immediately
+                # so that short lived scopes are not missed
+                self._queue_metrics()
 
     def end_scope(self) -> None:
         """Ends the current scope."""

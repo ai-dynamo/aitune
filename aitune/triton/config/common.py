@@ -161,9 +161,10 @@ class BaseModelConfig(BaseModel, ABC):
         """Require a batched model contract before enabling the scheduler."""
         if self.batcher is not None and self.max_batch_size == 0:
             raise ValueError("batcher requires a positive max_batch_size")
-        if isinstance(self.batcher, DynamicBatcher):
-            if any(size > self.max_batch_size for size in self.batcher.preferred_batch_size):
-                raise ValueError("preferred_batch_size cannot exceed max_batch_size")
+        if isinstance(self.batcher, DynamicBatcher) and any(
+            size > self.max_batch_size for size in self.batcher.preferred_batch_size
+        ):
+            raise ValueError("preferred_batch_size cannot exceed max_batch_size")
         if self.platform != "tensorrt_plan" and any(group.profile for group in self.instance_groups):
             raise ValueError("Instance profiles are only supported by TensorRT")
         if len({sample.name for sample in self.warmup}) != len(self.warmup):

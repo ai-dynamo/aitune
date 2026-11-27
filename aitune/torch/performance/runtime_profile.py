@@ -211,7 +211,7 @@ class _RuntimeProfile:
 
             profiler_kwargs["on_trace_ready"] = export_trace
 
-        with _RegionInstaller(aot_targets + untuned_targets):
+        with _RegionInstaller(aot_targets + untuned_targets):  # noqa: PLR1702  # No safe autofix.
             with torch.profiler.profile(**profiler_kwargs) as profiler:
                 with torch.no_grad():
                     for step in range(total_steps):

@@ -519,15 +519,14 @@ class Module(wrapt.CallableObjectProxy):
         self._self_strategy = strategy
         if strategies is None:
             self._self_strategy_map = self._self_strategy_list = None
+        elif isinstance(strategies, list):
+            self._self_strategy_list = strategies
+            self._self_strategy_map = None
+        elif isinstance(strategies, dict):
+            self._self_strategy_map = strategies
+            self._self_strategy_list = None
         else:
-            if isinstance(strategies, list):
-                self._self_strategy_list = strategies
-                self._self_strategy_map = None
-            elif isinstance(strategies, dict):
-                self._self_strategy_map = strategies
-                self._self_strategy_list = None
-            else:
-                raise ValueError("strategies should be a list or a dict")
+            raise ValueError("strategies should be a list or a dict")
 
     def _get_strategies_for_graph_specs(
         self,
