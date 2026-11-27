@@ -68,20 +68,14 @@ Use these references when the task touches the corresponding area:
 
 ## Code Style
 
-Every production file must begin with:
+Read and follow `CODING_GUIDELINES.md` before you write or review code. It contains the SPDX header,
+the ruff and pyrefly rules, and the rules for control flow, typing, errors, and tests.
 
-```python
-# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: Apache-2.0
-```
+## Pull Requests
 
-- **Formatter/linter:** `ruff` (line length 120, Google-style docstrings, complexity ≤ 10).
-- **Static analysis:** `pyrefly` (config in `pyproject.toml`). CI fails on errors not listed in
-  `pyrefly-baseline.json`. After fixing listed errors, run `pyrefly check --prune-baseline`.
-  When a change edits a file with baselined errors, fix them if the fix is small and typing-only (no
-  runtime behavior change). Do not add new entries to the baseline.
-- Keep docstring examples runnable; pytest executes doctests.
-- `tests/` and `examples/` are exempt from docstring and `print` rules.
+Follow the "Pull Requests" section in `CONTRIBUTING.md`. Keep each pull request to one logical
+change and about 400 changed lines, not counting generated files such as `uv.lock`. If a larger
+change is not mechanical (a rename, a move, or a tool auto-fix), split it into a stack with `gh stack`.
 
 ## Test Fixtures
 
