@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "ai-tune-flux-schnell-example"
+version = "0.1.0"
+description = "NVIDIA AITune FLUX.1-schnell Example"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11, <3.14"
+
+dependencies = [
+    "aitune",
+    "diffusers>=0.36,<0.38",
+    "pillow",
+    "numpy",
+    "protobuf",
+    "pydantic>=2,<3",
+    "pyyaml",
+    "scikit-image",
+    "sentencepiece",
+    "torch>=2.0.0",
+    "transformers<5",
+]
+
+[project.optional-dependencies]
+dynamo = [
+    "ai-dynamo>=1.3,<2.0.0",
+    "openai",
+    "uvicorn",
+    "aiohttp",
+    "aiofiles",
+    "uvloop",
+]
+
+[tool.uv.sources]
+aitune = { path = "../../", editable = true }
+
+[project.scripts]
+flux_schnell = "flux_schnell.cli:main"
+
+[build-system]
+requires = ["setuptools>=77.0.0", "wheel>=0.37.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+namespaces = false
+include = ["flux_schnell*"]
+
+[tool.setuptools.package-data]
+flux_schnell = ["dynamo/web.html"]
+
+[tool.aitune]
+# The shared runner requires standalone tune/inference scripts; this example uses subcommands.
+skip = true
+docker_image = "nvcr.io/nvidia/pytorch:26.06-py3"
+variants = [
+    { arguments = { "recipe" = "recipes/single-gpu.yaml" } },
+]
+use_gated_hf_token = true
+allow_failure = true
