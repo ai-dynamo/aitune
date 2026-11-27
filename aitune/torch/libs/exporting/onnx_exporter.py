@@ -16,6 +16,7 @@ from onnx_ir.passes.common import TopologicalSortPass
 from aitune.torch.dynamic_shapes import DynamicDim
 from aitune.torch.libs.exporting.dynamic_shapes import build_dynamic_shapes, log_dynamic_shapes
 from aitune.torch.libs.exporting.preparation import TensorExportPreparation, prepare_tensor_export
+from aitune.torch.libs.exporting.rms_norm import rms_norm_symbolic, rms_norm_translations
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
 from aitune.torch.utils.tensor import format_tensor_name
@@ -137,6 +138,7 @@ class ONNXExporter:
             input_names=self._input_names(graph_spec),
             output_names=list(graph_spec.output_names()),
             dynamic_shapes=dynamic_shapes,
+            custom_translation_table=rms_norm_translations(),
             verbose=verbose,
         )
         if onnx_program is None:
@@ -155,18 +157,19 @@ class ONNXExporter:
         """Export the prepared adapter with the legacy ONNX tracer."""
         # Torch's annotation separates list and dict forms; our mapping can contain both.
         dynamic_axes = cast(dict[str, list[int]] | dict[str, dict[int, str]], self._create_dynamic_axes(graph_spec))
-        torch.onnx.export(
-            preparation.adapter,
-            args=preparation.flat_inputs,
-            kwargs=None,
-            f=self.output_path.as_posix(),
-            dynamo=False,
-            input_names=self._input_names(graph_spec),
-            output_names=list(graph_spec.output_names()),
-            opset_version=self.opset_version,
-            dynamic_axes=dynamic_axes,
-            verbose=verbose,
-        )
+        with rms_norm_symbolic():
+            torch.onnx.export(
+                preparation.adapter,
+                args=preparation.flat_inputs,
+                kwargs=None,
+                f=self.output_path.as_posix(),
+                dynamo=False,
+                input_names=self._input_names(graph_spec),
+                output_names=list(graph_spec.output_names()),
+                opset_version=self.opset_version,
+                dynamic_axes=dynamic_axes,
+                verbose=verbose,
+            )
 
     @staticmethod
     def _input_names(graph_spec: GraphSpec) -> list[str]:
