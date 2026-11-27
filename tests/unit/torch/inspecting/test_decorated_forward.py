@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections import OrderedDict
 from copy import deepcopy
 from functools import partial
 
@@ -10,7 +11,15 @@ import wrapt
 from packaging.version import Version
 
 import aitune.torch as ait
-from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
+from aitune.torch.backend import (
+    Backend,
+    TorchAOBackend,
+    TorchAOBackendConfig,
+    TorchInductorJitBackend,
+    TorchInductorJitBackendConfig,
+)
+from aitune.torch.module.sample_metadata import SampleMetadata
+from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.utils.torch_compile import DecoratedForwardBindings
 from tests.toy_models.decorated_forward_models import ToyDecoratedSpeechModel
 from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store
@@ -200,4 +209,83 @@ def test_decorated_forward_backend_checkpoint_reactivation(monkeypatch, tmp_path
             backend.deactivate()
         if restored is not None and restored.is_active:
             restored.deactivate()
+        torch._dynamo.reset()
+
+
+def test_decorated_forward_checkpoint_activation_retries_after_warmup_failure(monkeypatch, tmp_path):
+    compile_eager = partial(torch.compile, backend="eager")
+    monkeypatch.setattr(torch, "compile", compile_eager)
+    model = ToyDecoratedSpeechModel().eval()
+    sample = torch.ones(2, 8)
+    samples = make_sample_store([((sample,), {})], tmp_path)
+    graph_spec = make_recorded_graph_spec(model, ((sample,), {}))
+    backend = TorchInductorJitBackend(TorchInductorJitBackendConfig(dynamic=False))
+    restored = None
+    try:
+        with torch.no_grad():
+            expected = model(sample)
+        backend.build(model, graph_spec, samples, device=torch.device("cpu"), cache_dir=tmp_path)
+        state = backend.to_dict()
+        backend.deactivate()
+        restored = TorchInductorJitBackend.from_dict(ToyDecoratedSpeechModel(seed=1).eval(), state)
+
+        def failing_warmup(*args, **kwargs):
+            raise torch.OutOfMemoryError("Warmup allocation failed")
+
+        def compile_with_failed_warmup(*args, **kwargs):
+            # Subsequent compilations can succeed, but this failed artifact remains unusable.
+            monkeypatch.setattr(torch, "compile", compile_eager)
+            return failing_warmup
+
+        monkeypatch.setattr(torch, "compile", compile_with_failed_warmup)
+        with pytest.raises(torch.OutOfMemoryError, match="Warmup allocation failed"):
+            restored.activate()
+        assert not restored.is_active
+
+        restored.activate()
+        torch.testing.assert_close(restored.infer(sample), expected)
+    finally:
+        if backend.is_active:
+            backend.deactivate()
+        if restored is not None and restored.is_active:
+            restored.deactivate()
+        torch._dynamo.reset()
+
+
+def test_decorated_forward_mixed_backend_checkpoint_activation(monkeypatch, tmp_path):
+    monkeypatch.setattr(torch, "compile", partial(torch.compile, backend="eager"))
+    model = ToyDecoratedSpeechModel().eval()
+    inputs = (torch.ones(1, 8), torch.ones(2, 8))
+    backends = [
+        TorchInductorJitBackend(TorchInductorJitBackendConfig(dynamic=False)),
+        TorchAOBackend(TorchAOBackendConfig(quantization="int8wo", mode="default", dynamic=False)),
+    ]
+    restored = None
+    try:
+        with torch.no_grad():
+            expected = [model(sample) for sample in inputs]
+        graph_specs = [make_recorded_graph_spec(model, ((sample,), {})) for sample in inputs]
+        graph_backends: OrderedDict[SampleMetadata, Backend] = OrderedDict()
+        for index, (backend, sample, graph_spec) in enumerate(zip(backends, inputs, graph_specs, strict=True)):
+            cache_dir = tmp_path / str(index)
+            cache_dir.mkdir()
+            samples = make_sample_store([((sample,), {})], cache_dir)
+            # Functional linear keeps outputs exact while exercising TorchAO's real model-copy path.
+            backend.build(model, graph_spec, samples, device=torch.device("cpu"), cache_dir=cache_dir)
+            graph_backends[graph_spec.input_spec] = backend
+            backend.deactivate()
+
+        tuned = TunedModule(graph_backends, "decorated", graph_specs[0].forward_signature)
+        restored = TunedModule.from_dict(ToyDecoratedSpeechModel(seed=1).eval(), tuned.to_dict())
+        restored.activate()
+        for sample, reference in zip(inputs, expected, strict=True):
+            torch.testing.assert_close(restored(sample), reference)
+    finally:
+        for backend in backends:
+            if backend.is_active:
+                backend.deactivate()
+        if restored is not None:
+            for backend in restored.backends.values():
+                if backend.is_active:
+                    backend.deactivate()
         torch._dynamo.reset()
