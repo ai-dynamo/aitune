@@ -11,7 +11,7 @@ import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.nodes import CallNode
-from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.recording import StructureRecorder
 from aitune.torch.inspecting import inspect
 from tests.toy_models.call_tree_models import VlaToy, vla_inputs
 from tests.unit.torch.call_tree.jit_adapter import jit_recording_adapter
@@ -20,7 +20,12 @@ ITERATIONS = 2
 
 
 def _canonical(tree: CallTree, node: CallNode) -> tuple:
-    return (node.owner_class, node.method, node.calls, tuple(_canonical(tree, tree.nodes[p]) for p in node.children))
+    return (
+        node.owner_class,
+        node.method,
+        node.total_calls,
+        tuple(_canonical(tree, tree.nodes[p]) for p in node.children),
+    )
 
 
 def _structure(tree: CallTree) -> list[tuple]:
@@ -42,15 +47,14 @@ def _aot_tree(tokens, image) -> CallTree:
 
 
 def _jit_tree(tokens, image) -> CallTree:
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with jit_recording_adapter(recorder):
         model = VlaToy()
         model(tokens, image)  # warmup, not recorded
         with recorder, torch.no_grad():
             for _ in range(ITERATIONS):
-                recorder.begin_iteration()
-                model(tokens, image)
-                recorder.end_iteration()
+                with recorder.record_sample():
+                    model(tokens, image)
     return recorder.result()
 
 

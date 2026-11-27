@@ -1,22 +1,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Mode-independent call recorder.
+"""The structure pass's call recorder.
 
 The recorder builds a context-keyed call tree. It installs no hooks on modules: each inspection mode (an adapter)
-wraps the methods it finds and calls ``begin_call`` and ``end_call`` around the original call::
+wraps the methods it finds and runs them through the active recorder's ``call``::
 
-    frame = recorder.begin_call(label, obj, name, args, kwargs)
-    try:
-        result = original(*args, **kwargs)
-    except BaseException:
-        recorder.end_call(frame)
-        raise
-    recorder.end_call(frame, result)
-    return result
+    recorder = CallRecorder.active()
+    if recorder is None:
+        return original(*args, **kwargs)
+    return recorder.call(original, args, kwargs, label=label, obj=obj, method=name)
 
 The only hook the recorder owns is a process-wide probe on ``nn.Module._apply`` (``.to()``, ``.cuda()``, ...), active
-inside a ``with recorder:`` block. Timing uses CUDA events per call (no per-call synchronization) when CUDA is
-available and ``time.perf_counter`` otherwise; ``flush()`` resolves the pending events once per iteration.
+inside a ``with`` block, which records no times. A second pass with ``TimingRecorder`` times the recorded
+calls without that probe or the weight-access mode.
 """
 
 from __future__ import annotations
@@ -25,47 +21,46 @@ import contextlib
 import dataclasses
 import enum
 import functools
-import time
 import weakref
 from collections import UserDict
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Self
+from typing import Any
 
 import torch
 from torch import nn
 
 from aitune.torch.call_tree.call_tree import CallNode, CallTree
 from aitune.torch.call_tree.callers import unrecorded_caller
-from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container
-from aitune.torch.call_tree.nodes import CallPath, CallSignature, Leaf, TensorLeaf, _Source
+from aitune.torch.call_tree.methods import is_compiled_call
+from aitune.torch.call_tree.nodes import CallPath, CallSignature, Leaf, Sample, TensorLeaf, _Source
+from aitune.torch.call_tree.recording.call_recorder import NO_RESULT, CallRecorder
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, WeightAccessMode, storage_key
 from aitune.torch.module.forward_signature import ForwardSignature
-
-_NO_RESULT = object()
 
 # A raw signature key: the input leaves, and the output leaves or None when the call raised.
 _SignatureKey = tuple[tuple[Leaf, ...], tuple[Leaf, ...] | None]
 
 
-class CallRecorder:
-    """Record a context-keyed call tree from begin_call/end_call callbacks.
+class StructureRecorder(CallRecorder):
+    """Record a context-keyed call tree from begin_call/end_call callbacks: the structure pass.
+
+    Inside a ``with`` block it installs the ``nn.Module._apply`` probe and the weight-access mode and records
+    every wrapped call inside a ``record_sample()`` block until the block ends; it records no times —
+    ``TimingRecorder`` times them in a second pass, never inside this one. Everything restores on exit, also
+    when the recorded code raised; repeated ``with`` blocks keep accumulating.
 
     Example:
-        >>> recorder = CallRecorder()
+        >>> recorder = StructureRecorder()
         >>> with recorder:
-        ...     recorder.begin_iteration()
-        ...     outer = recorder.begin_call("root.forward", object(), "forward", ())
-        ...     inner = recorder.begin_call("root.head.forward", object(), "forward", ())
-        ...     recorder.end_call(inner)
-        ...     recorder.end_call(outer)
-        ...     recorder.end_iteration()
+        ...     with recorder.record_sample():
+        ...         outer = recorder.begin_call("root.forward", object(), "forward", ())
+        ...         inner = recorder.begin_call("root.head.forward", object(), "forward", ())
+        ...         recorder.end_call(inner)
+        ...         recorder.end_call(outer)
         >>> sorted(recorder.result().nodes)
         [('root.forward',), ('root.forward', 'root.head.forward')]
     """
-
-    # The recorder whose ``nn.Module._apply`` probe is installed; the probe is process-wide, so only one may record.
-    _recording_now: CallRecorder | None = None
 
     def __init__(self) -> None:
         """Create an empty recorder."""
@@ -75,56 +70,18 @@ class CallRecorder:
         # per node: raw signature key -> its CallSignature, the same object as in the node's ``signatures``
         self._signatures: dict[CallPath, dict[_SignatureKey, CallSignature]] = {}
         self._stack: list[_Frame] = []
-        # what the outermost calls of the current iteration returned; inside a call, its frame's ``visible``
+        # what the outermost calls of the current sample returned; inside a call, its frame's ``visible``
         self._top_visible = _SourceIndex()
-        self._events: list[tuple[CallNode, Any, Any]] = []
-        self._sequences: list[list[CallPath]] = []
-        self._current_sequence: list[CallPath] | None = None
+        self._samples: list[Sample] = []
+        self._current_sample: Sample | None = None
+        # per node: how many calls it has recorded so far, which is the index of its next call
+        self._call_counts: dict[CallPath, int] = {}
+        self._failed = False
         self._apply_depth = 0
         self._original_apply: Callable[..., Any] | None = None
         self._weight_access_log = WeightAccessLog()
         self._weight_access_mode: WeightAccessMode | None = None
         self._modules: dict[int, tuple[str, nn.Module]] = {}
-        self._active = False
-        self._use_cuda = torch.cuda.is_available()
-
-    def __enter__(self) -> Self:
-        """Start recording: install the ``nn.Module._apply`` probe; calls are recorded until ``__exit__``."""
-        if CallRecorder._recording_now is not None:
-            raise RuntimeError("Another CallRecorder is already recording; the nn.Module._apply probe is process-wide.")
-        self._original_apply = nn.Module._apply
-        CallRecorder._recording_now = self
-        try:
-            nn.Module._apply = self._make_apply_probe(self._original_apply)
-            self._weight_access_log.start(self._modules.values())
-            weight_access_mode = WeightAccessMode(
-                self._weight_access_log, lambda: self._stack[-1].node.path_str if self._stack else ""
-            )
-            weight_access_mode.__enter__()
-            self._weight_access_mode = weight_access_mode
-        except BaseException:
-            self.__exit__(None, None, None)
-            raise
-        self._active = True
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        """Stop recording and restore ``nn.Module._apply``, also when the recorded code raised."""
-        self._active = False
-        self._stack.clear()
-        self._current_sequence = None
-        if self._weight_access_mode is not None:
-            self._weight_access_mode.__exit__(None, None, None)
-            self._weight_access_mode = None
-        if self._original_apply is not None:
-            nn.Module._apply = self._original_apply
-            self._original_apply = None
-        CallRecorder._recording_now = None
-
-    @property
-    def active(self) -> bool:
-        """Whether the recorder is inside its ``with`` block."""
-        return self._active
 
     def register_module(self, label_prefix: str, module: nn.Module) -> None:
         """Register an instrumented module for parameter names and sizes.
@@ -145,14 +102,15 @@ class CallRecorder:
             obj: The object the method belongs to.
             method: Method name.
             args: Positional arguments of the call.
-            kwargs: Keyword arguments of the call; a callable among them makes the call transparent as well.
+            kwargs: Keyword arguments of the call.
 
         Returns:
-            A frame to pass to ``end_call``, or None if the call is not recorded (not recording, exact torch container,
-            or a helper that runs a callable argument).
+            A frame to pass to ``end_call``, or None if this recorder is not the active one or no sample is
+            being recorded.
         """
-        if not self._active or is_transparent_container(obj) or is_transparent_call(args, kwargs):
+        if CallRecorder.active() is not self or self._current_sample is None:
             return None
+        parent = self._stack[-1].compiled if self._stack else False
         parent_path = self._stack[-1].node.path if self._stack else ()
         path = (*parent_path, label)
         node = self._nodes.get(path)
@@ -168,19 +126,124 @@ class CallRecorder:
             self._nodes[path] = node
             if self._stack:
                 self._stack[-1].node.children.append(path)
-        node.calls += 1
+        call_index = self._call_counts.get(path, 0)
+        self._call_counts[path] = call_index + 1
+        # a node stays timeable if any call of it ran outside a compiled part
+        node.inside_compiled_part = parent if call_index == 0 else node.inside_compiled_part and parent
+        self._current_sample.calls[path] = self._current_sample.calls.get(path, 0) + 1
         with torch._C.DisableTorchFunction():
             values, input_bytes = _leaves_and_bytes(self._input_leaves(obj, method, args, kwargs))
-        node.bytes_in += input_bytes
-        if self._current_sequence is not None:
-            self._current_sequence.append(path)
+        node.total_bytes_in += input_bytes
         input_key, visible = self._link_inputs(path, values)
-        start, device = self._start_timer()
         frame = _Frame(
-            node=node, start=start, device=device, input_key=input_key, call_index=node.calls - 1, visible=visible
+            node=node,
+            input_key=input_key,
+            call_index=call_index,
+            visible=visible,
+            compiled=parent or is_compiled_call(obj, method),
         )
         self._stack.append(frame)
         return frame
+
+    def end_call(self, frame: _Frame | None, result: Any = NO_RESULT) -> None:
+        """Record the end of a call started with ``begin_call``.
+
+        Args:
+            frame: The frame ``begin_call`` returned.
+            result: The call's return value, to count its tensor bytes; omit it when the call raised.
+        """
+        if frame is None:
+            return
+        if self._stack and self._stack[-1] is frame:
+            self._stack.pop()
+        if result is NO_RESULT:
+            output_key = None
+        else:
+            with torch._C.DisableTorchFunction():
+                values, output_bytes = _leaves_and_bytes(list(_named_leaves(result, "output")))
+            frame.node.total_bytes_out += output_bytes
+            output_key = self._link_outputs(frame.node.path, values, frame.visible)
+        signatures = self._signatures.setdefault(frame.node.path, {})
+        key = (frame.input_key, output_key)
+        signature = signatures.get(key)
+        if signature is None:
+            signature = signatures[key] = _signature(key)
+            frame.node.signatures.append(signature)
+        signature.call_indices.append(frame.call_index)
+
+    @contextlib.contextmanager
+    def record_sample(self, args: Sequence[Any] = (), kwargs: Mapping[str, Any] | None = None) -> Generator[None]:
+        """Record one sample, one call of the inference function, inside the ``with`` block.
+
+        Calls are recorded only inside such a block, into a new ``Sample`` that ``result()`` returns in
+        ``CallTree.samples``. The arguments are described when the block starts, so changes the inference makes to
+        them in place do not show.
+
+        An exception inside the block invalidates the recorder: ``result()`` then raises instead of returning an
+        incomplete tree, also after later sessions; record again with a new recorder.
+
+        Args:
+            args: Positional arguments the inference function receives for this sample.
+            kwargs: Keyword arguments the inference function receives for this sample.
+        """
+        self._current_sample = Sample(inputs=describe_sample_inputs(args, kwargs))
+        self._top_visible = _SourceIndex()  # a new top level: nothing links across samples
+        try:
+            yield
+        except BaseException:
+            self._failed = True
+            self._current_sample = None
+            raise
+        self._samples.append(self._current_sample)
+        self._current_sample = None
+
+    def result(self) -> CallTree:
+        """Return the recorded call tree.
+
+        The returned tree is a snapshot — a ``CallTree.copy()`` of the recorder's state — so later recording
+        does not change it.
+
+        Raises:
+            RuntimeError: If a sample raised while it was recorded, in this or an earlier session: the tree is
+                incomplete.
+        """
+        if self._failed:
+            raise RuntimeError(
+                "A sample raised while the call tree's structure was recorded, "
+                "so the recorded tree is incomplete; record it again with a new StructureRecorder."
+            )
+        return CallTree(
+            nodes=self._nodes,
+            samples=self._samples,
+            weight_accesses=self._weight_access_log.snapshot(),
+            modules=list(self._modules.values()),
+        ).copy()
+
+    def _start(self) -> None:
+        """Install the ``nn.Module._apply`` probe and the weight-access mode."""
+        self._original_apply = nn.Module._apply
+        try:
+            nn.Module._apply = self._make_apply_probe(self._original_apply)
+            self._weight_access_log.start(self._modules.values())
+            weight_access_mode = WeightAccessMode(
+                self._weight_access_log, lambda: self._stack[-1].node.path_str if self._stack else ""
+            )
+            weight_access_mode.__enter__()
+            self._weight_access_mode = weight_access_mode
+        except BaseException:
+            self._stop(completed=False)
+            raise
+
+    def _stop(self, completed: bool) -> None:
+        """End the structure pass and restore ``nn.Module._apply``, also when the recorded code raised."""
+        self._stack.clear()
+        self._current_sample = None
+        if self._weight_access_mode is not None:
+            self._weight_access_mode.__exit__(None, None, None)
+            self._weight_access_mode = None
+        if self._original_apply is not None:
+            nn.Module._apply = self._original_apply
+            self._original_apply = None
 
     def _input_leaves(
         self, obj: Any, method: str, args: tuple[Any, ...], kwargs: dict[str, Any] | None
@@ -202,33 +265,6 @@ class CallRecorder:
                 arguments = dict(declared.normalize(args, kwargs or {}).arguments)
         seen: set[int] = set()  # container ids seen in this call's input walk
         return [leaf for parameter, value in arguments.items() for leaf in _named_leaves(value, parameter, seen)]
-
-    def end_call(self, frame: _Frame | None, result: Any = _NO_RESULT) -> None:
-        """Record the end of a call started with ``begin_call``.
-
-        Args:
-            frame: The frame ``begin_call`` returned.
-            result: The call's return value, to count its tensor bytes; omit it when the call raised.
-        """
-        if frame is None:
-            return
-        self._stop_timer(frame)
-        if self._stack and self._stack[-1] is frame:
-            self._stack.pop()
-        if result is _NO_RESULT:
-            output_key = None
-        else:
-            with torch._C.DisableTorchFunction():
-                values, output_bytes = _leaves_and_bytes(list(_named_leaves(result, "output")))
-            frame.node.bytes_out += output_bytes
-            output_key = self._link_outputs(frame.node.path, values, frame.visible)
-        signatures = self._signatures.setdefault(frame.node.path, {})
-        key = (frame.input_key, output_key)
-        signature = signatures.get(key)
-        if signature is None:
-            signature = signatures[key] = _signature(key)
-            frame.node.signatures.append(signature)
-        signature.call_indices.append(frame.call_index)
 
     def _link_inputs(self, path: CallPath, values: list[tuple[Any, Leaf]]) -> tuple[tuple[Leaf, ...], _SourceIndex]:
         """Source a call's arguments from what its caller sees; return its input signature key and what it sees.
@@ -268,88 +304,8 @@ class CallRecorder:
         """What the caller of a starting or ending call sees: the innermost open call's ``visible`` or the top level."""
         return self._stack[-1].visible if self._stack else self._top_visible
 
-    def begin_iteration(self) -> None:
-        """Mark the start of one iteration (for example one call of the inference function)."""
-        self._current_sequence = []
-        self._top_visible = _SourceIndex()  # a new top level: nothing links across iterations
-
-    def end_iteration(self) -> None:
-        """Mark the end of the current iteration."""
-        if self._current_sequence is not None:
-            self._sequences.append(self._current_sequence)
-        self._current_sequence = None
-
-    def result(self) -> CallTree:
-        """Return the recorded call tree, with times resolved to milliseconds.
-
-        Idempotent: resolved event times accumulate on the nodes, so calling ``result`` again returns the
-        same times, and recording more calls afterwards keeps accumulating. The returned tree is a snapshot: its nodes,
-        their ``children`` and ``signatures`` are copies, so later recording does not change it.
-        """
-        self.flush()
-        nodes = {
-            path: replace(
-                node,
-                children=list(node.children),
-                signatures=[
-                    replace(
-                        sig,
-                        inputs=dict(sig.inputs),
-                        outputs=None if sig.outputs is None else dict(sig.outputs),
-                        call_indices=list(sig.call_indices),
-                    )
-                    for sig in node.signatures
-                ],
-            )
-            for path, node in self._nodes.items()
-        }
-        return CallTree(
-            nodes=nodes,
-            iterations=len(self._sequences),
-            sequences=list(self._sequences),
-            weight_accesses=self._weight_access_log.snapshot(),
-            modules=list(self._modules.values()),
-        )
-
-    def flush(self) -> None:
-        """Resolve pending CUDA event pairs into the accumulated totals so they are not held until the end.
-
-        Adapters call it once per iteration; pending events stay bounded by one iteration. Each end event is
-        synchronized on its own, so pairs recorded on any device resolve without a device-wide synchronization.
-        """
-        if not self._events:
-            return
-        if self._use_cuda:
-            for _, _, end in self._events:
-                end.synchronize()
-        for node, start, end in self._events:
-            node.time_ms += start.elapsed_time(end)
-        self._events.clear()
-
-    def _start_timer(self) -> tuple[Any, int | None]:
-        """Start timing a call: record a CUDA event, or read ``time.perf_counter`` without CUDA.
-
-        Returns:
-            The start of the timer and the CUDA device the start event was recorded on (``None`` without CUDA).
-        """
-        if self._use_cuda:
-            device = torch.cuda.current_device()
-            event = torch.cuda.Event(enable_timing=True)
-            event.record()
-            return event, device
-        return time.perf_counter(), None
-
-    def _stop_timer(self, frame: _Frame) -> None:
-        """Stop timing a call: queue the CUDA event pair for ``flush``, or add the CPU time to the node's total."""
-        if self._use_cuda:
-            end = torch.cuda.Event(enable_timing=True)
-            end.record(torch.cuda.current_stream(frame.device))
-            self._events.append((frame.node, frame.start, end))
-        else:
-            frame.node.time_ms += (time.perf_counter() - frame.start) * 1000.0
-
     def _make_apply_probe(self, original_apply: Callable) -> Callable:
-        """Build the replacement for ``nn.Module._apply`` that ``__enter__`` installs.
+        """Build the replacement for ``nn.Module._apply`` that ``_start`` installs.
 
         ``nn.Module._apply`` is the method that ``.to()``, ``.cuda()``, ``.half()`` and similar calls use to convert a
         module's parameters and buffers. The replacement runs ``original_apply`` unchanged. While the recorder is
@@ -361,7 +317,7 @@ class CallRecorder:
         themselves do not count as accesses.
 
         Args:
-            original_apply: The ``nn.Module._apply`` to call; restored by ``__exit__``.
+            original_apply: The ``nn.Module._apply`` to call; restored when the ``with`` block ends.
 
         Returns:
             A function with the signature of ``nn.Module._apply``.
@@ -370,7 +326,7 @@ class CallRecorder:
 
         def _apply(module: nn.Module, fn: Callable, *args: Any, **kwargs: Any) -> Any:
             # ``nn.Module._apply`` recurses through child ``_apply`` calls; only the outermost one records.
-            if recorder._active and recorder._apply_depth == 0:
+            if CallRecorder.active() is recorder and recorder._apply_depth == 0:
                 caller = recorder._stack[-1].node.path_str if recorder._stack else unrecorded_caller()
                 recurse = kwargs.get("recurse", args[0] if args else True)
                 with torch._C.DisableTorchFunction():
@@ -387,7 +343,11 @@ class CallRecorder:
                 return original_apply(module, fn, *args, **kwargs)
             finally:
                 recorder._apply_depth -= 1
-                if recorder._apply_depth == 0 and recorder._active and recorder._weight_access_mode is not None:
+                if (
+                    recorder._apply_depth == 0
+                    and CallRecorder.active() is recorder
+                    and recorder._weight_access_mode is not None
+                ):
                     # A move or cast gives the tensors new storage; keep tracking them under it.
                     recorder._weight_access_log.retrack()
 
@@ -545,7 +505,7 @@ def _leaves_and_bytes(leaves: list[tuple[str, Any]]) -> tuple[list[tuple[Any, Le
 
 
 class _SourceIndex:
-    """An index of the values visible inside one call, or at the top level of an iteration: where each was last seen.
+    """An index of the values visible inside one call, or at the top level of a sample: where each was last seen.
 
     Values are matched by identity. An entry is keyed by the object's ``id`` and holds a weak reference to it: the
     reference confirms that the id still belongs to the same object, because CPython gives a freed object's id to
@@ -606,17 +566,30 @@ def _signature(key: _SignatureKey) -> CallSignature:
 
 @dataclass
 class _Frame:
-    """An open call: its node, the start of its timer, the raw key of its inputs, its call index and what it sees.
+    """An open call: its node, the raw key of its inputs, its call index and what it sees.
 
-    ``call_index`` is the call's position among the node's calls in start order (the same order
-    ``CallTree.sequences`` records). The start is a CUDA event or a ``perf_counter`` value; ``device`` is the
-    CUDA device the start event was recorded on. ``visible`` holds the values visible inside the call: its own
-    arguments and what its child calls returned.
+    ``call_index`` is the call's position among the node's calls in start order (the order
+    ``CallNode.calls_per_sample`` counts). ``visible`` holds the values visible inside the call: its own
+    arguments and what its child calls returned. ``compiled`` says whether calls inside this call run compiled.
     """
 
     node: CallNode
-    start: Any
     input_key: tuple[Leaf, ...]
     call_index: int
     visible: _SourceIndex
-    device: int | None = None
+    compiled: bool
+
+
+def describe_sample_inputs(args: Sequence[Any] = (), kwargs: Mapping[str, Any] | None = None) -> dict[str, Leaf]:
+    """Describe a sample's arguments as ``Sample.inputs`` does, without registering them as sources.
+
+    The names follow ``Sample``: ``args[0]``, ... for positional arguments, keyword arguments by their name, and
+    ``kwargs['args']`` for a keyword argument named ``args``.
+    """
+    seen: set[int] = set()
+    named = list(_named_leaves(tuple(args), "args", seen))
+    for name, value in (kwargs or {}).items():
+        named.extend(_named_leaves(value, name if name != "args" else "kwargs['args']", seen))
+    with torch._C.DisableTorchFunction():
+        values, _ = _leaves_and_bytes(named)
+    return {leaf.name: leaf for _, leaf in values}

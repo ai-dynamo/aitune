@@ -717,6 +717,38 @@ def test_inspect_does_not_warn_about_unused_submodules_under_force_eager(mocker)
     assert _compiled_module_warnings(warning) == []
 
 
+@pytest.mark.parametrize("how", ["decorator", "call"])
+def test_inspect_does_not_warn_about_a_disabled_forward(mocker, how):
+    """A ``torch.compiler.disable``'d ``forward`` runs eagerly; its module is not a compiled module."""
+
+    class DisabledEncoder(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.unused = nn.Linear(10, 10)  # registered but never called, so a false "compiled" verdict warns
+
+        @torch.compiler.disable
+        def forward(self, x):
+            return x
+
+    class EagerEncoder(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.unused = nn.Linear(10, 10)
+
+        def forward(self, x):
+            return x
+
+    torch._dynamo.reset()
+    model = _ModelWithEncoder(DisabledEncoder() if how == "decorator" else EagerEncoder())
+    if how == "call":
+        model.encoder.forward = torch.compiler.disable(model.encoder.forward)
+    warning = mocker.patch.object(module_inspector.logger, "warning")
+
+    _inspected_counts(model, min_depth=2)
+
+    assert _compiled_module_warnings(warning) == []
+
+
 class _EagerBlock(nn.Module):
     def __init__(self):
         super().__init__()

@@ -3,11 +3,17 @@
 """Tests for Torch Export through the flat tensor boundary."""
 
 import inspect
+import socket
 from functools import partial
 
 import pytest
 import torch
+import torch.distributed as dist
+from torch.distributed.device_mesh import init_device_mesh
+from torch.distributed.tensor._dtensor_spec import DTensorSpec
+from torch.distributed.tensor.parallel import ColwiseParallel, parallelize_module
 from torch.fx.experimental.symbolic_shapes import ConstraintViolationError
+from torch.utils import _pytree
 
 from aitune.torch.libs.exporting import TorchExporter
 from tests.toy_models import ToyNestedInputModel
@@ -144,3 +150,64 @@ def test_export_supports_different_batch_axis_multipliers():
         expected = model(*args)
         actual = exported_module(*args)
         torch.testing.assert_close(actual, expected)
+
+
+@pytest.fixture
+def dtensor_spec_registry():
+    """Remove the process-wide DTensorSpec registration added by an export."""
+    registered = DTensorSpec in _pytree.SUPPORTED_NODES
+    yield
+    if not registered and DTensorSpec in _pytree.SUPPORTED_NODES:
+        _pytree._deregister_pytree_node(DTensorSpec)
+
+
+@pytest.fixture
+def single_rank_mesh(tmp_path, monkeypatch):
+    interfaces = {name for _, name in socket.if_nameindex()}
+    monkeypatch.setenv("GLOO_SOCKET_IFNAME", "lo" if "lo" in interfaces else "lo0")
+    dist.init_process_group("gloo", init_method=f"file://{tmp_path / 'rendezvous'}", rank=0, world_size=1)
+    try:
+        yield init_device_mesh("cpu", (1,))
+    finally:
+        dist.destroy_process_group()
+
+
+@pytest.mark.parametrize("strict", [True, False], ids=["strict", "non-strict"])
+def test_export_supports_tensor_parallel_modules(strict, single_rank_mesh, dtensor_spec_registry):
+    model = parallelize_module(torch.nn.Linear(3, 4), single_rank_mesh, ColwiseParallel()).eval()
+    x = torch.randn(2, 3)
+    sample = ((x,), {})
+    expected = model(x)
+    graph_spec = make_graph_spec(model.forward, sample, expected)
+
+    export_result = TorchExporter(strict=strict).export(model, sample, graph_spec)
+    output = export_result.exported_program.module()(x)
+
+    torch.testing.assert_close(output, (expected,))
+
+
+def test_export_does_not_register_dtensor_spec_for_dynamic_shapes(mocker, single_rank_mesh, dtensor_spec_registry):
+    if DTensorSpec in _pytree.SUPPORTED_NODES:
+        pytest.skip("DTensorSpec is already registered in this process")
+    model = parallelize_module(torch.nn.Linear(3, 4), single_rank_mesh, ColwiseParallel()).eval()
+    samples = [((torch.randn(2, 3),), {}), ((torch.randn(4, 3),), {})]
+    graph_spec = make_graph_spec(model.forward, samples[0], model(*samples[0][0]), batch_size=2)
+    update_input_spec(graph_spec, samples[1], batch_size=4)
+    mocker.patch("torch.export.export")
+
+    TorchExporter().export(model, samples[0], graph_spec)
+
+    assert DTensorSpec not in _pytree.SUPPORTED_NODES
+
+
+def test_export_does_not_register_dtensor_spec_for_local_modules(dtensor_spec_registry):
+    if DTensorSpec in _pytree.SUPPORTED_NODES:
+        pytest.skip("DTensorSpec is already registered in this process")
+    model = torch.nn.Identity().eval()
+    x = torch.ones(2)
+    sample = ((x,), {})
+    graph_spec = make_graph_spec(model.forward, sample, model(x))
+
+    TorchExporter().export(model, sample, graph_spec)
+
+    assert DTensorSpec not in _pytree.SUPPORTED_NODES

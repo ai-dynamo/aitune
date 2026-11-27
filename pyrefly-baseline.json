@@ -862,13 +862,6 @@
       "severity": "error"
     },
     {
-      "column": 40,
-      "path": "aitune/torch/module/graph_spec.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `int | str | tuple[int | str, ...]` is not assignable to parameter `key` with type `str | tuple[int | str, ...]` in function `dict.get`",
-      "severity": "error"
-    },
-    {
       "column": 38,
       "path": "aitune/torch/module/onnx_module.py",
       "name": "bad-argument-type",
@@ -1611,13 +1604,6 @@
       "severity": "error"
     },
     {
-      "column": 12,
-      "path": "examples/YOLO/yolo/model.py",
-      "name": "pytorch-efficiency-lint-cuda-call",
-      "concise_description": "`Tensor.cuda()` hard-codes the target device",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "examples/common/aitune_examples_common/batching.py",
       "name": "missing-attribute",
@@ -2196,13 +2182,6 @@
       "path": "tests/functional_ci/artifacts.py",
       "name": "missing-attribute",
       "concise_description": "No attribute `float16` in module `tensorrt`",
-      "severity": "error"
-    },
-    {
-      "column": 81,
-      "path": "tests/functional_ci/backends.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `CompilationSettings | aitune.torch.backend.torch_tensorrt_jit_backend.TorchTensorRTConfig` is not assignable to parameter `compile_config` with type `CompilationSettings | aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTConfig` in function `aitune.torch.backend.torch_tensorrt_aot_backend.TorchTensorRTAotBackendConfig.__init__`",
       "severity": "error"
     },
     {
@@ -3190,13 +3169,6 @@
       "path": "tests/unit/torch/module/test_recording_module.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `dict[str | tuple[str, str], tuple[BatchDim, DynamicDim]]` is not assignable to parameter `dynamic_shapes` with type `dict[ForwardInputPath, tuple[DynamicDim | int, ...]] | None` in function `aitune.torch.module.recording_module.RecordingModule.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "tests/unit/torch/module/test_sample_metadata.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of type `Tensor | dict[str, Tensor] | list[Tensor]` has no attribute `shape`",
       "severity": "error"
     },
     {

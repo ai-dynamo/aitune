@@ -1,4 +1,6 @@
 #syntax=docker/dockerfile:1.3
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 ARG FROM_IMAGE=nvcr.io/nvidia/pytorch:26.01-py3
 FROM ${FROM_IMAGE}
 

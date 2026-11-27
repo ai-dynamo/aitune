@@ -5,6 +5,8 @@
 import copy
 import pickle
 from collections.abc import Mapping
+from functools import cached_property
+from operator import itemgetter
 from typing import Any, Literal, cast
 
 import torch
@@ -12,7 +14,7 @@ from tabulate import tabulate
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch.config import config
-from aitune.torch.module.locator import Locator
+from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
 from aitune.utils.serialization import json_serialize
 
@@ -134,10 +136,12 @@ class SampleMetadata:
         - for outputs - use SampleMetadata.from_outputs(output)
 
     2. In order to support Hugging Face integrations with kv cache the following behavior is changed:
-        - the equality and hash operator ignore all tensors and return value corresponding to the llm_graph_type,
-        which is either "prefill" or "decode". This is deduced based on the cache_position tensor. It cannot be
+        - equality and hashing ignore tensor metadata and use the LLM phase, either "prefill" or "decode",
+        together with non-tensor values captured in strict mode. The phase is deduced from cache_position. It cannot be
         done otherwise because even though kv cache is lazily initialized, it can be cached on subsequent generate
         calls i.e. it can always have tensors irrespective of the phase.
+        - strict mode still distinguishes values such as encoder-decoder cache readiness flags, which select
+        different Python branches within a phase. Non-strict mode continues to match only the phase.
 
 
     See Also:
@@ -175,19 +179,23 @@ class SampleMetadata:
         if not isinstance(__value, type(self)):
             return False
 
+        # Prefill, decode, and ordinary metadata (None) use distinct graph identities.
+        # Check both phases before choosing a comparison mode so equality is symmetric.
+        if self._llm_phase != __value._llm_phase:
+            return False
+
         if self._llm_phase is None:
             return dict(self._tensor_data) == dict(__value._tensor_data) and dict(self._other_data) == dict(
                 __value._other_data
             )
-        # LLM integration: check only LLM phase
-        return self._llm_phase == __value._llm_phase
+        # Tensor structure may change as caches initialize. Strict Python values still select distinct graphs.
+        return dict(self._other_data) == dict(__value._other_data)
 
     def __hash__(self) -> int:
         """Compute hash of sample metadata."""
         if self._llm_phase is None:
             return hash(frozenset(self._tensor_data)) ^ self._hash_other_data()
-        # LLM integration: hash only LLM phase
-        return hash(self._llm_phase)
+        return hash(self._llm_phase) ^ self._hash_other_data()
 
     def _hash_other_data(self) -> int:
         """Compute an order-independent hash for non-tensor data."""
@@ -230,10 +238,16 @@ class SampleMetadata:
         Export and inference must use the same recorded paths, rather than rediscovering leaves from
         each runtime value. Otherwise a tensor can be passed to the wrong compiled input or shape rule.
 
-        Each call walks the recorded paths in Python without copying tensor data. Inference overhead
-        therefore depends on the number and depth of tensor paths, rather than tensor size.
+        Top-level indexed paths use a prepared itemgetter; nested and attribute paths retain locator
+        traversal. Neither path copies tensor data, so cost depends on path count and depth, not tensor size.
         """
-        tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
+        getter = self._top_level_tensor_itemgetter
+        if getter is None:
+            tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
+        elif len(self._tensor_data) == 1:
+            tensors = (getter(value),)
+        else:
+            tensors = getter(value)
         for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
             if not isinstance(tensor, torch.Tensor):
                 raise TypeError(f"Recorded tensor path {locator} resolved to {type(tensor).__name__}, not a tensor.")
@@ -265,6 +279,18 @@ class SampleMetadata:
         for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
             if not isinstance(tensor, torch.Tensor):
                 raise TypeError(f"Recorded tensor path {locator} received {type(tensor).__name__}, not a tensor.")
+
+        # Every slot is replaced, so a plain tensor tuple needs neither a copied template nor
+        # grouped locator replacements. Check the recorded order once; matching counts alone
+        # would lose constants or put tensors in the wrong slots. Tuple subclasses keep their
+        # existing reconstruction, including named-tuple fields and custom instance state.
+        if (
+            type(template) is tuple
+            and not preserved_values
+            and len(template) == len(tensors)
+            and self._is_flat_tensor_sequence
+        ):
+            return tensors
 
         tensor_memo = {}
         for locator, _ in self._tensor_data:
@@ -468,6 +494,36 @@ class SampleMetadata:
     def has_batch_axis(self) -> bool:
         """Check if metadata has batch axis."""
         return all(tensor_spec.has_batch_axis() for tensor_spec in self.tensor_specs)
+
+    @cached_property
+    def _top_level_tensor_itemgetter(self) -> itemgetter | None:
+        """Cache an itemgetter when all recorded tensors are at top-level indices or keys.
+
+        The getter reads tensors in recorded order and holds no sample values. Checkpoints store
+        the locators, which are used to rebuild the getter on first use after loading.
+        """
+        # itemgetter requires at least one index or key and reads directly from the root object
+        # using value[index_or_key]. A root tensor has an empty path. Nested paths and attribute
+        # access also require the general locator path, so one such tensor rules out the shortcut.
+        if not self._tensor_data or any(
+            locator.depth != 1 or next(locator.path_iter())[1] not in (ObjectType.SEQUENCE, ObjectType.DICT)
+            for locator, _ in self._tensor_data
+        ):
+            return None
+        # Each locator has exactly one step, so accessor_at(0) is the index or key on the root.
+        return itemgetter(*(locator.accessor_at(0) for locator, _ in self._tensor_data))
+
+    @cached_property
+    def _is_flat_tensor_sequence(self) -> bool:
+        """Whether tensor paths cover consecutive top-level sequence slots in recorded order.
+
+        Paths remain fixed when shape observations change. Lazy preparation also supports metadata
+        restored from older checkpoints without adding a required serialized field or retaining tensors.
+        """
+        return bool(self._tensor_data) and all(
+            tuple(locator.path_iter()) == ((index, ObjectType.SEQUENCE),)
+            for index, (locator, _) in enumerate(self._tensor_data)
+        )
 
 
 def batch_tensor(tensor: torch.Tensor, tensor_spec: TensorSpec, batch_size: int) -> torch.Tensor:

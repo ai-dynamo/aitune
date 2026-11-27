@@ -22,9 +22,9 @@ title: "Known Issues and Limitations"
   `step[0] += 1` with `step=[0]` stores `1`; reusing that graph with `step=[5]` can restore `1` instead of `6`.
   With `config.strict_mode=False`, graph matching and post-call input validation ignore non-tensor values, so the
   incorrect update can go undetected. Strict graph matching can reject a changed starting value, but does not make
-  the update dynamic. Strict mode alone does not protect calls when graph checking is disabled or graph selection
-  uses only the LLM prefill/decode phase. Keep updates to Python counters and similar changing non-tensor state
-  outside the compiled module.
+  the update dynamic. Strict mode alone does not protect calls when graph checking is disabled. LLM phase matching
+  also retains strict non-tensor values; with strict mode disabled it matches only the prefill/decode phase.
+  Keep updates to Python counters and similar changing non-tensor state outside the compiled module.
 - **Diffusers context parallelism with JIT tuning.** AITune's automatic JIT tuning currently degrades inference
   performance with Diffusers context parallelism because of module wrapping and patching order. Use the explicit AOT
   tuning API as a workaround. JIT backends may still be selected through the AOT API.

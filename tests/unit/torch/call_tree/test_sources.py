@@ -36,7 +36,7 @@ def _outputs(tree, path):
 def test_a_caller_argument_is_the_source_of_a_child_input():
     model = _Delegating()
 
-    tree = record(model, lambda: model(torch.randn(4)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=1)
 
     assert tree.nodes[HEAD].signatures[0].inputs["x"].source == (ROOT, "inputs", "x")
 
@@ -44,7 +44,7 @@ def test_a_caller_argument_is_the_source_of_a_child_input():
 def test_a_child_result_is_the_source_of_the_callers_output():
     model = _Delegating()
 
-    tree = record(model, lambda: model(torch.randn(4)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=1)
 
     assert _outputs(tree, ROOT)["output"].source == (HEAD, "outputs", "output")
 
@@ -65,7 +65,7 @@ def test_a_sibling_result_is_the_source_of_a_later_siblings_input():
     model = _Siblings()
     a_path = ("root.forward", "root.a.forward")
 
-    tree = record(model, lambda: model(torch.randn(4)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=1)
 
     assert tree.nodes[("root.forward", "root.b.forward")].signatures[0].inputs["x"].source == (
         a_path,
@@ -88,7 +88,7 @@ class _Chain(nn.Module):
 def test_a_nodes_previous_result_is_the_source_of_a_later_calls_input():
     model = _Chain()
 
-    tree = record(model, lambda: model(torch.randn(4)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=1)
 
     signatures = tree.nodes[HEAD].signatures
     assert [s.call_indices for s in signatures] == [[0], [1]]
@@ -104,7 +104,7 @@ class _Identity(nn.Module):
 def test_an_argument_returned_unchanged_is_the_source_of_the_output():
     model = _Identity()
 
-    tree = record(model, lambda: model(torch.randn(4)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=1)
 
     assert _outputs(tree, ROOT)["output"].source == (ROOT, "inputs", "x")
 
@@ -124,7 +124,7 @@ def test_the_side_tells_a_parameter_named_output_from_the_result():
 
     model = Model()
 
-    tree = record(model, lambda: model(torch.randn(4)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=1)
 
     # the head returns its argument ``output``: its input and its result are both named ``output``
     assert _outputs(tree, HEAD)["output"].source == (HEAD, "inputs", "output")
@@ -145,7 +145,7 @@ class _Computing(nn.Module):
 def test_a_value_made_inside_the_call_has_no_source():
     model = _Computing()
 
-    tree = record(model, lambda: model(torch.randn(4)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=1)
 
     assert tree.nodes[HEAD].signatures[0].inputs["x"].source is None
 
@@ -175,7 +175,7 @@ def test_sources_keep_nested_container_names_on_both_ends():
     a_path = ("root.forward", "root.a.forward")
     b_path = ("root.forward", "root.b.forward")
 
-    tree = record(model, lambda: model(torch.randn(4)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=1)
 
     assert tree.nodes[b_path].signatures[0].inputs["inputs['y']"].source == (a_path, "outputs", "output['y']")
     assert _outputs(tree, ROOT)["output"].source == (b_path, "outputs", "output")
@@ -206,7 +206,7 @@ class _Passing(nn.Module):
 def test_a_non_tensor_object_is_linked():
     model, cache = _Passing(), _Cache()
 
-    tree = record(model, lambda: model(torch.randn(4), cache), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4), cache), num_samples=1)
 
     assert tree.nodes[HEAD].signatures[0].inputs["cache"].source == (ROOT, "inputs", "cache")
 
@@ -214,13 +214,13 @@ def test_a_non_tensor_object_is_linked():
 def test_an_object_without_weakref_support_gets_no_source():
     model, cache = _Passing(), _SlotsCache()
 
-    tree = record(model, lambda: model(torch.randn(4), cache), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4), cache), num_samples=1)
 
     assert tree.nodes[HEAD].signatures[0].inputs["cache"].source is None
 
 
 class _Stashing(nn.Module):
-    """Stashes its child's result; the next iteration's call with it sees no scope it lives in."""
+    """Stashes its child's result; the next sample's call with it sees no scope it lives in."""
 
     def __init__(self):
         super().__init__()
@@ -242,7 +242,7 @@ def test_an_outermost_calls_result_is_the_source_of_a_later_outermost_call():
     def step():
         model(model(torch.randn(4)))
 
-    tree = record(model, step, iterations=1)
+    tree = record(model, step, num_samples=1)
 
     signatures = tree.nodes[ROOT].signatures
     assert [s.call_indices for s in signatures] == [[0], [1]]
@@ -250,22 +250,22 @@ def test_an_outermost_calls_result_is_the_source_of_a_later_outermost_call():
     assert signatures[1].inputs["x"].source == (ROOT, "outputs", "output")
 
 
-def test_an_outermost_calls_result_is_not_linked_into_the_next_iteration():
+def test_an_outermost_calls_result_is_not_linked_into_the_next_sample():
     model = _Head()
     previous = [torch.randn(4)]
 
     def step():
         previous[0] = model(previous[0])
 
-    tree = record(model, step, iterations=2)
+    tree = record(model, step, num_samples=2)
 
     assert [s.inputs["x"].source for s in tree.nodes[ROOT].signatures] == [None]
 
 
-def test_nothing_is_linked_across_iterations():
+def test_nothing_is_linked_across_samples():
     model = _Stashing()
 
-    tree = record(model, lambda: model(torch.randn(4)), iterations=2)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=2)
 
     signatures = {tuple(s.call_indices): s for s in tree.nodes[HEAD].signatures}
     assert signatures[(2,)].inputs["x"].source is None
@@ -289,7 +289,7 @@ class _Loop(nn.Module):
 def test_a_loop_callers_made_value_and_previous_results_give_two_signatures():
     model = _Loop()
 
-    tree = record(model, lambda: model(torch.randn(4), 3), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4), 3), num_samples=1)
 
     signatures = tree.nodes[HEAD].signatures
     assert [s.call_indices for s in signatures] == [[0], [1, 2]]
@@ -302,7 +302,7 @@ def test_a_loop_callers_made_value_and_previous_results_give_two_signatures():
 
 def test_to_dict_exports_sources():
     model = _Delegating()
-    tree = record(model, lambda: model(torch.randn(4)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(4)), num_samples=1)
 
     exported = tree.to_dict()
 

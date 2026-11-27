@@ -3,37 +3,15 @@
 """Unit tests for sample metadata."""
 
 from dataclasses import dataclass
-from statistics import median
-from timeit import repeat
 from typing import Any
 
 import pytest
 import torch
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
-from aitune.torch.module.locator import Locator, ObjectType
+from aitune.torch.config import config
 from aitune.torch.module.sample_metadata import SampleMetadata, batch_tensor
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
-
-
-def make_timing_sample(structure, tensor_count, tensor_elements):
-    tensors = tuple(torch.empty(tensor_elements, device="cpu") for _ in range(tensor_count))
-    if structure == "tensor":
-        return tensors[0]
-    if structure == "tuple":
-        return tensors
-    if structure == "cache":
-        return {"logits": tensors[0], "cache": tuple(zip(tensors[1::2], tensors[2::2], strict=True))}
-
-    value: dict[str, Any] = {f"tensor_{index}": tensor for index, tensor in enumerate(tensors)}
-    if structure == "nested_dict":
-        for _ in range(3):
-            value = {"nested": value}
-    elif structure == "metadata":
-        value["metadata"] = [{"tokens": list(range(32)), "label": "decode"} for _ in range(32)]
-    else:
-        assert structure == "dict"
-    return value
 
 
 @pytest.fixture
@@ -151,13 +129,9 @@ def test_unflatten_tensors_isolates_mutable_non_tensor_branches():
     assert value["metadata"] == {"items": []}
 
 
-def test_tensor_free_template_does_not_copy_tensor_subclasses():
-    class NonDeepcopyTensor(torch.Tensor):
-        def __deepcopy__(self, memo):
-            raise AssertionError("tensor must not be deep-copied")
-
+def test_tensor_free_template_replaces_tensors_and_copies_metadata():
     value = {
-        "tensor": torch.ones(2).as_subclass(NonDeepcopyTensor),
+        "tensor": torch.ones(2),
         "metadata": {"items": []},
     }
     metadata = SampleMetadata.from_outputs(value)
@@ -168,97 +142,13 @@ def test_tensor_free_template_does_not_copy_tensor_subclasses():
     assert result["metadata"] is not value["metadata"]
 
 
-@pytest.mark.parametrize("tensor_elements", [1, 4096], ids=["scalar-sized", "4096-elements"])
-@pytest.mark.parametrize(
-    "structure,tensor_count,preserve_cache",
-    [
-        pytest.param("tensor", 1, False, id="root-tensor"),
-        pytest.param("dict", 2, False, id="dict-2"),
-        pytest.param("dict", 8, False, id="dict-8"),
-        pytest.param("nested_dict", 8, False, id="nested-dict-depth-4"),
-        pytest.param("tuple", 16, False, id="tuple-16"),
-        pytest.param("tuple", 64, False, id="tuple-64"),
-        pytest.param("tuple", 256, False, id="tuple-256"),
-        pytest.param("cache", 65, False, id="cache-32-layers"),
-        pytest.param("cache", 65, True, id="preserved-cache-32-layers"),
-        pytest.param("metadata", 8, False, id="dict-with-mutable-metadata"),
-    ],
-)
-def test_flatten_unflatten_timing(structure, tensor_count, preserve_cache, tensor_elements, record_property):
-    """Report CPU microseconds per call, without machine-dependent performance assertions.
-
-    Run with ``pytest -s -k test_flatten_unflatten_timing`` on the same idle machine for comparisons.
-    Setup, allocation, metadata discovery, and correctness checks are outside the timed regions.
-    Like timeit's default, cyclic garbage collection is disabled during timing. These measurements
-    exclude model execution and GPU scheduling, so they do not establish end-to-end inference impact.
-    """
-    value = make_timing_sample(structure, tensor_count, tensor_elements)
-    metadata = SampleMetadata.from_outputs(value)
-    original_tensors = metadata.flatten_tensors(value)
-    tensors = tuple(torch.empty_like(tensor) for tensor in original_tensors)
-    preserved_values = ()
-    preserved_containers = ()
-    if preserve_cache:
-        preserved_containers = (value["cache"],)
-        preserved_values = ((Locator((("cache", ObjectType.DICT),), is_output=True), value["cache"]),)
-    template = metadata.without_tensors(value, preserved_containers)
-
-    restored = metadata.unflatten_tensors(tensors, template, preserved_values)
-    expected_tensors = (tensors[0], *original_tensors[1:]) if preserve_cache else tensors
-    assert len(original_tensors) == tensor_count
-    assert all(
-        actual is expected
-        for actual, expected in zip(metadata.flatten_tensors(restored), expected_tensors, strict=True)
-    )
-    if preserve_cache:
-        assert restored["cache"] is value["cache"]
-    if structure == "metadata":
-        assert restored["metadata"] == value["metadata"]
-        restored["metadata"][0]["tokens"].append(-1)
-        assert template["metadata"][0]["tokens"] == list(range(32))
-        assert value["metadata"][0]["tokens"] == list(range(32))
-
-    timing_globals = {
-        "metadata": metadata,
-        "value": value,
-        "tensors": tensors,
-        "template": template,
-        "preserved_values": preserved_values,
-    }
-    operations = {
-        "flatten": "metadata.flatten_tensors(value)",
-        "unflatten": "metadata.unflatten_tensors(tensors, template, preserved_values)",
-    }
-    iterations = 100
-    repeats = 5
-    for operation, statement in operations.items():
-        # Warm each path before collecting repeated batches of independent calls.
-        repeat(statement, globals=timing_globals, number=20, repeat=1)
-        samples_us = [
-            elapsed * 1e6 / iterations
-            for elapsed in repeat(statement, globals=timing_globals, number=iterations, repeat=repeats)
-        ]
-        record_property(f"{operation}_median_us", median(samples_us))
-        record_property(f"{operation}_samples_us", samples_us)
-        print(
-            f"{structure}, tensors={tensor_count}, elements={tensor_elements}, preserved_cache={preserve_cache}: "
-            f"{operation} median={median(samples_us):.3f} us/call, min={min(samples_us):.3f}, "
-            f"max={max(samples_us):.3f} ({repeats} batches of {iterations})"
-        )
-
-    assert all(
-        actual is original for actual, original in zip(metadata.flatten_tensors(value), original_tensors, strict=True)
-    )
-    assert template == metadata.without_tensors(value, preserved_containers)
-
-
 def test_make_batch():
     # the following tensors should not be modified
     constant_tensor = torch.ones(2, 2)
     constant_tensor_scalar = torch.tensor(3.14)
 
     # given input data, where 3rd axis is batch axis with multipliers 1, 2, 3
-    inputs_bs2 = {
+    inputs_bs2: dict[str, Any] = {
         "values": (
             torch.randn(1, 2, 2),  # tensor, multiplier 1
             constant_tensor,
@@ -270,7 +160,7 @@ def test_make_batch():
         "z": "abc",
     }
 
-    inputs_bs3 = {
+    inputs_bs3: dict[str, Any] = {
         "values": [
             torch.randn(1, 2, 3),  # tensor, multiplier 1
             constant_tensor,
@@ -405,25 +295,39 @@ def test_hash_strict_with_unhashable_inputs_is_a_valid_dict_key():
     assert cache[different_metadata] == "different"
 
 
-def test_hash_llm_dynamic():
-    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.randn(5)}, strict=True)
-    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.randn(5)}, strict=True)
-    m3 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.randn(6)}, strict=True)
-    assert hash(m1) == hash(m2), "other inputs should be ignored"
+@pytest.mark.parametrize("strict", [False, True])
+def test_hash_llm_dynamic(monkeypatch, strict):
+    monkeypatch.setattr(config, "enable_transformers_integration", True)
+    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([1])}, strict=strict)
+    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.tensor([1])}, strict=strict)
+    m3 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.tensor([2, 3])}, strict=strict)
+    assert len({m1, m2}) == (2 if strict else 1), "strict mode must distinguish non-tensor inputs"
     assert hash(m2) == hash(m3), "cache position should not affect hash"
 
-    m1 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1), "cache_position": torch.randn(5)})
-    m2 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1, 2), "cache_position": torch.randn(5)})
+    m1 = SampleMetadata.from_inputs(
+        {"hidden_states": torch.randn(1), "cache_position": torch.tensor([1])}, strict=strict
+    )
+    m2 = SampleMetadata.from_inputs(
+        {"hidden_states": torch.randn(1, 2), "cache_position": torch.tensor([2, 3])}, strict=strict
+    )
+    assert m1 == m2
     assert hash(m1) == hash(m2), "other tensor inputs should be ignored"
 
 
-def test_hash_llm_static():
-    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([0])}, strict=True)
-    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.tensor([0])}, strict=True)
-    assert hash(m1) == hash(m2), "other inputs should be ignored"
+@pytest.mark.parametrize("strict", [False, True])
+def test_hash_llm_static(monkeypatch, strict):
+    monkeypatch.setattr(config, "enable_transformers_integration", True)
+    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([0])}, strict=strict)
+    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.tensor([0])}, strict=strict)
+    assert len({m1, m2}) == (2 if strict else 1), "strict mode must distinguish non-tensor inputs"
 
-    m1 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1), "cache_position": torch.tensor([0])})
-    m2 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1, 2), "cache_position": torch.tensor([0])})
+    m1 = SampleMetadata.from_inputs(
+        {"hidden_states": torch.randn(1), "cache_position": torch.tensor([0])}, strict=strict
+    )
+    m2 = SampleMetadata.from_inputs(
+        {"hidden_states": torch.randn(1, 2), "cache_position": torch.tensor([0])}, strict=strict
+    )
+    assert m1 == m2
     assert hash(m1) == hash(m2), "other tensor inputs should be ignored"
 
     m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([0])})

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import dataclasses
+import pickle
 from collections import UserDict
 from collections.abc import Mapping
 
@@ -9,10 +10,11 @@ import pytest
 import torch
 from torch import nn
 
+from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.callers import OUTSIDE_ANY_CALL
 from aitune.torch.call_tree.methods import is_transparent_call, is_transparent_container, user_defined_methods
-from aitune.torch.call_tree.nodes import CallSignature, Leaf, TensorLeaf
-from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.nodes import CallNode, CallSignature, Leaf, Sample, TensorLeaf
+from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder, describe_sample_inputs
 from aitune.torch.call_tree.weights.accesses import WeightAccess, WeightAccessLog, storage_key
 from tests.toy_models.call_tree_models import (
     PlainPipeline,
@@ -22,6 +24,65 @@ from tests.toy_models.call_tree_models import (
     vla_inputs,
 )
 from tests.unit.torch.call_tree.helpers import instrumented, invisible_to_recorder, record
+
+
+def _boom() -> None:
+    raise RuntimeError("boom")
+
+
+def test_call_recorder_is_abstract():
+    assert CallRecorder.__abstractmethods__ == {"begin_call", "end_call"}
+
+
+def test_call_tree_copy_is_independent_of_the_original():
+    module = nn.Linear(2, 2)
+    root = CallNode(
+        path=("root.forward",),
+        label="root.forward",
+        owner_class="Root",
+        method="forward",
+        module=module,
+        signatures=[CallSignature(inputs={"x": Leaf("x", "int")}, outputs={}, call_indices=[0, 1])],
+        children=[("root.forward", "root.child.forward")],
+    )
+    child = CallNode(
+        path=("root.forward", "root.child.forward"),
+        label="root.child.forward",
+        owner_class="Linear",
+        method="forward",
+    )
+    tree = CallTree(
+        nodes={root.path: root, child.path: child},
+        samples=[
+            Sample(calls={root.path: 1, child.path: 1}, time_ms={root.path: 1.0}),
+            Sample(calls={root.path: 1, child.path: 1}, time_ms={root.path: 2.0}),
+        ],
+        weight_accesses={"weight": {WeightAccess("root.forward", "move")}},
+        modules=[("root", module)],
+    )
+    tree.samples[0].inputs = {"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 8))}
+
+    copied = tree.copy()
+    copied_root = copied.nodes[root.path]
+    copied.samples[0].time_ms[root.path] = 9.0
+    copied_root.children.clear()
+    copied_root.signatures[0].call_indices.append(2)
+    copied_root.signatures[0].inputs["x"] = TensorLeaf("x", "torch.Tensor", dtype=torch.float16, shape=(1,))
+    copied.samples[0].calls.clear()
+    copied.weight_accesses["weight"].add(WeightAccess("other", "read"))
+    copied.modules.append(("extra", nn.Linear(1, 1)))
+    copied.samples.clear()
+
+    assert root.total_time_ms == 3.0
+    assert root.time_ms_per_sample == [1.0, 2.0]
+    assert root.children == [child.path]
+    assert root.signatures[0].call_indices == [0, 1]
+    assert isinstance(root.signatures[0].inputs["x"], Leaf)
+    assert root.calls_per_sample == [1, 1]
+    assert tree.weight_accesses["weight"] == {WeightAccess("root.forward", "move")}
+    assert [label for label, _ in tree.modules] == ["root"]
+    assert tree.samples[0].inputs["args[0]"] == TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 8))
+    assert copied_root.module is module and copied_root is not root
 
 
 def _labels(tree):
@@ -50,22 +111,21 @@ def test_nodes_of_finds_a_modules_nodes_by_identity_and_method():
     assert tree.nodes_of(nn.Linear(2, 2)) == []
 
 
-def test_calls_are_counted_over_iterations_and_children_keep_first_call_order():
+def test_calls_are_counted_over_samples_and_children_keep_first_call_order():
     model = VlaToy(steps=5)
     tokens, image = vla_inputs()
 
-    tree = record(model, lambda: model(tokens, image), iterations=3)
+    tree = record(model, lambda: model(tokens, image), num_samples=3)
 
     root = tree.nodes[("root.forward",)]
-    assert tree.iterations == 3
-    assert root.calls == 3
+    assert root.total_calls == 3
     dit = tree.nodes[("root.forward", "root.dit_forward")]
-    assert dit.calls == 15
+    assert dit.total_calls == 15
     children = [tree.nodes[p].label for p in root.children]
     assert children[:2] == ["root.vision.0.forward", "root.vision.1.forward"]
     assert children[-1] == "root.dit_forward"
-    assert len(tree.sequences) == 3
-    assert tree.sequences[0][0] == ("root.forward",)
+    assert root.calls_per_sample == [1, 1, 1]
+    assert dit.calls_per_sample == [5, 5, 5]
 
 
 def test_exact_containers_are_transparent_but_subclasses_are_recorded():
@@ -115,27 +175,26 @@ def test_helper_receiving_its_callable_by_keyword_is_transparent():
 
 def test_result_is_a_snapshot_that_later_recording_does_not_change():
     model = nn.Linear(2, 2)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
 
-    def one_iteration():
+    def one_sample():
         with recorder:
-            recorder.begin_iteration()
-            frame = recorder.begin_call("root.forward", model, "forward", ())
-            model(torch.randn(2, 2))
-            recorder.end_call(frame)
-            recorder.end_iteration()
+            with recorder.record_sample():
+                frame = recorder.begin_call("root.forward", model, "forward", ())
+                model(torch.randn(2, 2))
+                recorder.end_call(frame)
 
-    one_iteration()
+    one_sample()
     first = recorder.result()
-    one_iteration()
+    one_sample()
 
-    assert first.nodes[("root.forward",)].calls == 1
-    assert first.iterations == 1
-    assert recorder.result().nodes[("root.forward",)].calls == 2
+    assert first.nodes[("root.forward",)].total_calls == 1
+    assert first.nodes[("root.forward",)].calls_per_sample == [1]
+    assert recorder.result().nodes[("root.forward",)].total_calls == 2
 
 
 def test_second_recorder_cannot_record_while_one_is_active():
-    first, second = CallRecorder(), CallRecorder()
+    first, second = StructureRecorder(), StructureRecorder()
     original_apply = nn.Module._apply
 
     with first:
@@ -158,7 +217,7 @@ def test_apply_probe_records_move_accesses_reaching_modules_from_outside():
 
 
 def test_apply_outside_any_recorded_call():
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     module = nn.Linear(1, 1)
     recorder.register_module("root", module)
     with recorder:
@@ -176,7 +235,7 @@ def test_apply_from_a_library_style_to_override_names_the_real_caller():
     def caller(module):
         module.to("cpu")
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     module = Wrapper(1, 1)
     recorder.register_module("root", module)
     with recorder:
@@ -188,7 +247,7 @@ def test_apply_from_a_library_style_to_override_names_the_real_caller():
 
 def test_apply_with_only_torch_frames_falls_back_to_outside_any_call(mocker):
     mocker.patch("aitune.torch.call_tree.callers.sys._getframe", return_value=None)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     module = nn.Linear(1, 1)
     recorder.register_module("root", module)
     with recorder:
@@ -201,7 +260,7 @@ def test_apply_probe_records_once_for_one_recursive_to(mocker):
     model = SequentialSubclassToy()  # 3 levels: root -> layers -> block -> proj
     x = torch.randn(2, 8)
 
-    tree = record(model, lambda: model.encode(x), iterations=1)
+    tree = record(model, lambda: model.encode(x), num_samples=1)
 
     assert spy.call_count == 1
     assert WeightAccess("encode", "move") in tree.weight_accesses["0.layers.0.proj.weight"]
@@ -215,7 +274,7 @@ def test_apply_probe_respects_recurse_false():
             self.w = nn.Parameter(torch.randn(4))
             self.child = nn.Linear(4, 4)
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     model = RootWithWeight()
     recorder.register_module("root", model)
     with recorder:
@@ -229,7 +288,7 @@ def test_apply_probe_respects_recurse_false():
 
 def test_a_move_records_only_the_move_for_its_caller():
     """The probe's own storage lookups are not recorded as reads."""
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     module = nn.Linear(4, 4)
     recorder.register_module("root", module)
 
@@ -247,66 +306,36 @@ def test_a_move_records_only_the_move_for_its_caller():
 
 def test_apply_probe_is_restored_after_an_exception():
     original = nn.Module._apply
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with pytest.raises(RuntimeError):
         with recorder:
             assert nn.Module._apply is not original
             raise RuntimeError("boom")
     assert nn.Module._apply is original
-    assert not recorder.active
+    assert CallRecorder.active() is None
 
 
 def test_nothing_is_recorded_outside_recording():
     model = TwoRoleToy()
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model):
         model(torch.randn(2, 8))
     assert recorder.result().nodes == {}
 
 
-def test_cpu_timing_is_recorded(mocker):
-    mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.is_available", return_value=False)
-    model = TwoRoleToy()
-    x = torch.randn(2, 8)
-
-    tree = record(model, lambda: model(x))
-
-    assert tree.nodes[("root.forward",)].time_ms > 0
-    assert tree.total_ms == tree.nodes[("root.forward",)].time_ms
-
-
 def _record_one_call(recorder, model, x):
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
-        model(x)
-        recorder.end_iteration()
+        with recorder.record_sample():
+            model(x)
 
 
-def test_result_returns_the_same_times_twice_and_keeps_accumulating(mocker):
-    mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.is_available", return_value=False)
+def test_structure_pass_records_no_times():
     model = TwoRoleToy()
-    recorder = CallRecorder()
-    x = torch.randn(2, 8)
 
-    _record_one_call(recorder, model, x)
-    first = recorder.result().nodes[("root.forward",)].time_ms
-    assert first > 0
-    assert recorder.result().nodes[("root.forward",)].time_ms == first
+    tree = record(model, lambda: model(torch.randn(2, 8)))
 
-    _record_one_call(recorder, model, x)
-    assert recorder.result().nodes[("root.forward",)].time_ms > first
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA events require a GPU")
-def test_result_returns_the_same_times_twice_with_cuda_events():
-    model = TwoRoleToy().cuda()
-    recorder = CallRecorder()
-
-    _record_one_call(recorder, model, torch.randn(2, 8, device="cuda"))
-    first = recorder.result().nodes[("root.forward",)].time_ms
-
-    assert first > 0
-    assert recorder.result().nodes[("root.forward",)].time_ms == first
+    assert all(node.total_time_ms is None for node in tree.nodes.values())
+    assert tree.total_time_ms == 0
 
 
 def test_user_defined_methods_skip_library_and_base_methods():
@@ -315,118 +344,15 @@ def test_user_defined_methods_skip_library_and_base_methods():
     assert user_defined_methods(PlainPipeline()) == ["decode", "_apply_checkpoint"]
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA events require a GPU")
-def test_flush_resolves_pending_events_into_totals():
-    model = nn.Linear(2, 2).cuda()
-    recorder = CallRecorder()
-
-    with recorder:
-        recorder.begin_iteration()
-        frame = recorder.begin_call("root.forward", model, "forward", ())
-        model(torch.randn(2, 2, device="cuda"))
-        recorder.end_call(frame)
-        recorder.end_iteration()
-
-    assert recorder._events
-    recorder.flush()
-    assert not recorder._events
-
-    assert recorder.result().nodes[("root.forward",)].time_ms > 0
-    assert recorder.result().nodes[("root.forward",)].time_ms == recorder.result().nodes[("root.forward",)].time_ms
-
-
-def test_end_event_is_recorded_on_the_start_device_when_the_call_changes_device(mocker):
-    events = []
-
-    class FakeEvent:
-        def __init__(self, *args, **kwargs):
-            events.append(self)
-            self.stream = None
-
-        def record(self, stream=None):
-            self.stream = stream
-
-        def synchronize(self):
-            pass
-
-        def elapsed_time(self, end):
-            return 2.0
-
-    mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.Event", FakeEvent)
-    current_device = mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.current_device", return_value=0)
-    mocker.patch(
-        "aitune.torch.call_tree.recorder.torch.cuda.current_stream",
-        side_effect=lambda device=None: f"stream{device}",
-    )
-    recorder = CallRecorder()
-    recorder._use_cuda = True
-    model = nn.Linear(2, 2)
-
-    with recorder:
-        recorder.begin_iteration()
-        frame = recorder.begin_call("root.forward", model, "forward", ())
-        current_device.return_value = 1  # the call changed the current device
-        recorder.end_call(frame)
-        recorder.end_iteration()
-
-    tree = recorder.result()
-    start, end = events
-    assert start.stream is None
-    assert end.stream == "stream0"
-    assert tree.nodes[("root.forward",)].time_ms == 2.0
-
-
-def test_flush_synchronizes_every_end_event(mocker):
-    events = []
-
-    class FakeEvent:
-        def __init__(self, *args, **kwargs):
-            events.append(self)
-            self.synchronized = False
-
-        def record(self, stream=None):
-            pass
-
-        def synchronize(self):
-            self.synchronized = True
-
-        def elapsed_time(self, end):
-            if not end.synchronized:
-                raise RuntimeError("Both events must be completed")
-            return 1.0
-
-    mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.Event", FakeEvent)
-    mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.current_device", return_value=0)
-    mocker.patch(
-        "aitune.torch.call_tree.recorder.torch.cuda.current_stream",
-        side_effect=lambda device=None: f"stream{device}",
-    )
-    cuda_synchronize = mocker.patch("aitune.torch.call_tree.recorder.torch.cuda.synchronize")
-    recorder = CallRecorder()
-    recorder._use_cuda = True
-    model = nn.Linear(2, 2)
-
-    with recorder:
-        recorder.begin_iteration()
-        for _ in range(2):
-            recorder.end_call(recorder.begin_call("root.forward", model, "forward", ()))
-        recorder.end_iteration()
-        recorder.flush()
-
-    assert recorder._nodes[("root.forward",)].time_ms == 2.0
-    cuda_synchronize.assert_not_called()
-
-
 def test_accesses_are_recorded_only_inside_recording():
     """Ops on weights outside the recorder's ``with`` block leave no weight_accesses."""
     model = torch.nn.Linear(4, 4)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model):
         model.bias.sum()  # outside recording: not recorded
         with recorder:
-            recorder.begin_iteration()
-            model.weight.sum()
-            recorder.end_iteration()
+            with recorder.record_sample():
+                model.weight.sum()
         model.bias.sum()  # outside again
     tree = recorder.result()
     assert "weight" in tree.weight_accesses
@@ -436,31 +362,30 @@ def test_accesses_are_recorded_only_inside_recording():
 def test_access_mode_is_removed_after_recording_raises():
     """An exception inside the recorder's ``with`` block still restores torch_function state."""
     model = torch.nn.Linear(4, 4)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     recorder.register_module("root", model)
 
     def record_then_raise():
         with recorder:
-            recorder.begin_iteration()
-            model.weight.sum()
-            raise RuntimeError("boom")
+            with recorder.record_sample():
+                model.weight.sum()
+                raise RuntimeError("boom")
 
     with pytest.raises(RuntimeError):
         record_then_raise()
     # if the mode leaked, this op would be recorded
-    before = recorder.result().weight_accesses
+    before = recorder._weight_access_log.snapshot()
     model.weight.sum()
-    assert recorder.result().weight_accesses == before
+    assert recorder._weight_access_log.snapshot() == before
 
 
 def test_ops_inside_apply_are_not_recorded():
     """.to() internals produce no reads; the probe records the move itself as a ``"move"`` access."""
     model = torch.nn.Linear(4, 4)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
-        model.to("cpu")
-        recorder.end_iteration()
+        with recorder.record_sample():
+            model.to("cpu")
     expected = WeightAccess("<unrecorded: test_ops_inside_apply_are_not_recorded>", "move")
     assert recorder.result().weight_accesses == {"weight": {expected}, "bias": {expected}}
 
@@ -468,19 +393,19 @@ def test_ops_inside_apply_are_not_recorded():
 def test_a_failing_access_mode_leaves_no_apply_probe_behind(mocker):
     original_apply = nn.Module._apply
     mocker.patch("aitune.torch.call_tree.weights.accesses.WeightAccessMode.__init__", side_effect=RuntimeError("boom"))
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
 
     with pytest.raises(RuntimeError, match="boom"):
         with recorder:
             pass
 
     assert nn.Module._apply is original_apply
-    assert CallRecorder._recording_now is None
+    assert CallRecorder.active() is None
 
 
-def test_weight_accesses_accumulate_over_recording_passes():
+def test_weight_accesses_accumulate_over_structure_passes():
     linear = nn.Linear(8, 8)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     recorder.register_module("root", linear)
 
     with recorder:
@@ -493,7 +418,7 @@ def test_weight_accesses_accumulate_over_recording_passes():
 
 def test_reads_after_a_cast_during_recording_are_tracked_under_the_new_storage():
     linear = nn.Linear(8, 8).double()
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     recorder.register_module("root", linear)
 
     with recorder:
@@ -506,7 +431,7 @@ def test_reads_after_a_cast_during_recording_are_tracked_under_the_new_storage()
 def test_access_of_a_weight_cast_through_an_unregistered_child_is_tracked():
     linear = nn.Linear(4, 4)
     seq = nn.Sequential(linear)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     recorder.register_module("root", seq)
 
     with recorder:
@@ -569,7 +494,7 @@ def test_a_tied_weight_is_read_through_both_names_after_a_move():
             self.head.weight = self.embed.weight
 
     model = Model()
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     recorder.register_module("root", model)
     old_storage = model.embed.weight.untyped_storage()  # kept alive so its address is not reused
 
@@ -587,7 +512,7 @@ def test_a_tied_weight_is_read_through_both_names_after_a_move():
 def test_an_untracked_parameter_miss_retracks_only_once(mocker):
     """A free Parameter not under any registered module triggers one miss-triggered re-scan."""
     linear = nn.Linear(4, 4)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     recorder.register_module("root", linear)
     free = nn.Parameter(torch.randn(4))
     calls = 0
@@ -611,7 +536,7 @@ def test_an_untracked_parameter_miss_retracks_only_once(mocker):
 def test_two_untracked_parameters_used_alternately_retrack_once_each(mocker):
     """Miss-triggered re-scans keep the untracked cache: each free Parameter re-scans only once."""
     linear = nn.Linear(4, 4)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     recorder.register_module("root", linear)
     a = nn.Parameter(torch.randn(4))
     b = nn.Parameter(torch.randn(4))
@@ -637,7 +562,7 @@ def test_two_untracked_parameters_used_alternately_retrack_once_each(mocker):
 def test_a_tied_weight_is_recorded_under_each_of_its_names():
     linear = nn.Linear(8, 8)
     linear.register_buffer("weight_alias", linear.weight)
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     recorder.register_module("root", linear)
 
     with recorder:
@@ -761,11 +686,11 @@ def test_bytes_in_counts_tensors_in_nested_args_and_kwargs():
     a, b, c = torch.randn(4, 8), torch.randn(2, 8), torch.randn(8)
     expected = a.numel() * a.element_size() + b.numel() * b.element_size() + c.numel() * c.element_size()
 
-    tree = record(model, lambda: model([a, b], extra={"t": c}), iterations=1)
+    tree = record(model, lambda: model([a, b], extra={"t": c}), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == expected
-    assert node.bytes_in / node.calls == expected
+    assert node.total_bytes_in == expected
+    assert node.total_bytes_in / node.total_calls == expected
 
 
 def test_bytes_in_counts_a_tensor_passed_twice_once():
@@ -776,9 +701,9 @@ def test_bytes_in_counts_a_tensor_passed_twice_once():
     model = Model()
     t = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(t, extra={"again": t}), iterations=1)
+    tree = record(model, lambda: model(t, extra={"again": t}), num_samples=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == t.numel() * t.element_size()
 
 
 def test_bytes_ignores_non_tensor_objects():
@@ -790,11 +715,11 @@ def test_bytes_ignores_non_tensor_objects():
     t = torch.randn(4, 8)
     obj = object()
 
-    tree = record(model, lambda: model(t, cache=obj), iterations=1)
+    tree = record(model, lambda: model(t, cache=obj), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
-    assert node.bytes_out == t.numel() * t.element_size()  # the (x, cache) tuple counts only x
+    assert node.total_bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_out == t.numel() * t.element_size()  # the (x, cache) tuple counts only x
 
 
 def test_bytes_out_counts_the_tensors_of_a_model_output():
@@ -811,13 +736,13 @@ def test_bytes_out_counts_the_tensors_of_a_model_output():
     model = Model()
     t = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(t), iterations=1)
+    tree = record(model, lambda: model(t), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_out == t.numel() * t.element_size()
+    assert node.total_bytes_out == t.numel() * t.element_size()
 
 
-def test_bytes_sum_over_calls_and_iterations():
+def test_bytes_sum_over_calls_and_samples():
     class Model(nn.Module):
         def __init__(self):
             super().__init__()
@@ -829,15 +754,15 @@ def test_bytes_sum_over_calls_and_iterations():
     model = Model()
     x = torch.randn(4, 8)
     per_call = x.numel() * x.element_size()
-    iterations = 3
+    num_samples = 3
 
-    tree = record(model, lambda: model(x), iterations=iterations)
+    tree = record(model, lambda: model(x), num_samples=num_samples)
 
     [node] = tree.nodes_of(model.head)
-    calls = 2 * iterations  # forward calls head twice per iteration
-    assert node.calls == calls
-    assert node.bytes_in == calls * per_call
-    assert node.bytes_out == calls * per_call  # Linear returns a same-shaped tensor here
+    total_calls = 2 * num_samples  # forward calls head twice per sample
+    assert node.total_calls == total_calls
+    assert node.total_bytes_in == total_calls * per_call
+    assert node.total_bytes_out == total_calls * per_call  # Linear returns a same-shaped tensor here
 
 
 def test_bytes_in_counts_a_call_that_raises_but_not_bytes_out():
@@ -848,17 +773,16 @@ def test_bytes_in_counts_a_call_that_raises_but_not_bytes_out():
     model = Model()
     x = torch.randn(4, 8)
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
-        with pytest.raises(RuntimeError, match="boom"):
-            model(x)
-        recorder.end_iteration()
+        with recorder.record_sample():
+            with pytest.raises(RuntimeError, match="boom"):
+                model(x)
     tree = recorder.result()
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == x.numel() * x.element_size()
-    assert node.bytes_out == 0
+    assert node.total_bytes_in == x.numel() * x.element_size()
+    assert node.total_bytes_out == 0
 
 
 def test_the_bytes_walk_records_no_weight_access():
@@ -872,7 +796,7 @@ def test_the_bytes_walk_records_no_weight_access():
 
     model = Model()
 
-    tree = record(model, lambda: model(model.lin.weight), iterations=1)
+    tree = record(model, lambda: model(model.lin.weight), num_samples=1)
 
     assert not tree.weight_accesses.get("lin.weight")
 
@@ -892,13 +816,13 @@ def test_bytes_count_tensors_inside_a_userdict():
     def call():
         return model(_Batch({"x": a, "y": b, "nested": [c]}))
 
-    tree = record(model, call, iterations=1)
+    tree = record(model, call, num_samples=1)
 
     node = tree.nodes[("root.forward",)]
     in_bytes = a.numel() * a.element_size() + b.numel() * b.element_size() + c.numel() * c.element_size()
     out_bytes = 2 * a.numel() * a.element_size()  # x plus a fresh same-shaped tensor
-    assert node.bytes_in == in_bytes
-    assert node.bytes_out == out_bytes
+    assert node.total_bytes_in == in_bytes
+    assert node.total_bytes_out == out_bytes
 
 
 def test_bytes_count_a_tensor_in_a_userdict_and_an_arg_once():
@@ -909,9 +833,9 @@ def test_bytes_count_a_tensor_in_a_userdict_and_an_arg_once():
     model = Model()
     t = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(t, batch=_Batch({"again": t})), iterations=1)
+    tree = record(model, lambda: model(t, batch=_Batch({"again": t})), num_samples=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == t.numel() * t.element_size()
 
 
 def test_bytes_count_tensors_inside_a_batch_feature():
@@ -924,12 +848,12 @@ def test_bytes_count_tensors_inside_a_batch_feature():
     model = Model()
     a, b, c = torch.randn(4, 8), torch.randn(2, 8), torch.randn(8)
 
-    tree = record(model, lambda: model(BatchFeature({"x": a, "y": b, "nested": [c]})), iterations=1)
+    tree = record(model, lambda: model(BatchFeature({"x": a, "y": b, "nested": [c]})), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
     in_bytes = a.numel() * a.element_size() + b.numel() * b.element_size() + c.numel() * c.element_size()
-    assert node.bytes_in == in_bytes
-    assert node.bytes_out == a.numel() * a.element_size()
+    assert node.total_bytes_in == in_bytes
+    assert node.total_bytes_out == a.numel() * a.element_size()
 
 
 def test_bytes_count_a_userdict_that_contains_itself():
@@ -942,11 +866,11 @@ def test_bytes_count_a_userdict_that_contains_itself():
     batch = _Batch({"x": t})
     batch["self"] = batch
 
-    tree = record(model, lambda: model(batch), iterations=1)
+    tree = record(model, lambda: model(batch), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
-    assert node.bytes_out == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_out == t.numel() * t.element_size()
 
 
 @pytest.mark.parametrize("options", [{}, {"frozen": True}, {"slots": True}], ids=["plain", "frozen", "slots"])
@@ -964,11 +888,11 @@ def test_bytes_count_tensors_inside_a_dataclass(options):
     model = Model()
     a, b = torch.randn(4, 8), torch.randn(2, 8)
 
-    tree = record(model, lambda: model(Packed(x=a, nested=[b])), iterations=1)
+    tree = record(model, lambda: model(Packed(x=a, nested=[b])), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == a.numel() * a.element_size() + b.numel() * b.element_size()
-    assert node.bytes_out == a.numel() * a.element_size() + 8 * 4
+    assert node.total_bytes_in == a.numel() * a.element_size() + b.numel() * b.element_size()
+    assert node.total_bytes_out == a.numel() * a.element_size() + 8 * 4
 
 
 def test_bytes_count_a_dataclass_that_contains_itself():
@@ -986,9 +910,9 @@ def test_bytes_count_a_dataclass_that_contains_itself():
     node = Node(t)
     node.parent = node
 
-    tree = record(model, lambda: model(node), iterations=1)
+    tree = record(model, lambda: model(node), num_samples=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == t.numel() * t.element_size()
 
 
 def test_bytes_skip_a_dataclass_field_without_a_value():
@@ -1004,9 +928,9 @@ def test_bytes_skip_a_dataclass_field_without_a_value():
     model = Model()
     t = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(Partial(t)), iterations=1)
+    tree = record(model, lambda: model(Partial(t)), num_samples=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == t.numel() * t.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == t.numel() * t.element_size()
 
 
 def test_bytes_walk_a_model_output_as_before():
@@ -1019,9 +943,9 @@ def test_bytes_walk_a_model_output_as_before():
     model = Model()
     x = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(x), iterations=1)
+    tree = record(model, lambda: model(x), num_samples=1)
 
-    assert tree.nodes[("root.forward",)].bytes_out == x.numel() * x.element_size() + 2 * 8 * 4
+    assert tree.nodes[("root.forward",)].total_bytes_out == x.numel() * x.element_size() + 2 * 8 * 4
 
 
 def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
@@ -1047,9 +971,9 @@ def test_bytes_do_not_read_a_mapping_that_is_not_a_userdict():
     model = Model()
     x = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(x, extra=LazyMap()), iterations=1)
+    tree = record(model, lambda: model(x, extra=LazyMap()), num_samples=1)
 
-    assert tree.nodes[("root.forward",)].bytes_in == x.numel() * x.element_size()
+    assert tree.nodes[("root.forward",)].total_bytes_in == x.numel() * x.element_size()
     assert reads == []
 
 
@@ -1066,7 +990,7 @@ def test_signatures_name_inputs_after_the_bound_parameters():
     model = Model()
     t, u = torch.randn(4, 8), torch.randn(2)
 
-    tree = record(model, lambda: model(t, extra=u), iterations=1)
+    tree = record(model, lambda: model(t, extra=u), num_samples=1)
 
     entry = tree.nodes[("root.forward",)].signatures[0]
     assert set(entry.inputs) == {"x", "extra"}
@@ -1082,7 +1006,7 @@ def test_signatures_name_positional_and_keyword_arguments_the_same():
     model = Model()
     t = torch.randn(4, 8)
 
-    tree = record(model, lambda: (model(t), model(x=t)), iterations=1)
+    tree = record(model, lambda: (model(t), model(x=t)), num_samples=1)
 
     signature = tree.nodes[("root.forward",)].signatures[0]
     assert set(signature.inputs) == {"x"}
@@ -1096,7 +1020,7 @@ def test_signatures_of_a_kwargs_only_call():
     model = Model()
     t = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(x=t), iterations=1)
+    tree = record(model, lambda: model(x=t), num_samples=1)
 
     assert set(tree.nodes[("root.forward",)].signatures[0].inputs) == {"x"}
 
@@ -1109,7 +1033,7 @@ def test_signatures_name_varargs_and_kwargs():
     model = Model()
     t, u, v = torch.randn(4, 8), torch.randn(2), torch.randn(1)
 
-    tree = record(model, lambda: model(t, u, w=v), iterations=1)
+    tree = record(model, lambda: model(t, u, w=v), num_samples=1)
 
     assert set(tree.nodes[("root.forward",)].signatures[0].inputs) == {
         "args[0]",
@@ -1122,12 +1046,11 @@ def test_signatures_fall_back_to_arg_positions_when_the_signature_cannot_be_boun
     model = nn.Linear(2, 2)
     t = torch.randn(1, 2)
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with recorder:
-        recorder.begin_iteration()
-        frame = recorder.begin_call("root.forward", model, "missing", (t,))
-        recorder.end_call(frame, t)
-        recorder.end_iteration()
+        with recorder.record_sample():
+            frame = recorder.begin_call("root.forward", model, "missing", (t,))
+            recorder.end_call(frame, t)
 
     entry = recorder.result().nodes[("root.forward",)].signatures[0]
     assert set(entry.inputs) == {"args[0]"}
@@ -1141,7 +1064,7 @@ def test_signatures_of_a_plain_object_method():
     pipe = Pipe()
     t = torch.randn(4, 8)
 
-    tree = record(pipe, lambda: pipe.run(t), iterations=1)
+    tree = record(pipe, lambda: pipe.run(t), num_samples=1)
 
     entry = tree.nodes[("root.run",)].signatures[0]
     assert set(entry.inputs) == {"x"}
@@ -1155,7 +1078,7 @@ def test_signatures_split_calls_with_a_changing_dimension():
     model = Model()
     a, b = torch.randn(1, 4, 8), torch.randn(1, 5, 8)
 
-    tree = record(model, lambda: (model(a), model(b)), iterations=1)
+    tree = record(model, lambda: (model(a), model(b)), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
     assert [sig.call_indices for sig in node.signatures] == [[0], [1]]
@@ -1171,7 +1094,7 @@ def test_signatures_reuse_the_argument_when_shapes_do_not_change():
 
     # identical calls intern into one signature (fresh tensors: reusing x would give the later calls a source)
     tree = record(
-        model, lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8)), model(torch.randn(4, 8))), iterations=1
+        model, lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8)), model(torch.randn(4, 8))), num_samples=1
     )
     node = tree.nodes[("root.forward",)]
     assert [sig.call_indices for sig in node.signatures] == [[0, 1, 2]]
@@ -1189,7 +1112,7 @@ def test_a_rank_change_at_a_path_is_a_separate_signature():
     tree = record(
         model,
         lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8, 2)), model(torch.randn(4, 8, 3))),
-        iterations=1,
+        num_samples=1,
     )
 
     node = tree.nodes[("root.forward",)]
@@ -1209,7 +1132,7 @@ def test_a_rank_change_in_the_output_is_a_separate_signature():
 
     model = Model()
 
-    tree = record(model, lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8))), iterations=1)
+    tree = record(model, lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8))), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
     assert [sig.call_indices for sig in node.signatures] == [[0], [1]]
@@ -1226,7 +1149,7 @@ def test_a_dtype_change_at_a_path_is_a_separate_signature():
     tree = record(
         model,
         lambda: (model(torch.randn(4, 8)), model(torch.randn(4, 8, dtype=torch.bfloat16))),
-        iterations=1,
+        num_samples=1,
     )
 
     node = tree.nodes[("root.forward",)]
@@ -1248,7 +1171,7 @@ def test_signatures_split_prefill_and_decode_calls():
             model(torch.randn(1, 4, 8), cache_position=torch.arange(4)),  # prefill-like
             model(torch.randn(1, 1, 8), cache_position=torch.tensor([4])),  # decode-like
         ),
-        iterations=1,
+        num_samples=1,
     )
 
     node = tree.nodes[("root.forward",)]
@@ -1268,7 +1191,7 @@ def test_signatures_walk_nested_containers_a_model_output_and_a_batch_feature():
     t, u, v, w = torch.randn(4, 8), torch.randn(2), torch.randn(1), torch.randn(3)
 
     call = lambda: model([t, (u, {"k": v})], features=BatchFeature({"f": w}))  # noqa: E731
-    tree = record(model, call, iterations=1)
+    tree = record(model, call, num_samples=1)
 
     entry = tree.nodes[("root.forward",)].signatures[0]
     assert set(entry.inputs) == {"x[0]", "x[1][0]", "x[1][1]['k']", "features['f']"}
@@ -1294,7 +1217,7 @@ def test_signatures_list_tensors_in_container_order():
     tensors = [torch.randn(1), torch.randn(2), torch.randn(3), torch.randn(4)]
     nested = {"a": [tensors[0], (tensors[1], tensors[2])], "b": tensors[3]}
 
-    tree = record(model, lambda: model(nested), iterations=1)
+    tree = record(model, lambda: model(nested), num_samples=1)
 
     entry = tree.nodes[("root.forward",)].signatures[0]
     outputs = entry.outputs
@@ -1333,12 +1256,12 @@ def test_bytes_skip_and_signatures_list_a_static_cache_by_type_name():
     model = Model()
     x = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(x, cache), iterations=1)
+    tree = record(model, lambda: model(x, cache), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
     # a StaticCache is a leaf to the walk: passed by reference, not as data crossing the call
     assert node.signatures[0].inputs["past_key_values"].type == "transformers.cache_utils.StaticCache"
-    assert node.bytes_in == x.numel() * x.element_size()
+    assert node.total_bytes_in == x.numel() * x.element_size()
 
 
 def test_bytes_skip_and_signatures_list_a_dynamic_cache_by_type_name():
@@ -1353,11 +1276,11 @@ def test_bytes_skip_and_signatures_list_a_dynamic_cache_by_type_name():
     model = Model()
     x = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(x, cache), iterations=1)
+    tree = record(model, lambda: model(x, cache), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
     assert node.signatures[0].inputs["past_key_values"].type == "transformers.cache_utils.DynamicCache"
-    assert node.bytes_in == x.numel() * x.element_size()
+    assert node.total_bytes_in == x.numel() * x.element_size()
 
 
 def test_signatures_list_a_dict_subclass_by_type_name_and_walk_a_dataclass_into_its_fields():
@@ -1378,11 +1301,11 @@ def test_signatures_list_a_dict_subclass_by_type_name_and_walk_a_dataclass_into_
     model = Model()
     a, b, c = torch.randn(4, 8), torch.randn(2), torch.randn(1)
 
-    tree = record(model, lambda: model(Box(a=a), Pack(x=b, y=c)), iterations=1)
+    tree = record(model, lambda: model(Box(a=a), Pack(x=b, y=c)), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
     # a dict subclass is an opaque leaf to the walk; a dataclass is walked into its fields
-    assert node.bytes_in == b.numel() * b.element_size() + c.numel() * c.element_size()
+    assert node.total_bytes_in == b.numel() * b.element_size() + c.numel() * c.element_size()
     inputs = node.signatures[0].inputs
     assert inputs["box"].type == f"{Box.__module__}.{Box.__qualname__}"
     assert [(name, _t(inputs[name]).shape) for name in ("pack.x", "pack.y")] == [("pack.x", (2,)), ("pack.y", (1,))]
@@ -1390,7 +1313,7 @@ def test_signatures_list_a_dict_subclass_by_type_name_and_walk_a_dataclass_into_
     outputs = node.signatures[0].outputs
     assert outputs is not None
     assert set(outputs) == {"output"}
-    assert node.bytes_out == a.numel() * a.element_size()
+    assert node.total_bytes_out == a.numel() * a.element_size()
 
 
 def test_bytes_and_shapes_count_a_tensor_inside_a_deque():
@@ -1403,11 +1326,11 @@ def test_bytes_and_shapes_count_a_tensor_inside_a_deque():
     model = Model()
     x, t = torch.randn(4, 8), torch.randn(2)
 
-    tree = record(model, lambda: model(x, deque([t])), iterations=1)
+    tree = record(model, lambda: model(x, deque([t])), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
     # pytree flattens a deque, so it is a container to bytes and shapes alike
-    assert node.bytes_in == (x.numel() + t.numel()) * x.element_size()
+    assert node.total_bytes_in == (x.numel() + t.numel()) * x.element_size()
     assert set(node.signatures[0].inputs) == {"x", "items[0]"}
 
 
@@ -1418,16 +1341,14 @@ def test_result_snapshots_the_signature():
 
     model = Model()
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
-        model(torch.randn(1, 2))
-        recorder.end_iteration()
+        with recorder.record_sample():
+            model(torch.randn(1, 2))
         tree = recorder.result()
-        recorder.begin_iteration()
-        model(torch.randn(1, 3))  # adds a second signature to the live recorder only
-        model(torch.randn(1, 2))  # adds a call to the first signature in the live recorder only
-        recorder.end_iteration()
+        with recorder.record_sample():
+            model(torch.randn(1, 3))  # adds a second signature to the live recorder only
+            model(torch.randn(1, 2))  # adds a call to the first signature in the live recorder only
 
     snapshot = tree.nodes[("root.forward",)]
     assert [sig.call_indices for sig in snapshot.signatures] == [[0]]
@@ -1443,11 +1364,10 @@ def test_result_snapshots_the_signature_mappings_too():
 
     model = Model()
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
-        model(torch.randn(1, 2))
-        recorder.end_iteration()
+        with recorder.record_sample():
+            model(torch.randn(1, 2))
 
     first = recorder.result().nodes[("root.forward",)].signatures[0]
     assert first.outputs is not None
@@ -1455,9 +1375,8 @@ def test_result_snapshots_the_signature_mappings_too():
     first.outputs.pop("output")
 
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
-        model(torch.randn(1, 2))  # same signature
-        recorder.end_iteration()
+        with recorder.record_sample():
+            model(torch.randn(1, 2))  # same signature
 
     second = recorder.result().nodes[("root.forward",)].signatures[0]
     assert second.outputs is not None
@@ -1481,7 +1400,7 @@ def test_signatures_record_objects_by_type_name_only():
 
     model = Model()
 
-    tree = record(model, lambda: model(torch.randn(2), Guarded()), iterations=1)
+    tree = record(model, lambda: model(torch.randn(2), Guarded()), num_samples=1)
 
     leaf = tree.nodes[("root.forward",)].signatures[0].inputs["obj"]
     assert leaf.type == f"{Guarded.__module__}.{Guarded.__qualname__}"
@@ -1499,7 +1418,7 @@ def test_a_tensor_and_an_object_at_the_same_path_give_separate_signatures():
 
     model = Model()
 
-    tree = record(model, lambda: (model(torch.randn(2)), model(Marker())), iterations=1)
+    tree = record(model, lambda: (model(torch.randn(2)), model(Marker())), num_samples=1)
 
     signatures = tree.nodes[("root.forward",)].signatures
     assert [sig.call_indices for sig in signatures] == [[0], [1]]
@@ -1514,7 +1433,7 @@ def test_argument_names_are_the_signature_keys():
 
     model = Model()
 
-    tree = record(model, lambda: model({"input_ids": torch.zeros(1, 3, dtype=torch.long)}), iterations=1)
+    tree = record(model, lambda: model({"input_ids": torch.zeros(1, 3, dtype=torch.long)}), num_samples=1)
 
     signature = tree.nodes[("root.forward",)].signatures[0]
     assert list(signature.inputs) == ["inputs['input_ids']"]
@@ -1542,7 +1461,7 @@ def test_signatures_do_not_record_primitives():
             model(x, True, 3, "x", torch.bfloat16, Mode.FAST, None),
             model(x, False, 9, "other", torch.float32, Mode.FAST, 0),
         ),
-        iterations=1,
+        num_samples=1,
     )
 
     signature = tree.nodes[("root.forward",)].signatures[0]
@@ -1556,10 +1475,10 @@ def test_signature_counts_the_calls_each_path_was_passed():
 
     model = Model()
 
-    tree = record(model, lambda: (model(object()), model(None)), iterations=1)
+    tree = record(model, lambda: (model(object()), model(None)), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.calls == 2
+    assert node.total_calls == 2
     assert node.calls_passing("x") == [0]
 
 
@@ -1570,7 +1489,7 @@ def test_signatures_record_a_non_tensor_result():
 
     model = Model()
 
-    tree = record(model, lambda: model(torch.randn(2, 3)), iterations=1)
+    tree = record(model, lambda: model(torch.randn(2, 3)), num_samples=1)
 
     outputs = tree.nodes[("root.forward",)].signatures[0].outputs
     assert outputs is not None
@@ -1587,10 +1506,10 @@ def test_bytes_do_not_count_objects_or_primitives():
     model = Model()
     x = torch.randn(4, 8)
 
-    tree = record(model, lambda: model(x, True, "note", object()), iterations=1)
+    tree = record(model, lambda: model(x, True, "note", object()), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == x.numel() * x.element_size()
+    assert node.total_bytes_in == x.numel() * x.element_size()
     assert set(node.signatures[0].inputs) == {"x", "obj"}
 
 
@@ -1604,10 +1523,10 @@ def test_signatures_walk_terminates_on_a_self_referential_list():
     items: list = [t]
     items.append(items)
 
-    tree = record(model, lambda: model(items), iterations=1)
+    tree = record(model, lambda: model(items), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
     assert list(node.signatures[0].inputs) == ["x[0]"]
 
 
@@ -1621,10 +1540,10 @@ def test_signatures_walk_terminates_on_a_self_referential_dict():
     box: dict = {"t": t}
     box["self"] = box
 
-    tree = record(model, lambda: model(box), iterations=1)
+    tree = record(model, lambda: model(box), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
     assert list(node.signatures[0].inputs) == ["x['t']"]
 
 
@@ -1639,10 +1558,10 @@ def test_signatures_walk_terminates_on_an_indirect_cycle():
     b = [a]
     a["b"] = b
 
-    tree = record(model, lambda: model(a), iterations=1)
+    tree = record(model, lambda: model(a), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
     assert list(node.signatures[0].inputs) == ["x['t']"]
 
 
@@ -1655,10 +1574,10 @@ def test_a_container_shared_between_arguments_is_walked_under_its_first_path():
     t = torch.randn(4, 8)
     shared = (t, t)
 
-    tree = record(model, lambda: model(shared, shared), iterations=1)
+    tree = record(model, lambda: model(shared, shared), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
-    assert node.bytes_in == t.numel() * t.element_size()
+    assert node.total_bytes_in == t.numel() * t.element_size()
     assert list(node.signatures[0].inputs) == ["x[0]", "x[1]"]
 
 
@@ -1670,7 +1589,7 @@ def test_signatures_record_a_parameters_class():
     model = Model()
     weight = nn.Parameter(torch.randn(4, 8))
 
-    tree = record(model, lambda: model(weight), iterations=1)
+    tree = record(model, lambda: model(weight), num_samples=1)
 
     arg = tree.nodes[("root.forward",)].signatures[0].inputs["x"]
     assert arg.type == "torch.nn.parameter.Parameter"
@@ -1684,7 +1603,7 @@ def test_a_tensor_and_a_parameter_at_one_path_are_two_signatures():
 
     model = Model()
 
-    tree = record(model, lambda: (model(torch.randn(4, 8)), model(nn.Parameter(torch.randn(4, 8)))), iterations=1)
+    tree = record(model, lambda: (model(torch.randn(4, 8)), model(nn.Parameter(torch.randn(4, 8)))), num_samples=1)
 
     node = tree.nodes[("root.forward",)]
     assert [sig.call_indices for sig in node.signatures] == [[0], [1]]
@@ -1708,7 +1627,7 @@ def test_calls_passing_and_shapes_cover_inputs_and_outputs():
     tree = record(
         model,
         lambda: (model(torch.randn(4, 8)), model(torch.randn(2, 8)), model(torch.randn(4, 8))),
-        iterations=1,
+        num_samples=1,
     )
 
     node = tree.nodes[("root.forward",)]
@@ -1728,44 +1647,84 @@ def test_calls_passing_skips_signatures_whose_calls_raised():
 
     model = Model()
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
-        model(torch.randn(4, 8))
-        with pytest.raises(ValueError):
-            model(torch.randn(1, 4, 8))
-        recorder.end_iteration()
+        with recorder.record_sample():
+            model(torch.randn(4, 8))
+            with pytest.raises(ValueError):
+                model(torch.randn(1, 4, 8))
 
     node = recorder.result().nodes[("root.forward",)]
     assert node.calls_passing("x") == [0, 1]
     assert node.calls_passing("output", "outputs") == [0]  # the raised call passed no result
 
 
-def test_iteration_starts_count_calls_before_each_iteration():
-    class Model(nn.Module):
-        def forward(self, x):
-            return x
+def test_a_raised_sample_invalidates_the_recording():
+    """A sample that raises inside ``record_sample`` propagates; ``result()`` refuses the incomplete tree."""
+    model = nn.Linear(4, 4)
+    x = torch.randn(4, 4)
 
-    model = Model()
-    x = torch.randn(4, 8)
-
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
+        with pytest.raises(RuntimeError, match="boom"):
+            with recorder.record_sample():
+                model(x)
+                _boom()
+
+    with pytest.raises(RuntimeError, match="incomplete"):
+        recorder.result()
+
+
+def test_a_sample_after_a_raised_one_does_not_save_the_recording():
+    """Catching the error inside the pass and recording more samples leaves the recording invalid."""
+    model = nn.Linear(4, 4)
+    x = torch.randn(4, 4)
+
+    recorder = StructureRecorder()
+    with instrumented(recorder, model), recorder:
+        with pytest.raises(RuntimeError, match="boom"):
+            with recorder.record_sample():
+                model(x)
+                _boom()
+        with recorder.record_sample():
+            model(x)
+
+    with pytest.raises(RuntimeError, match="incomplete"):
+        recorder.result()
+
+
+def test_a_later_session_does_not_clear_a_raised_sample():
+    """A raised sample invalidates the recorder for good: later sessions cannot save it."""
+    model = nn.Linear(4, 4)
+    x = torch.randn(4, 4)
+
+    recorder = StructureRecorder()
+    with instrumented(recorder, model), recorder:
+        with pytest.raises(RuntimeError, match="boom"):
+            with recorder.record_sample():
+                model(x)
+                _boom()
+    with recorder, recorder.record_sample():
+        pass
+
+    with pytest.raises(RuntimeError, match="incomplete"):
+        recorder.result()
+
+
+def test_calls_outside_a_sample_are_not_recorded():
+    """A call inside ``with recorder`` but outside ``record_sample()`` records nothing."""
+    model = nn.Linear(4, 4)
+    x = torch.randn(4, 4)
+
+    recorder = StructureRecorder()
+    with instrumented(recorder, model), recorder:
         model(x)
-        model(x)
-        recorder.end_iteration()
-        recorder.begin_iteration()  # no call in this iteration
-        recorder.end_iteration()
-        recorder.begin_iteration()
-        model(x)
-        recorder.end_iteration()
 
     tree = recorder.result()
-    assert tree.iteration_starts()[("root.forward",)] == [0, 2, 2]
+    assert tree.nodes == {}
 
 
-def test_call_indices_continue_across_iterations():
+def test_calls_per_sample_counts_each_samples_calls():
     class Model(nn.Module):
         def forward(self, x):
             return x
@@ -1773,19 +1732,92 @@ def test_call_indices_continue_across_iterations():
     model = Model()
     x = torch.randn(4, 8)
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
-        recorder.begin_iteration()
-        model(x)
-        recorder.end_iteration()
-        recorder.begin_iteration()
-        model(torch.randn(2, 8))
-        model(x)
-        recorder.end_iteration()
+        with recorder.record_sample():
+            model(x)
+            model(x)
+        with recorder.record_sample():
+            pass  # no call in this sample
+        with recorder.record_sample():
+            model(x)
+
+    tree = recorder.result()
+    node = tree.nodes[("root.forward",)]
+    assert node.calls_per_sample == [2, 0, 1]
+    assert sum(node.calls_per_sample) == node.total_calls
+
+
+def test_calls_per_sample_counts_calls_only_in_the_samples_that_made_them():
+    """A node called in only one sample (e.g. a routed expert) counts 0 in the samples that skipped it."""
+    model, expert = nn.Linear(2, 2), nn.Linear(2, 2)
+
+    recorder = StructureRecorder()
+    with recorder:
+        for i in range(3):
+            with recorder.record_sample():
+                outer = recorder.begin_call("root.forward", model, "forward", ())
+                if i == 1:
+                    for _ in range(2):
+                        inner = recorder.begin_call("root.expert_2.forward", expert, "forward", ())
+                        recorder.end_call(inner)
+                recorder.end_call(outer)
+
+    tree = recorder.result()
+    assert tree.nodes[("root.forward",)].calls_per_sample == [1, 1, 1]
+    expert_node = tree.nodes[("root.forward", "root.expert_2.forward")]
+    assert expert_node.calls_per_sample == [0, 2, 0]
+    assert expert_node.total_calls == 2
+
+
+def test_a_sample_with_no_calls_gives_every_node_a_zero():
+    """An empty sample still counts: the nodes it skipped get a 0 for it."""
+    model = nn.Linear(2, 2)
+
+    recorder = StructureRecorder()
+    with recorder:
+        for calls in (2, 0, 1):
+            with recorder.record_sample():
+                outer = recorder.begin_call("root.forward", model, "forward", ())
+                for _ in range(calls):
+                    inner = recorder.begin_call("root.lin.forward", model, "forward", ())
+                    recorder.end_call(inner)
+                recorder.end_call(outer)
+
+    tree = recorder.result()
+    assert tree.nodes[("root.forward",)].calls_per_sample == [1, 1, 1]
+    assert tree.nodes[("root.forward", "root.lin.forward")].calls_per_sample == [2, 0, 1]
+
+
+def test_total_calls_is_read_only():
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward")
+    CallTree(nodes={node.path: node}, samples=[Sample(calls={node.path: 2}), Sample(calls={node.path: 1})])
+
+    assert node.total_calls == 3
+    with pytest.raises(AttributeError):
+        node.total_calls = 5  # pyrefly: ignore[read-only]
+
+
+def test_call_indices_continue_across_samples():
+    class Model(nn.Module):
+        def forward(self, x):
+            return x
+
+    model = Model()
+    x = torch.randn(4, 8)
+
+    recorder = StructureRecorder()
+    with instrumented(recorder, model), recorder:
+        with recorder.record_sample():
+            model(x)
+        with recorder.record_sample():
+            model(torch.randn(2, 8))
+            model(x)
 
     node = recorder.result().nodes[("root.forward",)]
     assert [sig.call_indices for sig in node.signatures] == [[0, 2], [1]]
-    assert node.calls == 3
+    assert node.calls_per_sample == [1, 2]
+    assert node.total_calls == 3
 
 
 def test_signatures_fall_back_to_arg_positions_when_the_call_does_not_bind():
@@ -1796,12 +1828,11 @@ def test_signatures_fall_back_to_arg_positions_when_the_call_does_not_bind():
     model = Model()
     t, u = torch.randn(1, 2), torch.randn(1, 3)
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with recorder:
-        recorder.begin_iteration()
-        frame = recorder.begin_call("root.forward", model, "forward", (t, u))
-        recorder.end_call(frame, t)
-        recorder.end_iteration()
+        with recorder.record_sample():
+            frame = recorder.begin_call("root.forward", model, "forward", (t, u))
+            recorder.end_call(frame, t)
 
     node = recorder.result().nodes[("root.forward",)]
     assert set(node.signatures[0].inputs) == {"args[0]", "args[1]"}
@@ -1826,7 +1857,7 @@ def test_names_use_positional_steps_for_a_non_string_pytree_context():
 
         model = Model()
 
-        tree = record(model, lambda: model(Pair(torch.randn(2), torch.randn(3))), iterations=1)
+        tree = record(model, lambda: model(Pair(torch.randn(2), torch.randn(3))), num_samples=1)
 
         node = tree.nodes[("root.forward",)]
         assert list(node.signatures[0].inputs) == ["x[0]", "x[1]"]
@@ -1853,7 +1884,7 @@ def test_names_use_positional_steps_for_a_repeated_pytree_context_name():
 
         model = Model()
 
-        tree = record(model, lambda: model(Pair(torch.randn(2), torch.randn(3))), iterations=1)
+        tree = record(model, lambda: model(Pair(torch.randn(2), torch.randn(3))), num_samples=1)
 
         node = tree.nodes[("root.forward",)]
         assert list(node.signatures[0].inputs) == ["x[0]", "x[1]"]
@@ -1865,12 +1896,11 @@ def test_signatures_fall_back_without_losing_positional_arguments_to_a_kwarg_nam
     model = nn.Linear(2, 2)
     t, u = torch.randn(1, 2), torch.randn(1, 3)
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with recorder:
-        recorder.begin_iteration()
-        frame = recorder.begin_call("root.forward", model, "missing", (t,), {"args": u})
-        recorder.end_call(frame, t)
-        recorder.end_iteration()
+        with recorder.record_sample():
+            frame = recorder.begin_call("root.forward", model, "missing", (t,), {"args": u})
+            recorder.end_call(frame, t)
 
     node = recorder.result().nodes[("root.forward",)]
     assert set(node.signatures[0].inputs) == {"args[0]", "kwargs['args']"}
@@ -1886,13 +1916,12 @@ def test_signatures_bind_each_instance_with_its_own_method():
     patched.forward = lambda y: y  # type: ignore[assignment]
     t = torch.randn(1, 2)
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with recorder:
-        recorder.begin_iteration()
-        for label, model in (("root.plain.forward", plain), ("root.patched.forward", patched)):
-            frame = recorder.begin_call(label, model, "forward", (t,))
-            recorder.end_call(frame, t)
-        recorder.end_iteration()
+        with recorder.record_sample():
+            for label, model in (("root.plain.forward", plain), ("root.patched.forward", patched)):
+                frame = recorder.begin_call(label, model, "forward", (t,))
+                recorder.end_call(frame, t)
 
     nodes = recorder.result().nodes
     assert set(nodes[("root.plain.forward",)].signatures[0].inputs) == {"x"}
@@ -1911,7 +1940,198 @@ def test_recording_a_call_dispatches_no_torch_function_for_its_leaves(mocker):
         __import__("aitune.torch.call_tree.weights.accesses", fromlist=["WeightAccessMode"]).WeightAccessMode,
         "__torch_function__",
     )
-    tree = record(model, lambda: model(t, items=[u, {"k": v}]), iterations=1)
+    tree = record(model, lambda: model(t, items=[u, {"k": v}]), num_samples=1)
 
     spy.assert_not_called()
-    assert tree.nodes[("root.forward",)].bytes_in > 0
+    assert tree.nodes[("root.forward",)].total_bytes_in > 0
+
+
+def test_calls_inside_a_compiled_call_are_marked_inside_compiled_part():
+    """The compiled call's own node is timeable; everything below it is inside, a disabled call included."""
+    recorder = StructureRecorder()
+
+    compiled, disabled, plain = nn.Linear(2, 2), nn.Linear(2, 2), nn.Linear(2, 2)
+    compiled.forward = torch.compile(compiled.forward, backend="eager")
+    disabled.forward = torch.compiler.disable(disabled.forward)
+
+    with recorder:
+        with recorder.record_sample():
+            outer = recorder.begin_call("root.forward", compiled, "forward", ())
+            inner = recorder.begin_call("root.inner.forward", plain, "forward", ())
+            off = recorder.begin_call("root.inner.off.forward", disabled, "forward", ())
+            leaf = recorder.begin_call("root.inner.off.lin.forward", plain, "forward", ())
+            recorder.end_call(leaf)
+            recorder.end_call(off)
+            recorder.end_call(inner)
+            recorder.end_call(outer)
+
+    nodes = recorder.result().nodes
+    assert nodes[("root.forward",)].inside_compiled_part is False  # the compiled call itself is timed as one call
+    assert nodes[("root.forward", "root.inner.forward")].inside_compiled_part is True
+    assert nodes[("root.forward", "root.inner.forward", "root.inner.off.forward")].inside_compiled_part is True
+    assert (
+        nodes[
+            ("root.forward", "root.inner.forward", "root.inner.off.forward", "root.inner.off.lin.forward")
+        ].inside_compiled_part
+        is True
+    )  # a ``torch.compiler.disable``'d call runs eagerly, but the timing pass cannot match the calls below it
+
+
+def test_a_compiled_modules_other_methods_are_not_compiled_calls():
+    """``module.compile()`` compiles the call only: ``encode`` of the same module is not a compiled call."""
+    recorder = StructureRecorder()
+    module = nn.Linear(2, 2)
+    module.compile(backend="eager")
+    plain = nn.Linear(2, 2)
+
+    with recorder:
+        with recorder.record_sample():
+            outer = recorder.begin_call("root.forward", module, "forward", ())
+            inner = recorder.begin_call("root.inner.forward", plain, "forward", ())
+            recorder.end_call(inner)
+            recorder.end_call(outer)
+            encode = recorder.begin_call("root.encode", module, "encode", ())
+            leaf = recorder.begin_call("root.lin.forward", plain, "forward", ())
+            recorder.end_call(leaf)
+            recorder.end_call(encode)
+
+    nodes = recorder.result().nodes
+    assert nodes[("root.forward", "root.inner.forward")].inside_compiled_part is True
+    assert nodes[("root.encode",)].inside_compiled_part is False
+    assert nodes[("root.encode", "root.lin.forward")].inside_compiled_part is False
+
+
+def test_samples_describe_the_arguments_the_inference_received():
+    model = TwoRoleToy()
+    recorder = StructureRecorder()
+    xs = [torch.randn(2, 8), torch.randn(4, 8)]
+
+    with instrumented(recorder, model), recorder:
+        for x in xs:
+            with recorder.record_sample((x,)):
+                model(x)
+
+    tree = recorder.result()
+    assert [s.inputs for s in tree.samples] == [
+        {"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 8))},
+        {"args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (4, 8))},
+    ]
+    assert tree.samples[0].calls[("root.forward",)] == 1
+
+
+def test_samples_name_kwargs_and_nested_containers_and_skip_primitives():
+    recorder = StructureRecorder()
+
+    with recorder:
+        with recorder.record_sample(
+            (torch.randn(1, 2), "a string"),
+            {"kwarg": {"pixel_values": torch.randn(3, 4)}, "n": 5},
+        ):
+            pass
+
+    (sample,) = recorder.result().samples
+    assert set(sample.inputs) == {"args[0]", "kwarg['pixel_values']"}  # primitives are not recorded
+    assert sample.inputs["args[0]"] == TensorLeaf("args[0]", "torch.Tensor", torch.float32, (1, 2))
+    assert sample.inputs["kwarg['pixel_values']"] == TensorLeaf(
+        "kwarg['pixel_values']", "torch.Tensor", torch.float32, (3, 4)
+    )
+    assert all(leaf.source is None for leaf in sample.inputs.values())
+
+
+def test_record_sample_without_arguments_gives_an_empty_sample():
+    recorder = StructureRecorder()
+
+    with recorder, recorder.record_sample():
+        pass
+
+    (sample,) = recorder.result().samples
+    assert sample.inputs == {}
+
+
+def test_a_sample_is_described_before_the_inference_runs():
+    """In-place mutation during the sample does not change the description taken at the block's start."""
+    x, y = torch.randn(2, 4), {"pixel_values": torch.randn(3, 4)}
+    replacement = torch.randn(1, 1)
+    recorder = StructureRecorder()
+
+    with recorder:
+        with recorder.record_sample((x,), {"kw": y}):
+            x.resize_(4, 2)
+            y["pixel_values"] = replacement
+
+    (sample,) = recorder.result().samples
+    assert sample.inputs["args[0]"] == TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 4))
+    assert sample.inputs["kw['pixel_values']"] == TensorLeaf(
+        "kw['pixel_values']", "torch.Tensor", torch.float32, (3, 4)
+    )
+
+
+def test_a_failed_sample_is_not_appended():
+    model = TwoRoleToy()
+    recorder = StructureRecorder()
+
+    with instrumented(recorder, model), recorder:
+        with recorder.record_sample((torch.randn(2, 8),)):
+            model(torch.randn(2, 8))
+        with pytest.raises(RuntimeError, match="boom"):
+            with recorder.record_sample((torch.randn(2, 8),)):
+                _boom()
+
+    assert len(recorder._samples) == 1
+    with pytest.raises(RuntimeError, match="incomplete"):
+        recorder.result()
+
+
+def test_sample_leaves_have_no_source_and_are_not_registered():
+    """A sample's tensors are described but not indexed: a call receiving one of them gets no ``source``."""
+    model = TwoRoleToy()
+    x = torch.randn(2, 8)
+    recorder = StructureRecorder()
+
+    with instrumented(recorder, model), recorder:
+        with recorder.record_sample((x,)):
+            model(x)
+
+    tree = recorder.result()
+    assert all(leaf.source is None for leaf in tree.samples[0].inputs.values())
+    # the outermost call received the very tensor the sample describes; nothing points at the sample
+    for signature in tree.nodes[("root.forward",)].signatures:
+        assert all(leaf.source is None for leaf in signature.inputs.values())
+
+
+def test_pickle_keeps_the_nodes_bound_to_the_trees_samples():
+    node = CallNode(path=("a",), label="a", owner_class="M", method="forward")
+    tree = CallTree(nodes={node.path: node}, samples=[Sample(calls={node.path: 1})])
+
+    tree2 = pickle.loads(pickle.dumps(tree))
+
+    assert all(n._samples is tree2.samples for n in tree2.nodes.values())
+    assert tree2.nodes[node.path].calls_per_sample == [1]
+
+
+def test_a_kwarg_named_args_does_not_collide_with_the_positional_args():
+    """``record_sample((x,), {"args": [y]})`` keeps both: the kwarg's leaves are named ``kwargs['args']...``."""
+    x, y = torch.randn(2, 8), torch.randn(3, 4)
+    recorder = StructureRecorder()
+
+    with recorder, recorder.record_sample((x,), {"args": [y]}):
+        pass
+
+    (sample,) = recorder.result().samples
+    assert sample.inputs == {
+        "args[0]": TensorLeaf("args[0]", "torch.Tensor", torch.float32, (2, 8)),
+        "kwargs['args'][0]": TensorLeaf("kwargs['args'][0]", "torch.Tensor", torch.float32, (3, 4)),
+    }
+    assert sample.inputs == describe_sample_inputs((x,), {"args": [y]})
+
+
+def test_describe_sample_inputs_stores_what_record_sample_stores():
+    """``describe_sample_inputs`` is the description ``record_sample`` puts on the ``Sample``."""
+    x = torch.randn(2, 8)
+    recorder = StructureRecorder()
+
+    with recorder, recorder.record_sample((x,), {"kw": {"pixel_values": torch.randn(3, 4)}}):
+        pass
+
+    (sample,) = recorder.result().samples
+    assert sample.inputs == describe_sample_inputs((x,), {"kw": {"pixel_values": torch.randn(3, 4)}})

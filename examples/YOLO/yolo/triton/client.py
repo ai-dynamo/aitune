@@ -17,19 +17,23 @@ from yolo.model import sample_input
 
 
 def run_inference(checkpoint: Path, triton_url: str) -> None:
-    """Compare Triton outputs with the restored compiled checkpoint."""
+    """Compare Triton with the restored checkpoint using the same generated image tensor."""
     tuned_model = cast(Module, load(onnx_checkpoint_placeholder(), checkpoint))
-    images = sample_input()
     try:
-        artifact_input_name = tuned_model.artifact().input_names[0]
+        artifact = tuned_model.artifact()
+        images = sample_input(dtype=getattr(torch, artifact.inputs[0].dtype.value))
+        # Snapshot this sample before inference; send these exact image values to Triton below.
+        request_images = images.cpu().numpy()
+        artifact_input_name = artifact.input_names[0]
         if artifact_input_name not in {"images", "input_x"}:
             raise RuntimeError(f"Unexpected YOLO input name: {artifact_input_name}")
         input_name = "images" if artifact_input_name == "images" else "x"
-        result = tuned_model(**{input_name: images})
+        with torch.no_grad():
+            result = tuned_model(**{input_name: images})
         output = next(iter(result.values())) if isinstance(result, dict) else result
         reference = output[0]
         if reference.ndim != 2 or reference.shape[1] != 6 or not torch.isfinite(reference).all():
-            raise RuntimeError("Unexpected YOLO checkpoint output")
+            raise RuntimeError("Unexpected YOLO checkpoint detection output")
         reference = reference.cpu().numpy()
 
         client = grpcclient.InferenceServerClient(url=triton_url)
@@ -38,7 +42,7 @@ def run_inference(checkpoint: Path, triton_url: str) -> None:
         if len(metadata.inputs) != 1 or len(metadata.outputs) != 1:
             raise RuntimeError("YOLO Triton deployment must have one input and one output")
         model_input = grpcclient.InferInput(metadata.inputs[0].name, list(images.shape), metadata.inputs[0].datatype)
-        model_input.set_data_from_numpy(images.cpu().numpy())
+        model_input.set_data_from_numpy(request_images)
         output_name = metadata.outputs[0].name
         result = client.infer(model_name, inputs=[model_input], outputs=[grpcclient.InferRequestedOutput(output_name)])
         predictions = result.as_numpy(output_name)[0]
