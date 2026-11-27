@@ -79,6 +79,7 @@ def mock_onnx(mocker, graph_spec):
     """
 
     program = Mock()
+    program.model.graphs.return_value = ()
     program.save.side_effect = lambda path, **_: Path(path).write_bytes(b"onnx-model")
 
     def _export(*args, **kwargs):
@@ -301,6 +302,7 @@ def export_with_external_data(*args, **kwargs):
 
     if kwargs["dynamo"]:
         program = Mock()
+        program.model.graphs.return_value = ()
         program.save.side_effect = save
         return program
     save(kwargs["f"], external_data=True)

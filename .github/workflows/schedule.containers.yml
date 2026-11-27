@@ -3,8 +3,12 @@
 name: Create AITune containers for nightly testing
 
 on:
-  schedule:
-    - cron: "0 0 * * 1,2,3,4,5"
+  push:
+    branches: [main]
+    paths:
+      - ".github/docker/Dockerfile"
+      - ".github/docker/*.Dockerfile"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:

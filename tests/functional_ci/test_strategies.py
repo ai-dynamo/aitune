@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Strategy selection, fallback, performance validation, max-batch discovery, and dry-run."""
 
+import time
 from collections.abc import Callable
 
 import pytest
@@ -14,6 +15,7 @@ from aitune.torch.backend import (
     TorchEagerBackend,
     TorchInductorAotBackend,
 )
+from aitune.torch.backend.backend import BackendState
 from aitune.torch.module.wrapper_module import ModuleState
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.torch.tune_strategy.profiling_tune_strategy import ProfilingTuneStrategy
@@ -21,6 +23,18 @@ from tests.functional_ci.backends import BACKENDS
 from tests.functional_ci.lifecycle import TENSORRT_FP32, assert_matches_eager, pinned_strategy, selected_backend
 from tests.functional_ci.models import make_input, make_mlp
 from tests.toy_backends import BuildFailsBackend
+
+
+class SlowInductorAotBackend(TorchInductorAotBackend):
+    """Real Inductor AOT build, which offloads the module to the CPU, with slow inference so that eager wins."""
+
+    _build_mode = TorchInductorAotBackend._build_mode
+    _execution_modes = TorchInductorAotBackend._execution_modes
+
+    def _infer(self, *args, **kwargs):
+        time.sleep(0.01)
+        return super()._infer(*args, **kwargs)
+
 
 PROFILING_STRATEGIES: dict[str, Callable[[list[Backend]], ProfilingTuneStrategy]] = {
     "max-throughput": ait.MaxThroughputStrategy,
@@ -79,3 +93,25 @@ def test_dry_run_keeps_eager(device: torch.device):
     tuned = _tune(pinned_strategy(TorchInductorAotBackend()), device, dry_run=True)
     assert tuned.state != ModuleState.TUNED
     assert_matches_eager(tuned, make_mlp(device), device, TENSORRT_FP32)
+
+
+@pytest.mark.matrix("strategies.eager-after-offload/aot-tune", "strategies.eager-after-offload/selection-checked")
+@pytest.mark.parametrize(
+    ("backends", "mode"),
+    [
+        pytest.param(
+            lambda: [TorchEagerBackend(), SlowInductorAotBackend()],
+            PerformanceValidationMode.DISABLED,
+            id="eager-candidate-wins",
+        ),
+        pytest.param(lambda: [SlowInductorAotBackend()], PerformanceValidationMode.ENABLED, id="eager-baseline-wins"),
+    ],
+)
+def test_eager_selected_after_inductor_aot_offload(backends, mode, device: torch.device):
+    """Eager wins after the Inductor AOT build offloaded the module, as a candidate or as the validation baseline."""
+    strategy = ait.MaxThroughputStrategy(backends())
+    strategy.enable_performance_validation(mode).enable_find_max_batch_size(False)
+    tuned = _tune(strategy, device)
+    assert selected_backend(tuned, TorchEagerBackend).state == BackendState.ACTIVE
+    assert next(tuned.parameters()).device == device
+    assert_matches_eager(tuned, make_mlp(device), device, BACKENDS["torch-eager"].tolerance)
