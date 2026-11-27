@@ -24,8 +24,9 @@ class ToyDecoratedEncoder(torch.nn.Module):
         generator = torch.Generator().manual_seed(seed)
         self.weight = torch.nn.Parameter(torch.randn(8, 8, generator=generator) * 0.1)
 
+    # Keep the wrapt proxy so this fixture exercises NeMo's runtime descriptor.
     @_checked_forward
-    def forward(self, audio_signal, scale=2.0):
+    def forward(self, audio_signal, scale=2.0):  # pyrefly: ignore[bad-override]
         return torch.nn.functional.linear(audio_signal, self.weight) * scale
 
 
