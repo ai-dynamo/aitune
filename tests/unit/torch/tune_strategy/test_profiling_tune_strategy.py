@@ -15,7 +15,7 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
 )
 from aitune.torch.task.profiling.profiling_stop_strategy import AllSamplesProfilingStopStrategy
-from aitune.torch.tune_strategy.latency_budget_strategy import LatencyBudgetProfilingResult
+from aitune.torch.tune_strategy.latency_budget_strategy import LatencyBudgetProfilingResult, LatencyBudgetStrategy
 from aitune.torch.tune_strategy.performance_validation import PerformanceValidationMode
 from aitune.torch.tune_strategy.profiling_tune_strategy import (
     BackendPerfResult,
@@ -243,7 +243,10 @@ def test_aggregate_result_uses_worst_rank_metric(strategy):
     assert result.metric == 3.0
 
 
-def test_measure_distributed_collects_result_and_error_once(strategy, mocker):
+def test_measure_distributed_collects_result_and_error_once(mocker):
+    strategy = LatencyBudgetStrategy(
+        latency_budget_ms=10.0, backends=[SleepBackend()], profiling_config=_profiling_config()
+    )
     coordinator = mocker.patch("aitune.torch.tune_strategy.profiling_tune_strategy.coordinator")
     gathered_results = [
         LatencyBudgetProfilingResult(selected_batch_size=4, throughput=12.0, latency=3.0),
