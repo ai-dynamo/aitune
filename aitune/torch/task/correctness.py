@@ -57,12 +57,17 @@ def check_dynamic_shape_boundary_inference(
         None.
 
     Raises:
-        CorrectnessDynamicShapeError: If inference fails on min or max shape inputs.
+        CorrectnessDynamicShapeError: If boundary input preparation or inference fails.
         CorrectnessTensorShapeError: If inferred output tensor shapes do not match the expected metadata.
     """
-    for boundary_name, (args, kwargs) in zip(
-        ("min", "max"), _dynamic_shape_boundary_samples(sample, graph_spec), strict=False
-    ):
+    with coordinator.raise_if_any_rank_fails(f"Preparing dynamic shape correctness inputs for {name}"):
+        try:
+            boundary_samples = _dynamic_shape_boundary_samples(sample, graph_spec)
+        except ValueError as exc:
+            raise CorrectnessDynamicShapeError(
+                f"Cannot prepare dynamic shape correctness inputs for {name}: {exc}"
+            ) from exc
+    for boundary_name, (args, kwargs) in zip(("min", "max"), boundary_samples, strict=False):
         with coordinator.raise_if_any_rank_fails(f"Dynamic shape correctness check ({boundary_name})"):
             try:
                 with torch.no_grad():

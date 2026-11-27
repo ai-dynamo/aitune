@@ -107,13 +107,18 @@ def profile_backend(
     """
 
     def generator():
-        sample = samples[0]
-        if profiling_config.shape_boundary is not None:
-            sample = resize_sample_to_shape(sample, graph_spec, profiling_config.shape_boundary)
+        # Complete rank-local allocations collectively before measurement enters its barrier.
+        with coordinator.raise_if_any_rank_fails(f"Preparing profiling sample for {name}"):
+            sample = samples[0]
+            if profiling_config.shape_boundary is not None:
+                sample = resize_sample_to_shape(
+                    sample, graph_spec, profiling_config.shape_boundary, preserve_batch_axes=profiling_config.batching
+                )
         base_args, base_kwargs = sample
         if profiling_config.batching:
             for batch_size in profiling_config.batch_sizes:
-                args, kwargs = graph_spec.make_batch(base_args, base_kwargs, batch_size)
+                with coordinator.raise_if_any_rank_fails(f"Preparing profiling batch {batch_size} for {name}"):
+                    args, kwargs = graph_spec.make_batch(base_args, base_kwargs, batch_size)
                 yield batch_size, args, kwargs
         else:
             yield 1, base_args, base_kwargs

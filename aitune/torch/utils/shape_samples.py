@@ -20,11 +20,14 @@ def dynamic_shape_boundary_samples(sample: Sample, graph_spec: GraphSpec) -> lis
     ]
 
 
-def resize_sample_to_shape(sample: Sample, graph_spec: GraphSpec, boundary: str) -> Sample:
+def resize_sample_to_shape(
+    sample: Sample, graph_spec: GraphSpec, boundary: str, *, preserve_batch_axes: bool = False
+) -> Sample:
     """Resize tensor inputs by slicing or repeating while preserving the call layout.
 
     Tensor values may be numerically invalid. Use these inputs for shape checks
     and timing dense computation, rather than numerical accuracy validation.
+    Keep batch axes unchanged when a later batch sweep will resize them.
     """
     if boundary not in ("min_shape", "max_shape"):
         raise ValueError(f"Expected min_shape or max_shape, got {boundary!r}")
@@ -35,7 +38,17 @@ def resize_sample_to_shape(sample: Sample, graph_spec: GraphSpec, boundary: str)
         tensor = locator.get_value(forward_inputs.arguments)
         if not isinstance(tensor, torch.Tensor):
             raise TypeError(f"Expected a tensor at {locator.display_path} while constructing {boundary} inputs")
-        resized = _resize_tensor(tensor, getattr(tensor_spec, boundary))
+        target_shape: list[int] = list(getattr(tensor_spec, boundary))
+        if preserve_batch_axes:
+            for axis in tensor_spec.get_batch_axis_multipliers():
+                target_shape[axis] = tensor.shape[axis]
+        for axis, size in enumerate(target_shape):
+            if tensor.shape[axis] == 0 and size > 0:
+                raise ValueError(
+                    f"Cannot resize {locator.display_path} to {boundary} {tuple(target_shape)}: "
+                    f"recorded input has an empty axis {axis}"
+                )
+        resized = _resize_tensor(tensor, target_shape)
         updated_arguments = locator.set_value(forward_inputs.arguments, resized)
         if not isinstance(updated_arguments, dict):
             raise TypeError("Resizing normalized forward inputs must preserve their argument dictionary")
