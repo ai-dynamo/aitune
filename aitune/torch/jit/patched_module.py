@@ -168,7 +168,7 @@ class PatchedModule:
             report_inspection_details(self.inspection_subtree_reports(), replace=False)
 
         todo = [self]
-        while todo:
+        while todo:  # noqa: PLR1702  # No safe autofix.
             current = todo.pop()
             coordinator.verify_equal(current.fq_name, "JIT module order")
             recording = cast(RecordingModule, current._wrapper)

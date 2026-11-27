@@ -187,7 +187,9 @@ class ONNXRuntimeBackend(Backend):
 Handle errors and special cases first, with `raise`, `return`, or `continue`. Then write the main
 path without extra indentation.
 
-ruff reports an `else` after `return` or `raise`. It does not find other nested blocks.
+ruff reports an `else` after `return` or `raise`. It also flags nested `if` statements that can be
+combined (`SIM102`), `else: if` blocks that can become `elif` (`PLR5501`), and blocks nested too
+deeply (`PLR1702`).
 
 **Why:** Each level of nesting adds a condition that the reader must remember. A guard clause
 handles one condition and then the reader can forget it.

@@ -274,6 +274,9 @@ select = [
     "custom-type-var-for-self",  # `def f(self: T) -> T` -> `def f(self) -> Self`
     "assert",                    # no `assert` in `aitune/`; Python drops it under `python -O`
     "banned-api",                # no `cast` in `tests/`
+    "collapsible-if",            # combine nested `if` conditions
+    "collapsible-else-if",       # use `elif` instead of nesting `if` in `else`
+    "too-many-nested-blocks",    # limit deeply nested control flow
 ]
 ignore = [
     "property-docstring-starts-with-verb",  # allow `"""Return the name."""` on properties

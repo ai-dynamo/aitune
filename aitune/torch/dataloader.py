@@ -418,11 +418,10 @@ def default_data_collator(batch: list) -> tuple | list | dict:
     first = batch[0]
 
     # checking for Sample (args, kwargs)
-    if isinstance(first, (list, tuple)):
-        if len(first) == 2 and isinstance(first[1], Mapping):
-            args = _list_data_collator([sample[0] for sample in batch])
-            kwargs = _map_data_collator([sample[1] for sample in batch])
-            return args, kwargs
+    if isinstance(first, (list, tuple)) and len(first) == 2 and isinstance(first[1], Mapping):
+        args = _list_data_collator([sample[0] for sample in batch])
+        kwargs = _map_data_collator([sample[1] for sample in batch])
+        return args, kwargs
 
     if isinstance(first, torch.Tensor):
         return _list_data_collator([[tensor] for tensor in batch])

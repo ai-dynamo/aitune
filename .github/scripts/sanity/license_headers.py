@@ -285,18 +285,19 @@ def _fuzzy_find_license_header_index(
             LOGGER.info("Number of tokens:%s", num_tokens)
             LOGGER.info("Expected number of tokens:%s", expected_num_tokens)
             LOGGER.info("Num tokens diff:%s", num_tokens_diff)
-        if ratio >= fuzzy_ratio_cut_off:
-            if ratio > best_ratio or (ratio == best_ratio and num_tokens_diff < best_num_token_diff):
-                best_ratio = ratio
-                best_line_number_match = i + candidate_offset
-                best_num_token_diff = num_tokens_diff
-                if DEBUG_LEVENSHTEIN_DISTANCE_CALCULATION:
-                    LOGGER.info(
-                        "Setting best line number match: %s, ratio %s, num tokens diff %s",
-                        best_line_number_match,
-                        best_ratio,
-                        best_num_token_diff,
-                    )
+        if ratio >= fuzzy_ratio_cut_off and (
+            ratio > best_ratio or (ratio == best_ratio and num_tokens_diff < best_num_token_diff)
+        ):
+            best_ratio = ratio
+            best_line_number_match = i + candidate_offset
+            best_num_token_diff = num_tokens_diff
+            if DEBUG_LEVENSHTEIN_DISTANCE_CALCULATION:
+                LOGGER.info(
+                    "Setting best line number match: %s, ratio %s, num tokens diff %s",
+                    best_line_number_match,
+                    best_ratio,
+                    best_num_token_diff,
+                )
         if DEBUG_LEVENSHTEIN_DISTANCE_CALCULATION:
             LOGGER.info("Best offset match %s", best_line_number_match)
     return best_line_number_match
@@ -327,17 +328,15 @@ def _get_license_candidate_string(candidate_array, license_info):
                     in_license = True
                     found_license_offset = current_offset + 1  # License starts in the next line
                     continue
-            else:
-                if stripped_comment_prefix:
-                    if stripped_line.startswith(stripped_comment_prefix):
-                        in_license = True
-                        found_license_offset = current_offset  # License starts in this line
-                else:
+            elif stripped_comment_prefix:
+                if stripped_line.startswith(stripped_comment_prefix):
                     in_license = True
-                    found_license_offset = current_offset  # We have no data :(. We start license immediately
-        else:
-            if stripped_comment_end and stripped_line.startswith(stripped_comment_end):
-                break
+                    found_license_offset = current_offset  # License starts in this line
+            else:
+                in_license = True
+                found_license_offset = current_offset  # We have no data :(. We start license immediately
+        elif stripped_comment_end and stripped_line.startswith(stripped_comment_end):
+            break
         if in_license and (not stripped_comment_prefix or stripped_line.startswith(stripped_comment_prefix)):
             license_string_candidate += stripped_line[len(stripped_comment_prefix) :] + " "
         current_offset += 1

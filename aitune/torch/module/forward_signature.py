@@ -182,14 +182,13 @@ def validate_forward_input_path(path: object) -> None:
     if isinstance(path, str):
         if path:
             return
-    elif isinstance(path, tuple):
-        if (
-            len(path) >= 2
-            and isinstance(path[0], str)
-            and path[0]
-            and all(isinstance(component, (str, int)) and not isinstance(component, bool) for component in path[1:])
-        ):
-            return
+    elif isinstance(path, tuple) and (
+        len(path) >= 2
+        and isinstance(path[0], str)
+        and path[0]
+        and all(isinstance(component, (str, int)) and not isinstance(component, bool) for component in path[1:])
+    ):
+        return
     raise AITuneUserInputError(
         f"Forward input path must be a non-empty parameter name or a nested path tuple, got {path!r}."
     )

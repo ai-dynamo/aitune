@@ -1124,9 +1124,12 @@ class TensorRTBackend(Backend[TensorRTBackendConfig]):
                 self._output_allocator = profile.output_allocator
                 return
 
-        if self._trt_optimization_profiles and self._context.active_optimization_profile != index:
-            if not self._context.set_optimization_profile_async(index, self._cuda_stream.cuda_stream):
-                raise RuntimeError(f"TensorRT rejected optimization profile {index}")
+        if (
+            self._trt_optimization_profiles
+            and self._context.active_optimization_profile != index
+            and not self._context.set_optimization_profile_async(index, self._cuda_stream.cuda_stream)
+        ):
+            raise RuntimeError(f"TensorRT rejected optimization profile {index}")
 
     def _find_optimization_profile(self, inputs: dict[str, torch.Tensor]) -> int:
         """Find the first matching profile, including validation for a single profile.

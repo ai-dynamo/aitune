@@ -260,21 +260,21 @@
       "severity": "error"
     },
     {
-      "column": 48,
+      "column": 17,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `active_optimization_profile`",
       "severity": "error"
     },
     {
-      "column": 20,
+      "column": 21,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `set_optimization_profile_async`",
       "severity": "error"
     },
     {
-      "column": 72,
+      "column": 73,
       "path": "aitune/torch/backend/tensorrt/tensorrt_backend.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `cuda_stream`",

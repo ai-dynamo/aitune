@@ -240,9 +240,8 @@ class ModuleInspector:
             return
 
         # Skip Python built-in objects
-        if obj.__class__.__module__ == "builtins":
-            if not isinstance(obj, dict | list):
-                return
+        if obj.__class__.__module__ == "builtins" and not isinstance(obj, dict | list):
+            return
 
         # Skip if object has already been inspected
         obj_id = id(obj)
@@ -341,9 +340,8 @@ class ModuleInspector:
             return True
 
         # check if name is nn.Module default name, if so, skip
-        if isinstance(obj, torch.nn.Module):
-            if member_name in ModuleInspector.nn_module_base_members():
-                return True
+        if isinstance(obj, torch.nn.Module) and member_name in ModuleInspector.nn_module_base_members():
+            return True
 
         return False
 

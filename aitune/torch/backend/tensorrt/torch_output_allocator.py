@@ -81,25 +81,28 @@ class TorchOutputAllocator(trt.IOutputAllocator):
         try:
             # Determine the data type for this tensor
             dtype = torch.float32  # Default fallback
-            if self._engine_info and hasattr(self._engine_info, "output_dtypes"):
-                if tensor_name in self._engine_info.output_dtypes:
-                    engine_dtype = self._engine_info.output_dtypes[tensor_name]
+            if (
+                self._engine_info
+                and hasattr(self._engine_info, "output_dtypes")
+                and tensor_name in self._engine_info.output_dtypes
+            ):
+                engine_dtype = self._engine_info.output_dtypes[tensor_name]
 
-                    # First check if it's already a torch dtype
-                    if isinstance(engine_dtype, torch.dtype):
-                        dtype = engine_dtype
-                        logger.debug("Using torch dtype %s for tensor '%s' from engine info", dtype, tensor_name)
-                    # Otherwise try to map from TensorRT dtype to torch dtype
-                    elif engine_dtype in trt_to_torch_dtype_mapping:
-                        dtype = trt_to_torch_dtype_mapping[engine_dtype]
-                        logger.debug(
-                            "Mapped TensorRT dtype %s to torch dtype %s for tensor '%s'",
-                            engine_dtype,
-                            dtype,
-                            tensor_name,
-                        )
-                    else:
-                        raise ValueError("Unknown dtype '%s' for tensor '%s'", engine_dtype, tensor_name)
+                # First check if it's already a torch dtype
+                if isinstance(engine_dtype, torch.dtype):
+                    dtype = engine_dtype
+                    logger.debug("Using torch dtype %s for tensor '%s' from engine info", dtype, tensor_name)
+                # Otherwise try to map from TensorRT dtype to torch dtype
+                elif engine_dtype in trt_to_torch_dtype_mapping:
+                    dtype = trt_to_torch_dtype_mapping[engine_dtype]
+                    logger.debug(
+                        "Mapped TensorRT dtype %s to torch dtype %s for tensor '%s'",
+                        engine_dtype,
+                        dtype,
+                        tensor_name,
+                    )
+                else:
+                    raise ValueError("Unknown dtype '%s' for tensor '%s'", engine_dtype, tensor_name)
 
             # Calculate number of elements based on size and dtype
             element_size = DTYPE_ELEMENT_SIZE[dtype]
