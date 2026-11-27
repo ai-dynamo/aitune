@@ -157,8 +157,9 @@ candidate or fall back to the prepared original forward.
 JIT uses the ordinary top-level tuning report lifecycle and process-exit diagnostics. Nesting registration inside an
 unrelated AOT report or replacing its active report during serving is outside this contract.
 
-The registration API accepts existing instances without depending on their provider. Flex Tensor manager discovery
-and replanning integration are deferred until a public Flex Tensor release exposes the required manager APIs.
+The registration API is provider-independent. For FlexTensor-managed units, follow the
+[retained-profile workflow](flextensor.md#retain-the-initial-offload-profile): finish native FT startup, register its
+original units, then record, tune and warm before serving.
 
 #### Externally owned placement
 
@@ -200,8 +201,10 @@ must be `None`, `"default"` or `"max-autotune-no-cudagraphs"`, without custom op
 CUDA-graph modes and ONNX source targets are rejected before installation. Use the exact `OneBackendStrategy`,
 `FirstWinsStrategy`, `MinLatencyStrategy`, `MaxThroughputStrategy` or `LatencyBudgetStrategy` class with a nonempty set of
 explicit supported candidates. Custom strategy subclasses are rejected. The ordinary default strategy includes
-unsupported external candidates, so configure the candidate set explicitly. Flex Tensor manager discovery and replanning
-remain deferred until the required APIs are publicly released; this flow does not claim a validated Flex Tensor integration.
+unsupported external candidates, so configure the candidate set explicitly. The optional
+[FlexTensor adapter](flextensor.md) uses this placement policy for original public offload units. Prepare/load profiles
+through public FT APIs; retain the initial profile by default or choose
+[explicit replanning](flextensor.md#advanced-explicitly-replan-after-tuning) in a fresh worker.
 
 Protection follows each source node's lifetime, including a child that outlives its original root. Independent copies
 have new identities and remain movable. Keep the prepared module tree fixed and do not share its parameters, buffers

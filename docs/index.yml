@@ -26,6 +26,8 @@ navigation:
         path: ../docs/guides/aot_inspect.md
       - page: Just-in-time Tuning
         path: ../docs/guides/jit_tuning.md
+      - page: FlexTensor Integration
+        path: ../docs/guides/flextensor.md
       - page: Just-in-time Inspect
         path: ../docs/guides/jit_inspect.md
       - page: Multi-GPU Integration
