@@ -135,7 +135,7 @@ def _register_dtensor_spec_as_constant() -> None:
     if DTensorSpec in _pytree.SUPPORTED_NODES:
         return
     _pytree.register_constant(DTensorSpec)
-    logger.info("Registered DTensorSpec as a pytree constant for distributed Torch Export.")
+    logger.debug("Registered DTensorSpec as a pytree constant for distributed Torch Export.")
 
 
 def _is_constraint_violation(error: Exception) -> bool:
