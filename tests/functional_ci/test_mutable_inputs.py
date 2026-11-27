@@ -3,7 +3,6 @@
 """Caller-visible input state changes through tuning and checkpoint reload."""
 
 from functools import partial
-from typing import cast
 
 import pytest
 import torch
@@ -161,7 +160,8 @@ def check_jit_mutations(case, device, *, replace_cache=False, model_factory=None
 
         (head,) = PatchedModule.heads
         assert head._state == ModuleState.TUNED
-        (selected,) = cast(TunedModule, head._wrapper).backends.values()
+        assert isinstance(head._wrapper, TunedModule)
+        (selected,) = head._wrapper.backends.values()
         assert type(selected) is type(backend)
         for batch_size in batch_sizes:
             check_mutable_input_state(
@@ -229,7 +229,8 @@ def lazy_cache_pipeline(model, value):
 
 
 def check_lazy_mutations(model, case, device, backend_type):
-    backends = cast(TunedModule, model.module).backends.values()
+    assert isinstance(model.module, TunedModule)
+    backends = model.module.backends.values()
     assert [type(selected) for selected in backends] == [backend_type] * 2
     reference = LazyCacheModel(device).eval()
     states, expected_states = [[None], [None]], [[None], [None]]

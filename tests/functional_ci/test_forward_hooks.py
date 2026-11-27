@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Forward hooks on the tuned module: the pre-hook supplies the input and the post-hook changes the output."""
 
-from typing import cast
-
 import pytest
 import torch
 from torch import nn
@@ -66,7 +64,8 @@ def test_forward_hooks_jit_tuning(case: BackendCase, device: torch.device):
 
         (head,) = PatchedModule.heads
         assert head._state == ModuleState.TUNED
-        (selected,) = cast(TunedModule, head._wrapper).backends.values()
+        assert isinstance(head._wrapper, TunedModule)
+        (selected,) = head._wrapper.backends.values()
         assert type(selected) is type(backend)
         assert selected.device == device
         actual = model()

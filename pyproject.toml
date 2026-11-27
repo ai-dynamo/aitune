@@ -264,6 +264,7 @@ select = [
     "logging-f-string",          # `logger.info(f"x={x}")` -> `logger.info("x=%s", x)`
     "custom-type-var-for-self",  # `def f(self: T) -> T` -> `def f(self) -> Self`
     "assert",                    # no `assert` in `aitune/`; Python drops it under `python -O`
+    "banned-api",                # no `cast` in `tests/`
 ]
 ignore = [
     "property-docstring-starts-with-verb",  # allow `"""Return the name."""` on properties
@@ -282,6 +283,7 @@ exclude = ["**/*.ipynb"]
 "**/__init__.py" = ["undocumented-public-package"]  # no module docstring required in `__init__.py`
 "**/__version__.py" = ["undocumented-public-module"]
 "!aitune/**" = ["assert"]  # asserts are fine in tests, scripts, and `conftest.py`
+"!tests/**" = ["banned-api"]
 "**/{tests,docs,tools,examples}/*" = [
     "unnecessary-comprehension",  # allow `[x for x in y]` instead of `list(y)`
     "D",                          # pydocstyle: docstrings optional
@@ -289,6 +291,10 @@ exclude = ["**/*.ipynb"]
     "subclass-builtin",           # allow `class FakeDict(dict)` test doubles
     "math-constant",              # allow literal values such as `3.14` in test data
 ]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"typing.cast".msg = "Use assert isinstance instead of cast in tests."
+"typing_extensions.cast".msg = "Use assert isinstance instead of cast in tests."
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

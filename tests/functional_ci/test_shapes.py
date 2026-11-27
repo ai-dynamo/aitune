@@ -3,7 +3,6 @@
 """Dynamic batch and spatial shape constraints across backends."""
 
 from functools import partial
-from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -121,13 +120,15 @@ def test_recorded_batch_range_jit(case: BackendCase, device: torch.device):
         model(make_input(device, batch_size=1))
         model(make_input(device, batch_size=4))
         (head,) = PatchedModule.heads
-        (graph_spec,) = cast(RecordingModule, head._wrapper).graph_specs
+        assert isinstance(head._wrapper, RecordingModule)
+        (graph_spec,) = head._wrapper.graph_specs
         (tensor_spec,) = graph_spec.input_spec.tensor_specs
         assert tensor_spec.min_shape == [1, IN_FEATURES]
         assert tensor_spec.max_shape == [4, IN_FEATURES]
         model(make_input(device, batch_size=1))
     assert head._state == ModuleState.TUNED
-    (selected,) = cast(TunedModule, head._wrapper).backends.values()
+    assert isinstance(head._wrapper, TunedModule)
+    (selected,) = head._wrapper.backends.values()
     assert type(selected) is type(backend)
     assert_matches_eager(model, reference, device, case.tolerance, batch_sizes=(1, 2, 3, 4))
 
@@ -226,14 +227,16 @@ def test_explicit_spatial_dims_jit(case: BackendCase, device: torch.device):
         model(torch.randn(1, 3, 16, 16, device=device, generator=generator))
         model(torch.randn(4, 3, 32, 32, device=device, generator=generator))
         (head,) = PatchedModule.heads
-        (graph_spec,) = cast(RecordingModule, head._wrapper).graph_specs
+        assert isinstance(head._wrapper, RecordingModule)
+        (graph_spec,) = head._wrapper.graph_specs
         (tensor_spec,) = graph_spec.input_spec.tensor_specs
         assert tensor_spec.has_dynamic_axis()
         assert tensor_spec.min_shape == [1, 3, 16, 16]
         assert tensor_spec.max_shape == [4, 3, 32, 32]
         model(torch.randn(1, 3, 16, 16, device=device, generator=generator))
     assert head._state == ModuleState.TUNED
-    (selected,) = cast(TunedModule, head._wrapper).backends.values()
+    assert isinstance(head._wrapper, TunedModule)
+    (selected,) = head._wrapper.backends.values()
     assert type(selected) is type(backend)
     value = torch.randn(4, 3, 23, 23, device=device, generator=generator)
     assert_matches_eager(

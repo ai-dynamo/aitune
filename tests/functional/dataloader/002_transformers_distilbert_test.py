@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
-from typing import cast
 
 import datasets
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
@@ -15,7 +14,8 @@ MAX_SEQUENCE_LENGTH = 64
 
 
 def get_dataloader():
-    tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained("distilbert-base-uncased"))
+    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    assert isinstance(tokenizer, PreTrainedTokenizerBase)
 
     def tokenize_function(examples):
         return tokenizer(examples["prompt"], truncation=True, max_length=MAX_SEQUENCE_LENGTH)

@@ -13,7 +13,7 @@
 
 import logging
 from logging import basicConfig
-from typing import Literal, cast
+from typing import Literal
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast, pipeline
@@ -26,9 +26,8 @@ from aitune.torch.backend import TorchEagerBackend, TorchInductorJitBackend
 def get_model_and_tokenizer(model_id="Qwen/Qwen3.5-0.8B"):
     """Get the model and tokenizer."""
     model = AutoModelForCausalLM.from_pretrained(model_id, dtype="auto", trust_remote_code=False)
-    tokenizer = cast(
-        PreTrainedTokenizer | PreTrainedTokenizerFast, AutoTokenizer.from_pretrained(model_id, padding_side="left")
-    )
+    tokenizer = AutoTokenizer.from_pretrained(model_id, padding_side="left")
+    assert isinstance(tokenizer, (PreTrainedTokenizer, PreTrainedTokenizerFast))
     tokenizer.pad_token = tokenizer.eos_token  # some models does not have it set
     return model.to("cuda"), tokenizer
 

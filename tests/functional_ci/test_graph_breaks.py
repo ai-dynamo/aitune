@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Functional coverage for graph breaks in model forward methods."""
 
-from typing import Any, cast
+from typing import Any
 
 import pytest
 import torch
@@ -122,8 +122,12 @@ def test_graph_break_jit_tunning(case: BackendCase, device: torch.device):
     """JIT backends compile the head around the branch."""
     backend = case.factory()
     if isinstance(backend, TorchTensorRTJitBackend):
+        from torch_tensorrt.dynamo import CompilationSettings
+
         # Raise instead of silently running the graph in PyTorch when TensorRT cannot build it.
-        cast(Any, backend._config.compile_config).pass_through_build_failures = True
+        compile_config = backend._config.compile_config
+        assert isinstance(compile_config, CompilationSettings)
+        compile_config.pass_through_build_failures = True
     jit_config.mode = JITMode.TUNE_EAGER
     jit_config.device = device
     jit_config.min_samples = 2
@@ -139,5 +143,6 @@ def test_graph_break_jit_tunning(case: BackendCase, device: torch.device):
     (head,) = PatchedModule.heads
     assert head._name.split(" ")[0] == "BranchingModel"
     assert head._state == ModuleState.TUNED
-    assert all(type(selected) is type(backend) for selected in cast(TunedModule, head._wrapper).backends.values())
+    assert isinstance(head._wrapper, TunedModule)
+    assert all(type(selected) is type(backend) for selected in head._wrapper.backends.values())
     _assert_both_branches(model, positive, case.tolerance)

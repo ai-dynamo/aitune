@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Functional coverage for one module called with several input signatures."""
 
-from typing import Any, cast
-
 import pytest
 import torch
 from torch import nn
@@ -62,19 +60,23 @@ def test_multiple_graphs_aot_tunning(case: BackendCase, device: torch.device, tm
     backend = case.factory()
     reference = MultipleGraphsMLP(device)
     model = MultipleGraphsMLP(device)
-    model.encoder = ait.Module(cast(nn.Module, model.encoder), "encoder", strategy=pinned_strategy(backend))
+    assert isinstance(model.encoder, nn.Module)
+    model.encoder = ait.Module(model.encoder, "encoder", strategy=pinned_strategy(backend))
     value = make_input(device)
     ait.tune(model, list(value.unbind(0)), batch_sizes=[value.shape[0]], device=device)
 
     assert len(model.encoder.graph_specs) == 3
-    _assert_backends(cast(TunedModule, model.encoder.module), backend)
+    assert isinstance(model.encoder.module, TunedModule)
+    _assert_backends(model.encoder.module, backend)
     assert_matches_eager(model, reference, device, case.tolerance, batch_sizes=(2,))
 
     checkpoint = tmp_path / "multiple_graphs.ait"
     ait.save(model, checkpoint)
     model.encoder.deactivate()
     restored = ait.load(MultipleGraphsMLP(device, seed=1), checkpoint)
-    _assert_backends(cast(TunedModule, cast(ait.Module, restored.encoder).module), backend)
+    assert isinstance(restored.encoder, ait.Module)
+    assert isinstance(restored.encoder.module, TunedModule)
+    _assert_backends(restored.encoder.module, backend)
     assert_matches_eager(restored, reference, device, case.tolerance, batch_sizes=(2,))
 
 
@@ -84,8 +86,12 @@ def test_multiple_graphs_jit_tunning(case: BackendCase, device: torch.device):
     """JIT tuning records every signature, then tunes one graph per signature."""
     backend = case.factory()
     if isinstance(backend, TorchTensorRTJitBackend):
+        from torch_tensorrt.dynamo import CompilationSettings
+
         # Raise instead of silently running the graph in PyTorch when TensorRT cannot build it.
-        cast(Any, backend._config.compile_config).pass_through_build_failures = True
+        compile_config = backend._config.compile_config
+        assert isinstance(compile_config, CompilationSettings)
+        compile_config.pass_through_build_failures = True
     jit_config.mode = JITMode.TUNE_EAGER
     jit_config.device = device
     jit_config.min_samples = 6
@@ -103,7 +109,8 @@ def test_multiple_graphs_jit_tunning(case: BackendCase, device: torch.device):
     (head,) = PatchedModule.heads
     assert head._name.split(" ")[0] == "SingleGraphsMLP"
     assert head._state == ModuleState.TUNED
-    _assert_backends(cast(TunedModule, head._wrapper), backend)
+    assert isinstance(head._wrapper, TunedModule)
+    _assert_backends(head._wrapper, backend)
     assert_matches_eager(
         lambda value: tuple(model(*args) for args in _split_input_for_multiple_graphs(value)),
         lambda value: tuple(reference(*args) for args in _split_input_for_multiple_graphs(value)),

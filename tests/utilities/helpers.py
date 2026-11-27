@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Helper functions and classes for testing."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, ParamSpec, TypeVar
 
 import pytest
 import torch
+import wrapt
 from packaging.version import Version
 
 from aitune.torch.module.forward_effects_spec import ForwardEffectsCapture, ForwardEffectsSpec
@@ -25,6 +26,23 @@ xfail_fullgraph_under_force_eager = pytest.mark.xfail(
     reason="torch 2.13.0a0 raises on fullgraph=True under force_eager (fixed by pytorch/pytorch#183623)",
     raises=RuntimeError,
 )
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def require_keyword_forward(forward: Callable[P, R]) -> Callable[P, R]:
+    def require_keywords(
+        wrapped: Callable[..., R],
+        instance: object,
+        args: tuple[object, ...],
+        kwargs: dict[str, Any],
+    ) -> R:
+        if args:
+            raise TypeError("All arguments must be passed by kwargs only for typed methods")
+        return wrapped(**kwargs)
+
+    return wrapt.FunctionWrapper(forward, require_keywords)
 
 
 def make_sample_store(
