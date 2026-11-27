@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """``ait.inspect(..., call_tree=True)``: the recorder pass and its effect on the legacy output."""
 
+import contextlib
+import itertools
 import unittest.mock
 
 import pytest
@@ -10,7 +12,7 @@ from torch import nn
 
 import aitune.torch.inspecting.inspecting as inspecting_module
 from aitune.torch.call_tree import WeightAccess
-from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.recording import StructureRecorder, TimingRecorder
 from aitune.torch.distributed import coordinator
 from aitune.torch.inspecting import inspect
 from aitune.torch.inspecting.module_inspector import ModuleInspector
@@ -86,7 +88,8 @@ def test_call_tree_adds_one_broadcast(mocker, dataset):
 
     info = inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
 
-    assert barrier.call_count == 2 * (3 + 2 + 3)
+    # warmup, per-module and structure passes run number_of_iterations; the timing pass one inference per planned depth
+    assert barrier.call_count == 2 * (2 + 3 + 3 + sum(map(len, TimingRecorder(_tree(info)).depths_per_sample())))
     assert broadcast.call_count == 2
     iterations, records = broadcast.call_args_list[1].args[0]
     assert iterations == 3
@@ -169,23 +172,497 @@ def test_plain_object_methods_and_to_calls_are_recorded(dataset):
     assert WeightAccess("encode", "move") in tree.weight_accesses["0.layers.0.proj.weight"]
 
 
-def test_recording_pass_flushes_after_every_inference(mocker, dataset):
+def test_every_timeable_node_is_timed(mocker, dataset):
+    """The timing pass replays each sample once per depth, so two samples already time the whole tree."""
     model, fn = _vla()
-    spy = mocker.spy(CallRecorder, "flush")
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
 
-    inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
+    info = inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
-    # once per recording iteration, plus the one in result()
-    assert spy.call_count == 3 + 1
+    tree = _tree(info)
+    assert max(len(path) for path in tree.nodes) > 2
+    assert all(
+        node.total_time_ms is not None for node in tree.nodes.values() if node.calls and not node.inside_compiled_part
+    )
+    warning.assert_not_called()
+
+
+def test_the_timing_pass_runs_each_sample_once_per_its_depths(mocker, dataset):
+    """``begin_iteration`` is called once per depth of ``TimingRecorder.depths_per_sample()``, in order."""
+    model, fn = _vla()
+    begin = mocker.spy(TimingRecorder, "begin_iteration")
+
+    info = inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    tree = _tree(info)
+    assert [c.args[1] for c in begin.call_args_list] == list(
+        itertools.chain.from_iterable(TimingRecorder(tree).depths_per_sample())
+    )
+
+
+def test_ranks_verify_the_same_timing_depths(mocker, dataset):
+    model, fn = _vla()
+    verify = mocker.spy(coordinator, "verify_equal")
+
+    info = inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    verify.assert_called_once_with(TimingRecorder(_tree(info)).depths_per_sample(), "call tree timing depths")
+
+
+def test_calls_that_only_some_samples_make_are_timed(mocker):
+    class Branch(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return self.lin(x)
+
+    class Conditional(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.always = nn.Linear(8, 8)
+            self.sometimes = Branch()
+
+        def forward(self, x):
+            out = self.always(x)
+            if x.flatten()[0] > 0:
+                out = out + self.sometimes(x)
+            return out
+
+    model = Conditional()
+    dataset = [torch.ones(8), -torch.ones(8), torch.ones(8), -torch.ones(8)]
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    branch = ("root.forward", "root.sometimes.forward")
+    deep = (*branch, "root.sometimes.lin.forward")
+    assert branch in tree.sequences[0] and branch in tree.sequences[2]
+    assert branch not in tree.sequences[1] and branch not in tree.sequences[3]
+    # only the branch reaches depth 3, so only samples 0 and 2 get an iteration at that depth
+    assert TimingRecorder(tree).depths_per_sample() == [[1, 2, 3], [1, 2], [1, 2, 3], [1, 2]]
+    assert tree.nodes[branch].total_time_ms is not None
+    assert tree.nodes[deep].total_time_ms is not None
+    warning.assert_not_called()
+
+
+def test_a_part_compiled_with_module_compile_logs_no_timing_warning(mocker, dataset):
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    inner = Inner()
+    inner.compile(backend="eager")
+    model = Root(inner)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    assert ("root.forward", "root.child.forward", "root.child.lin.forward") in _tree(info).nodes
+    warning.assert_not_called()
+
+
+def test_a_part_compiled_through_its_forward_logs_no_timing_warning(mocker, dataset):
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    inner = Inner()
+    inner.forward = torch.compile(inner.forward, backend="eager")
+    model = Root(inner)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    assert ("root.forward", "root.child.forward", "root.child.lin.forward") in _tree(info).nodes
+    assert _tree(info).nodes[("root.forward", "root.child.forward")].total_time_ms is not None
+    warning.assert_not_called()
+
+
+def test_a_compiled_sequential_gets_a_timed_node_and_its_children_stay_untimed(mocker, dataset):
+    """``nn.Module.compile()`` on an exact ``nn.Sequential``: the container is a unit of its own — recorded and
+    timed as one call — and the calls inside the compiled part get no time without a warning."""
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    child = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8))
+    child.compile(backend="eager")
+    model = Root(child)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    node = tree.nodes[("root.forward", "root.child.forward")]
+    assert node.total_time_ms is not None
+    inner = tree.nodes[("root.forward", "root.child.forward", "root.child.0.forward")]
+    assert inner.total_time_ms is None
+    warning.assert_not_called()
+
+
+def test_a_sequential_with_a_compiled_forward_gets_a_timed_node_and_its_children_stay_untimed(mocker, dataset):
+    """A ``torch.compile``'d ``forward`` on an exact ``nn.Sequential`` makes the container a unit of its own, like
+    ``nn.Module.compile()``: its call is timed as one node, and the calls inside are marked as inside it."""
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    child = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8))
+    child.forward = torch.compile(child.forward, backend="eager")
+    model = Root(child)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    node = tree.nodes[("root.forward", "root.child.forward")]
+    assert node.total_time_ms is not None
+    assert not node.inside_compiled_part
+    inner = tree.nodes[("root.forward", "root.child.forward", "root.child.0.forward")]
+    assert inner.total_time_ms is None
+    assert inner.inside_compiled_part
+    warning.assert_not_called()
+
+
+def test_a_compiled_sequential_times_its_own_node(mocker, dataset):
+    """The compiled part's own node is timeable: the plan covers its depth, while the depths that only exist
+    inside it are left out and never warned about."""
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    child = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8))
+    child.compile(backend="eager")
+    model = Root(child)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=1,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    own = tree.nodes[("root.forward", "root.child.forward")]
+    assert own.inside_compiled_part is False
+    for path in ("root.child.0.forward", "root.child.1.forward", "root.child.2.forward"):
+        node = tree.nodes[("root.forward", "root.child.forward", path)]
+        assert node.inside_compiled_part is True
+        assert node.total_time_ms is None
+    assert own.total_time_ms is not None
+    warning.assert_not_called()
+
+
+@pytest.mark.parametrize("how", ["module.compile", "forward"])
+def test_a_compiled_part_times_its_own_node(mocker, dataset, how):
+    """The plan covers the timeable depths, so the compiled part's call is timed and nothing warns."""
+
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    inner = Inner()
+    if how == "module.compile":
+        inner.compile(backend="eager")
+    else:
+        inner.forward = torch.compile(inner.forward, backend="eager")
+    model = Root(inner)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=2,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    assert tree.nodes[("root.forward", "root.child.forward")].total_time_ms is not None
+    warning.assert_not_called()
+
+
+def test_a_disabled_call_inside_a_compiled_part(mocker, dataset):
+    """Inside a compiled part, a ``torch.compiler.disable``'d call and everything below it are marked inside:
+    the calls run eagerly, but the timing pass never sees the disabled call, so it cannot match them to their
+    nodes and cannot time them."""
+
+    class Disabled(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        @torch.compiler.disable
+        def forward(self, x):
+            return self.lin(x)
+
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.off = Disabled()
+
+        def forward(self, x):
+            return self.off(x)
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    inner = Inner()
+    inner.compile(backend="eager")
+    model = Root(inner)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    disabled = tree.nodes[("root.forward", "root.child.forward", "root.child.off.forward")]
+    assert disabled.inside_compiled_part is True
+    assert disabled.total_time_ms is None
+    lin = tree.nodes[("root.forward", "root.child.forward", "root.child.off.forward", "root.child.off.lin.forward")]
+    assert lin.inside_compiled_part is True
+    assert lin.total_time_ms is None
+    warning.assert_not_called()
+
+
+def test_a_torch_compiled_sequential_gets_a_timed_node(mocker, dataset):
+    """``torch.compile(nn.Sequential)``: the ``OptimizedModule`` gets the compiled call's node — recorded under its
+    label and timed — while the calls inside stay untimed without a warning."""
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    torch._dynamo.reset()
+    model = Root(torch.compile(nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8)), backend="eager"))
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+    torch._dynamo.reset()
+
+    tree = _tree(info)
+    node = tree.nodes[("root.forward", "root.child.forward")]
+    assert node.total_time_ms is not None
+    inner = tree.nodes[("root.forward", "root.child.forward", "root.child._orig_mod.0.forward")]
+    assert inner.total_time_ms is None
+    warning.assert_not_called()
+
+
+def test_a_compiled_modules_encode_call_exposes_its_children(mocker, dataset):
+    """``module.compile()`` compiles the call (``forward``) only: an ``encode()`` of the compiled module runs
+    eagerly in the timing pass, so the calls below it are seen and timed like any other — no warning."""
+
+    class Inner(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lin = nn.Linear(8, 8)
+
+        def forward(self, x):
+            return torch.relu(self.lin(x))
+
+        def encode(self, x):
+            return self.lin(x)
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child.encode(x)
+
+    inner = Inner()
+    inner.compile(backend="eager")
+    model = Root(inner)
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+
+    tree = _tree(info)
+    path = ("root.forward", "root.child.encode", "root.child.lin.forward")
+    assert path in tree.nodes
+    assert tree.nodes[path].total_time_ms is not None
+    warning.assert_not_called()
+
+
+def test_a_torch_compiled_child_that_recurses_records_the_nested_call(mocker, dataset):
+    """A compiled module whose forward calls itself: the mark suppresses only the first entry, so the
+    structure pass records the nested call and the timing pass reports it, not as a missing call."""
+
+    class Recursive(nn.Module):
+        def forward(self, x, depth=0):
+            if depth == 0:
+                return self.forward(x, depth + 1)
+            return x.relu()
+
+    class Root(nn.Module):
+        def __init__(self, child):
+            super().__init__()
+            self.child = child
+
+        def forward(self, x):
+            return self.child(x)
+
+    torch._dynamo.reset()
+    model = Root(torch.compile(Recursive(), backend="eager"))
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=lambda x: model(x),
+        number_of_iterations=4,
+        warmup_iterations=1,
+        call_tree=True,
+    )
+    torch._dynamo.reset()
+
+    path = ("root.forward", "root.child.forward", "root.child._orig_mod.forward")
+    assert path in _tree(info).nodes
+    warning.assert_not_called()
+
+
+def test_timing_pass_ends_every_run(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(TimingRecorder, "end_iteration")
+
+    info = inspect(model, dataset, inference_function=fn, number_of_iterations=3, warmup_iterations=2, call_tree=True)
+
+    # once per timing iteration, plus one when the timing pass ends
+    assert spy.call_count == sum(map(len, TimingRecorder(_tree(info)).depths_per_sample())) + 1
 
 
 def test_default_inspect_creates_no_recorder(mocker, dataset):
     model, fn = _vla()
-    spy = mocker.spy(CallRecorder, "__init__")
+    structure_spy = mocker.spy(StructureRecorder, "__init__")
+    timing_spy = mocker.spy(TimingRecorder, "__init__")
 
     inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1)
 
-    assert spy.call_count == 0
+    assert structure_spy.call_count == 0
+    assert timing_spy.call_count == 0
 
 
 def test_forward_is_not_recorded_while_compiling(mocker, dataset):
@@ -208,16 +685,88 @@ def test_forward_is_not_recorded_while_compiling(mocker, dataset):
     assert _legacy(info) == _legacy(without)
 
 
-def test_flush_failure_is_raised_through_the_rank_failure_context(mocker, dataset):
+def test_end_iteration_failure_is_raised_through_the_rank_failure_context(mocker, dataset):
     model, fn = _vla()
     spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
-    mocker.patch.object(CallRecorder, "flush", side_effect=RuntimeError("bad events"))
+
+    def fail_in_the_timing_pass(self):
+        raise RuntimeError("bad events")
+
+    mocker.patch.object(TimingRecorder, "end_iteration", new=fail_in_the_timing_pass)
     original_apply = nn.Module._apply
 
     with pytest.raises(RuntimeError, match="bad events"):
         inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
 
     spy.assert_any_call("Resolving call tree timings")
+    assert nn.Module._apply is original_apply
+
+
+def test_timing_pass_entry_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    mocker.patch.object(TimingRecorder, "_start", side_effect=RuntimeError("bad start"))
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad start"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Starting the call tree timing pass")
+    begin.assert_not_called()  # the failure on entry ran no timed inference
+    assert nn.Module._apply is original_apply
+
+
+def test_timing_pass_entry_peer_failure_exits_the_recorder(mocker, dataset):
+    model, fn = _vla()
+    real_guard = coordinator.raise_if_any_rank_fails
+    begin = mocker.spy(TimingRecorder, "begin_iteration")
+    stop = mocker.spy(TimingRecorder, "_stop")
+    original_apply = nn.Module._apply
+
+    @contextlib.contextmanager
+    def _peer_failed():
+        yield
+        raise RuntimeError("peer failed")
+
+    mocker.patch.object(
+        coordinator,
+        "raise_if_any_rank_fails",
+        side_effect=lambda op: _peer_failed() if op == "Starting the call tree timing pass" else real_guard(op),
+    )
+
+    with pytest.raises(RuntimeError, match="peer failed"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    begin.assert_not_called()  # entry succeeded locally but no timed inference ran
+    stop.assert_called_once()
+    assert stop.call_args.kwargs["completed"] is False  # the recorder exited through the failed path
+    assert nn.Module._apply is original_apply
+
+
+def test_timing_pass_exit_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    mocker.patch.object(TimingRecorder, "_stop", side_effect=RuntimeError("bad stop"))
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad stop"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Ending the call tree timing pass")
+    assert nn.Module._apply is original_apply
+
+
+def test_structure_result_failure_goes_through_the_rank_failure_context(mocker, dataset):
+    model, fn = _vla()
+    spy = mocker.spy(coordinator, "raise_if_any_rank_fails")
+    mocker.patch.object(StructureRecorder, "result", side_effect=RuntimeError("bad result"))
+    original_apply = nn.Module._apply
+
+    with pytest.raises(RuntimeError, match="bad result"):
+        inspect(model, dataset, inference_function=fn, number_of_iterations=2, warmup_iterations=1, call_tree=True)
+
+    spy.assert_any_call("Reading the call tree's structure")
     assert nn.Module._apply is original_apply
 
 
@@ -255,7 +804,7 @@ def test_compiled_child_inspects_and_its_calls_appear_in_the_tree(dataset):
 
 
 def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(dataset):
-    """``torch.compile(module)`` adds no node of its own: the original module's ``forward`` is the node."""
+    """``torch.compile(module)``: the ``OptimizedModule``'s ``forward`` is the node; ``_orig_mod`` adds none."""
     from typing import cast
 
     from aitune.torch.call_tree import shared_weights_of
@@ -290,14 +839,14 @@ def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(datase
     paths = {n.path_str: n.calls for n in _tree(info).nodes.values()}
     assert paths == {
         "forward": ITERATIONS,
-        "forward > child._orig_mod.forward": ITERATIONS,
-        "forward > child._orig_mod.forward > child._orig_mod.lin.forward": ITERATIONS,
+        "forward > child.forward": ITERATIONS,
+        "forward > child.forward > child._orig_mod.lin.forward": ITERATIONS,
     }
     assert shared_weights_of(_tree(info), cast(nn.Module, model.child)) == []
 
 
 def test_module_compiled_child_is_recorded_once_and_counts_stay_unchanged(dataset):
-    """A child compiled with ``nn.Module.compile()`` gets its call-tree nodes, and the recording pass leaves counts alone."""
+    """A child compiled with ``nn.Module.compile()`` gets its nodes; the structure pass leaves counts alone."""
 
     class Inner(nn.Module):
         def __init__(self):
@@ -391,3 +940,58 @@ def test_call_tree_after_tune_matches_eager_call_paths():
 
     again = inspect(model, x, number_of_iterations=1, warmup_iterations=0, min_depth=2, call_tree=True)
     assert call_paths(again) == eager_paths
+
+
+def test_max_timing_depth_leaves_deep_nodes_untimed_without_a_warning(mocker, dataset):
+    """Nodes deeper than the limit are still recorded — calls, bytes, weight accesses — just not timed."""
+    model, fn = _vla()
+    warning = mocker.patch("aitune.torch.call_tree.recording.timing_recorder.logger.warning")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=1,
+        call_tree=True,
+        max_timing_depth=2,
+    )
+
+    tree = _tree(info)
+    assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
+    deep = [node for node in tree.nodes.values() if len(node.path) > 2]
+    assert all(node.calls > 0 for node in deep)
+    assert all(node.total_time_ms is None for node in deep)
+    shallow = [node for node in tree.nodes.values() if node.calls and len(node.path) <= 2]
+    assert shallow and all(node.total_time_ms is not None for node in shallow)
+    warning.assert_not_called()
+
+
+@pytest.mark.parametrize("bad", [-1, -5])
+def test_max_timing_depth_rejects_negative_values(bad, dataset):
+    model, fn = _vla()
+
+    with pytest.raises(ValueError, match="max_timing_depth must be a non-negative int or None"):
+        inspect(model, dataset, inference_function=fn, call_tree=True, max_timing_depth=bad)
+
+
+def test_max_timing_depth_zero_skips_the_timing_pass(mocker, dataset):
+    """``max_timing_depth=0`` runs only the structure pass: the tree is complete, every ``total_time_ms`` stays None."""
+    model, fn = _vla()
+    timing = mocker.patch("aitune.torch.inspecting.inspecting._time_call_tree")
+
+    info = inspect(
+        model,
+        dataset,
+        inference_function=fn,
+        number_of_iterations=2,
+        warmup_iterations=1,
+        call_tree=True,
+        max_timing_depth=0,
+    )
+
+    timing.assert_not_called()
+    tree = _tree(info)
+    assert max(len(path) for path in tree.nodes) > 2  # the structure pass still records the whole tree
+    assert all(node.calls > 0 for node in tree.nodes.values())
+    assert all(node.total_time_ms is None for node in tree.nodes.values())

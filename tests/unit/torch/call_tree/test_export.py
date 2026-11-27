@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
-from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.recording import StructureRecorder
 from tests.toy_models.call_tree_models import TwoRoleToy, VlaToy, vla_inputs
 from tests.unit.torch.call_tree.helpers import instrumented, record
 
@@ -29,9 +29,9 @@ def test_to_dict_exports_the_whole_tree():
     d = tree.to_dict()
 
     assert d["schema_version"] == 1
-    assert set(d) == {"schema_version", "iterations", "total_ms", "nodes", "modules", "weights"}
+    assert set(d) == {"schema_version", "iterations", "total_time_ms", "nodes", "modules", "weights"}
     assert d["iterations"] == tree.iterations
-    assert d["total_ms"] == tree.total_ms
+    assert d["total_time_ms"] == tree.total_time_ms
     nodes = d["nodes"]
     assert len(nodes) == len(tree.nodes)
     paths = {n["call_path"] for n in nodes}
@@ -45,18 +45,20 @@ def test_to_dict_exports_the_whole_tree():
         if node.module is not None:
             assert _object_path(exported["call_path"]) in d["modules"]
         assert exported["calls"] == node.calls
-        assert exported["time_ms"] == node.time_ms
-        assert exported["bytes_in"] == node.bytes_in
-        assert exported["bytes_out"] == node.bytes_out
+        assert exported["inside_compiled_part"] == node.inside_compiled_part
+        assert exported["total_time_ms"] == node.total_time_ms
+        assert exported["total_bytes_in"] == node.total_bytes_in
+        assert exported["total_bytes_out"] == node.total_bytes_out
         assert set(exported) == {
             "call_path",
             "owner_class",
             "calls",
-            "time_ms",
-            "bytes_in",
-            "bytes_out",
+            "inside_compiled_part",
+            "total_time_ms",
+            "total_bytes_in",
+            "total_bytes_out",
             "signatures",
-            "iteration_starts",
+            "calls_per_iteration",
         }
         parent = exported["call_path"].rpartition(" > ")[0]
         assert not parent or parent in paths
@@ -134,7 +136,7 @@ def test_to_dict_modules_parameters_skip_a_missing_bias():
 
 def test_to_dict_modules_parameters_list_meta_tensors():
     model = torch.nn.Linear(4, 4).to("meta")
-    tree = CallTree(iterations=1, modules=[("root", model)])
+    tree = CallTree(sequences=[[]], modules=[("root", model)])
 
     assert tree.to_dict()["modules"][""]["parameters"] == {
         "weight": {"dtype": "torch.float32", "shape": [4, 4]},
@@ -219,7 +221,7 @@ def test_to_dict_exports_object_entries_as_type_only_and_stays_strict_json():
     json.dumps(tree.to_dict(), allow_nan=False)
 
 
-def test_to_dict_exports_signatures_and_iteration_starts():
+def test_to_dict_exports_signatures_and_calls_per_iteration():
     class Model(torch.nn.Module):
         def forward(self, x):
             if x.ndim > 2:
@@ -228,7 +230,7 @@ def test_to_dict_exports_signatures_and_iteration_starts():
 
     model = Model()
 
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, model), recorder:
         recorder.begin_iteration()
         model(torch.randn(4, 8))
@@ -238,7 +240,7 @@ def test_to_dict_exports_signatures_and_iteration_starts():
         recorder.end_iteration()
 
     node = next(n for n in recorder.result().to_dict()["nodes"] if n["call_path"] == "forward")
-    assert node["iteration_starts"] == [0]
+    assert node["calls_per_iteration"] == [3]
     signatures = node["signatures"]
     assert [sig["call_indices"] for sig in signatures] == [[0], [1], [2]]
     assert signatures[0]["inputs"]["x"] == {

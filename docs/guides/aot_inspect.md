@@ -225,7 +225,7 @@ modules_info = ait.inspect(model, input_data, inference_function=run_chunk, min_
 tree = modules_info.call_tree
 
 for node in tree.find("dit"):    # recorded calls whose label contains "dit"
-    print(node.path_str, node.calls, node.time_ms, node.bytes_in, node.bytes_out)
+    print(node.path_str, node.calls, node.total_time_ms, node.total_bytes_in, node.total_bytes_out)
 # forward > dit_forward 10 ...
 # forward > dit_forward > dit.forward 10 ...
 ```
@@ -245,7 +245,7 @@ What is recorded:
 - calls of `.to()`, `.cuda()` and similar that reach a module from code outside it, with the code that made them;
 - every torch op that reads a module's parameter or buffer, or looks up its device, with the recorded call it ran in;
 - times from CUDA events without synchronizing after every call, or from `time.perf_counter` without CUDA;
-- tensor bytes in and out (`bytes_in`, `bytes_out`), summed over a node's calls: the tensors in each call's
+- tensor bytes in and out (`total_bytes_in`, `total_bytes_out`), summed over a node's calls: the tensors in each call's
   args/kwargs and in its result, nested containers and ModelOutputs included, each tensor counted once per call.
   `UserDict`s, such as transformers' `BatchFeature` and `BatchEncoding`, are walked into their values, and dataclass
   instances into their fields. Other objects that `torch.utils._pytree` does not flatten, such as caches or your own
@@ -261,20 +261,44 @@ What is recorded:
   source; neither has an object without weak-reference support, such as one whose class defines `__slots__`
   without `__weakref__`.
 
-`call_tree=True` runs one more pass of `number_of_iterations`, so inspection takes longer. Parts compiled with
-`torch.compile` run compiled in the per-module pass, so calls inside them are not measured there; in the call-tree
-pass they run eagerly, so their calls and weight reads are recorded too, and the call tree's
-times for them are eager times, not compiled ones. Call-tree times also include the cost of recording weight accesses
-and counting tensor bytes, which run in Python. Where the GPU waits for the CPU, this inflates times, most of all for
-calls with many recorded calls inside, so use them for a rough comparison, not as deployed latency. `get_modules()` and
-`describe()` are unchanged: they still come from the synchronized pass. The object walk has to reach the linear
-layers, so deep models need a larger `max_depth` (8 for BAGEL-sized pipelines).
+### How the call tree is recorded
 
-Limits: exact `nn.Sequential`, `nn.ModuleList` and
-`nn.ModuleDict` containers are skipped and their children attached to the caller; a call that takes a callable as an
-argument (a checkpoint helper) is skipped the same way; free functions are not recorded. CUDA times come from
-events on the device that was current when a call started, so work that a call runs on other GPUs is not fully
-counted.
+`call_tree=True` adds a structure pass of `number_of_iterations` and a timing pass after the per-module pass that
+`get_modules()` comes from, so inspection takes longer:
+
+1. **The structure pass** records the tree: every call with its arguments, tensor bytes and weight accesses. It runs
+   eagerly, parts compiled with `torch.compile` included, so the calls inside them are recorded too. This tracking
+   runs in Python and would distort times, so the structure pass records none.
+2. **The timing pass** replays the same samples in the same order, with all tracking off and compiled parts
+   compiled. Each sample is replayed once per call-path depth its calls reach, so every call is timed exactly once
+   on the sample the structure pass recorded it on, and no timed call runs inside another. The number of iterations —
+   at most `number_of_iterations` times the number of call-path depths — is logged before the pass starts.
+
+Some nodes get no time (`total_time_ms` is `null`):
+
+- calls inside a compiled part, since they run inside the compiled code. The compiled part itself is timed as one
+  call, and such nodes are marked `inside_compiled_part` in the export;
+- nodes deeper than `max_timing_depth`. They are recorded but not timed, and `inspect` logs no warning for them.
+  `max_timing_depth=0` skips the timing pass entirely — a structure pass only (calls, bytes, signatures, sources,
+  weights), saving its `number_of_iterations` × depths inferences.
+
+`max_timing_depth` bounds the timing cost: fewer depths per sample means fewer iterations. It counts call-path depths,
+with the root call at depth 1, not the attribute depths that `max_depth` counts. The deep leaf levels (linear
+layers, norms) are rarely worth timing, and their calls and weight accesses are still recorded.
+
+The times are close to a normal eager run, but not exact: every call inside a timed call still runs through its
+recording wrapper, about 0.7 µs each. Where the GPU waits for the CPU, that adds up for calls with many calls inside:
+on roberta-base at batch 1, the encoder reads about 10% high; at batch 8, within a few percent. Use the times to
+compare nodes, or eager with tuned trees, not as deployed latency.
+
+`get_modules()` and `describe()` are unchanged. The object walk has to reach the linear layers, so deep models need
+a larger `max_depth` (8 for BAGEL-sized pipelines).
+
+Limits: exact `nn.Sequential`, `nn.ModuleList` and `nn.ModuleDict` containers are skipped and their children
+attached to the caller, unless the container itself is compiled with `module.compile()`. A call that takes a
+callable as an argument (a checkpoint helper) is skipped the same way, and free functions are not recorded. CUDA
+times come from events on the device that was current when a call started, so work that a call runs on other GPUs
+is not fully counted.
 
 ### Export the call tree
 
@@ -294,11 +318,12 @@ The exported data has this structure:
 {
   "schema_version": 1,
   "iterations": 2,
-  "total_ms": 30.0,
+  "total_time_ms": 30.0,
   "nodes": [
-    {"call_path": "forward", "owner_class": "Vla", "calls": 2, "time_ms": 30.0, ...},
+    {"call_path": "forward", "owner_class": "Vla", "calls": 2, "total_time_ms": 30.0, ...},
     {"call_path": "forward > dit_forward > dit.forward", "owner_class": "Dit",
-     "calls": 10, "time_ms": 25.0, "bytes_in": 3670056, "bytes_out": 3670016,
+     "calls": 10, "inside_compiled_part": false, "total_time_ms": 25.0,
+     "total_bytes_in": 3670056, "total_bytes_out": 3670016,
      "signatures": [
          {"call_indices": [0, 5],
           "inputs": {"hidden_states": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
@@ -314,7 +339,7 @@ The exported data has this structure:
                      "timestep": {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [1]}},
           "outputs": {"output": {"type": "torch.Tensor", "dtype": "torch.bfloat16",
                                  "shape": [1, 1, 4096]}}}],
-     "iteration_starts": [0, 5]}
+     "calls_per_iteration": [5, 5]}
   ],
   "modules": {"dit": {"class": "my_pkg.Dit",
                       "parameters": {"weight": {"dtype": "torch.float32", "shape": [4, 4]}},
@@ -323,8 +348,11 @@ The exported data has this structure:
 }
 ```
 
-`iterations` is the number of recorded iterations and all node values (`calls`, `time_ms`, `bytes_in`,
-`bytes_out`) are totals over them — divide by `iterations` for per-iteration values, by `calls` for per-call.
+`iterations` is the number of recorded iterations; `total_time_ms`, `total_bytes_in` and `total_bytes_out` are
+totals over all calls and iterations; divide by `calls` for per-call values and by `iterations` for per-iteration
+values. `total_time_ms` is `null` when the timing pass never timed the node.
+`inside_compiled_part` is true for calls inside a compiled part: they run inside the compiled code in the timing
+pass, so their `total_time_ms` is `null`; the compiled part's own call is timed.
 `signatures` lists the node's distinct signatures in first-seen order: each has `call_indices`, the indices of
 the calls with exactly that signature, plus `inputs`/`outputs` dicts keyed by argument name (such as `x` or
 `inputs['input_ids']`), and `output` for the result, or `output[0]` and `output['logits']` for values nested in it.
@@ -332,7 +360,7 @@ Every leaf has `type`, tensors also `dtype` and exact `shape`; `outputs` is null
 A leaf with a `source` names where its object was last seen: `call_path`, `side` and the leaf `name` there, which can
 be in any of that node's signatures. In the example, `dit.forward` received `hidden_states` as `dit_forward`'s own
 argument of that name.
-`iteration_starts` gives how many of the node's calls were made before each iteration began.
+`calls_per_iteration` gives how many of the node's calls each iteration made; they add up to `calls`.
 `nodes` lists every recorded call node in the order the nodes were first called. `call_path` is the chain of calls
 that led to the node and identifies it; the rest follows from it:
 

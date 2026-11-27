@@ -11,7 +11,7 @@ import torch
 
 from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.nodes import CallNode
-from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.recording import StructureRecorder
 from aitune.torch.inspecting import inspect
 from tests.toy_models.call_tree_models import VlaToy, vla_inputs
 from tests.unit.torch.call_tree.jit_adapter import jit_recording_adapter
@@ -42,7 +42,7 @@ def _aot_tree(tokens, image) -> CallTree:
 
 
 def _jit_tree(tokens, image) -> CallTree:
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with jit_recording_adapter(recorder):
         model = VlaToy()
         model(tokens, image)  # warmup, not recorded

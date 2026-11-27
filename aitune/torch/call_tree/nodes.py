@@ -106,12 +106,12 @@ class CallSignature:
 
     Example:
         >>> import torch
-        >>> from aitune.torch.call_tree.recorder import CallRecorder
+        >>> from aitune.torch.call_tree.recording import StructureRecorder
         >>> class Cache: ...
         >>> class Layer(torch.nn.Module):
         ...     def forward(self, x, state=None):
         ...         return x
-        >>> recorder, layer = CallRecorder(), Layer()
+        >>> recorder, layer = StructureRecorder(), Layer()
         >>> with recorder:
         ...     for args in (
         ...         ((torch.zeros(1, 4, 8),), {"state": Cache()}),
@@ -144,13 +144,12 @@ class CallSignature:
 class CallNode:
     """One node of the call tree.
 
-    ``bytes_in`` and ``bytes_out`` measure the tensor data passed into and returned from the node's calls. Only
-    tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
-    inside lists, tuples, dicts and ``ModelOutput`` count too; ``UserDict``s, such as transformers'
-    ``BatchFeature`` and ``BatchEncoding``, are walked into their values, and dataclass instances into their fields.
-    Everything else counts as 0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache`` or
-    ``StaticCache``, including the tensors they hold. The ``signatures`` are recorded by the same walk and also list
-    the non-tensor objects by type.
+    ``total_bytes_in`` and ``total_bytes_out`` measure the tensor data passed into and returned from the node's calls.
+    Only tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
+    inside lists, tuples, dicts and ``ModelOutput`` count too; ``UserDict``s, such as transformers' ``BatchFeature`` and
+    ``BatchEncoding``, are walked into their values, and dataclass instances into their fields. Everything else counts
+    as 0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache`` or ``StaticCache``, including the
+    tensors they hold. The ``signatures`` are recorded by the same walk and also list the non-tensor objects by type.
 
     Attributes:
         path: Labels of the calling chain, outermost first. Identifies the node and must not change after creation:
@@ -160,15 +159,21 @@ class CallNode:
         method: Name of the called method (``forward`` for module calls).
         module: Module the method belongs to, or None for methods of plain objects.
         calls: Number of calls over all recorded iterations.
-        time_ms: Time in milliseconds over all recorded iterations.
-        bytes_in: Tensor bytes in the arguments, summed over all recorded iterations. Bytes per call:
-            ``bytes_in / calls``.
-        bytes_out: Tensor bytes in the results, summed over all recorded iterations.
+        total_time_ms: Total time of the node's calls in milliseconds over all calls and recorded iterations;
+            None when the node was never timed (inside a compiled part or deeper than ``max_timing_depth``).
+            Time per call: ``total_time_ms / calls``.
+        total_bytes_in: Total tensor bytes in the arguments over all calls and recorded iterations. Bytes per call:
+            ``total_bytes_in / calls``.
+        total_bytes_out: Total tensor bytes in the results over all calls and recorded iterations.
         signatures: The distinct ``CallSignature``s of the node's calls, in first-seen order; each records the
             start-order indices of the calls that had it, so ``sum(len(s.call_indices)) == calls`` and every index
             appears exactly once. A signature whose calls raised has ``outputs`` None.
         children: Call paths of the called nodes in first-call order.
         first_seen: Position of the node's first call among all nodes.
+        inside_compiled_part: Whether the call runs inside a compiled part, so the timing pass cannot time it (it
+            runs compiled there). The compiled part's own call is not inside it and is timed as one call. Calls
+            below a ``torch.compiler.disable``'d call inside a compiled part count as inside too: they run
+            eagerly, but the timing pass does not see the disabled call, so it cannot match them to their nodes.
 
     Example:
         >>> node = CallNode(
@@ -187,12 +192,13 @@ class CallNode:
     method: str
     module: nn.Module | None = None
     calls: int = 0
-    time_ms: float = 0.0
-    bytes_in: int = 0
-    bytes_out: int = 0
+    total_time_ms: float | None = None
+    total_bytes_in: int = 0
+    total_bytes_out: int = 0
     signatures: list[CallSignature] = field(default_factory=list)
     children: list[CallPath] = field(default_factory=list)
     first_seen: int = 0
+    inside_compiled_part: bool = False
 
     def calls_passing(self, name: str, side: Literal["inputs", "outputs"] = "inputs") -> list[int]:
         """The sorted indices of the calls that passed the argument ``name`` on ``side``.

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Test helpers: wrap methods so they report to a CallRecorder, and build call trees by hand."""
+"""Test helpers: wrap methods so they report to the active call recorder, and build call trees by hand."""
 
 import functools
 from contextlib import contextmanager
@@ -11,25 +11,21 @@ from torch import nn
 from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.methods import user_defined_methods
 from aitune.torch.call_tree.nodes import CallNode
-from aitune.torch.call_tree.recorder import CallRecorder
+from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder
 from tests.toy_models.call_tree_models import Block, NoWeights
 
 
-def wrap_method(recorder: CallRecorder, obj, name: str, label: str, restore: list):
-    """Replace ``obj.<name>`` with a wrapper reporting to ``recorder``; remember how to restore it."""
+def wrap_method(obj, name: str, label: str, restore: list):
+    """Replace ``obj.<name>`` with a wrapper reporting to the active recorder; remember how to restore it."""
     original = getattr(obj, name)
     was_instance = name in vars(obj)
 
     @functools.wraps(original)
     def wrapper(*args, **kwargs):
-        frame = recorder.begin_call(label, obj, name, args, kwargs)
-        try:
-            result = original(*args, **kwargs)
-        except BaseException:
-            recorder.end_call(frame)
-            raise
-        recorder.end_call(frame, result)
-        return result
+        recorder = CallRecorder.active()
+        if recorder is None:
+            return original(*args, **kwargs)
+        return recorder.call(original, args, kwargs, label=label, obj=obj, method=name)
 
     setattr(obj, name, wrapper)
     restore.append((obj, name, was_instance, original))
@@ -51,7 +47,7 @@ def invisible_to_recorder():
 
 
 @contextmanager
-def instrumented(recorder: CallRecorder, root, root_label: str = "root"):
+def instrumented(recorder: StructureRecorder, root, root_label: str = "root"):
     """Wrap ``forward`` and user methods of every module under ``root`` (and ``root``'s own methods)."""
     restore: list = []
     objects = [(root_label, root)]
@@ -67,9 +63,9 @@ def instrumented(recorder: CallRecorder, root, root_label: str = "root"):
         for label, obj in objects:
             if isinstance(obj, nn.Module):
                 recorder.register_module(label, obj)
-                wrap_method(recorder, obj, "forward", f"{label}.forward", restore)
+                wrap_method(obj, "forward", f"{label}.forward", restore)
             for name in user_defined_methods(obj):
-                wrap_method(recorder, obj, name, f"{label}.{name}", restore)
+                wrap_method(obj, name, f"{label}.{name}", restore)
         yield
     finally:
         restore_methods(restore)
@@ -77,7 +73,7 @@ def instrumented(recorder: CallRecorder, root, root_label: str = "root"):
 
 def record(root, call, iterations: int = 2, root_label: str = "root") -> CallTree:
     """Record ``call()`` for ``iterations`` iterations with ``root`` instrumented."""
-    recorder = CallRecorder()
+    recorder = StructureRecorder()
     with instrumented(recorder, root, root_label), recorder:
         for _ in range(iterations):
             recorder.begin_iteration()
@@ -87,15 +83,16 @@ def record(root, call, iterations: int = 2, root_label: str = "root") -> CallTre
 
 
 def make_tree(spec: dict, iterations: int = 1, modules: dict | None = None) -> CallTree:
-    """Build a call tree from ``{label: (calls, time_ms, children_spec)}``, nested; labels end in ``.method``.
+    """Build a call tree from ``{label: (calls, total_time_ms, children_spec)}``, nested; labels end in ``.method``.
 
+    ``total_time_ms`` is set to the spec's value.
     ``modules`` maps labels to the ``nn.Module`` the node belongs to.
     """
     modules = modules or {}
-    tree = CallTree(iterations=iterations)
+    tree = CallTree()
     order = [0]
 
-    def add(parent_path, label, calls, time_ms, children):
+    def add(parent_path, label, calls, total_time_ms, children):
         path = (*parent_path, label)
         method = label.rsplit(".", 1)[-1]
         module = modules.get(label)
@@ -106,7 +103,7 @@ def make_tree(spec: dict, iterations: int = 1, modules: dict | None = None) -> C
             method=method,
             module=module,
             calls=calls,
-            time_ms=time_ms,
+            total_time_ms=total_time_ms,
             first_seen=order[0],
         )
         order[0] += 1
