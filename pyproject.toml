@@ -63,7 +63,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dynamo = [
-    "ai-dynamo-runtime>=0.1",
+    # Dynamo 1.7 changes /health responses; the serving scripts still expect endpoint names there.
+    "ai-dynamo-runtime>=0.1,<1.7.0",
     "uvloop",
 ]
 triton = [
@@ -125,6 +126,7 @@ onnxruntime-gpu-cuda12 = ["onnxruntime-gpu; python_version < '3.14' and platform
 "Tracker" = "https://github.com/ai-dynamo/aitune/issues"
 
 [dependency-groups]
+# Shared by tests/unit and tests/functional_ci. Keep the legacy catalog independent.
 test = [
     "pytest>=9.0.0",
     "pytest-mock",
@@ -148,12 +150,14 @@ dev = [
     "tox",
     "uv>=0.13.4",
 ]
+# Dependencies for the legacy tests/functional catalog and example executor.
+# Individual scripts may explicitly install newer versions for their own coverage.
 functional-test = [
     "fire",
     "timm",
     "diffusers>=0.35.0,!=0.37.1",
     "datasets>=3.3.2",
-    "transformers>=5,<6",
+    "transformers>=4.57.6,<5",
     "sentencepiece>=0.2.0,<0.2.3", # 0.2.3 needs protobuf>=7, but protobuf is pinned <7 above.
     "urllib3>=2.6.3", # sec
     "kernels>=0.12",
@@ -188,6 +192,11 @@ environments = [
     "sys_platform == 'linux' and platform_machine == 'aarch64' and 'tegra' not in platform_release",
 ]
 conflicts = [
+    # The legacy catalog uses Transformers 4; unit and functional_ci tests use Transformers 5.
+    [
+        { group = "test" },
+        { group = "functional-test" },
+    ],
     [
         { extra = "torch28" },
         { extra = "torch29" },

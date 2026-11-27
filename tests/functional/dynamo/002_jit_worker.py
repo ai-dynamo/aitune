@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # /// script
-# dependencies = ["ai-dynamo<2.0.0", "openai", "aitune", "sentence-transformers"]
+# dependencies = ["ai-dynamo<1.7.0", "openai", "aitune", "sentence-transformers"]
 # use_gated_hf_token = true
 # [environment]
 # DYN_DISCOVERY_BACKEND = "file"
