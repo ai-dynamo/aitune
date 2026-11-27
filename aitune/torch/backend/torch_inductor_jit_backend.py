@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Torch Inductor JIT backend."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
@@ -177,10 +177,15 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
         return self
 
     def _compile(self):
-        if self._samples is None:
-            raise RuntimeError("Backend has no warmup samples. Please call build() first.")
+        if self._samples is None or self._orig_module is None:
+            raise RuntimeError("Backend has no module or warmup samples. Please call build() first.")
         logger.info("Start compiling torch module.")
         move_module_to_device(self._orig_module, self.device)
+
+        # torch.compile accepts callable options too, so copy into its wider dictionary type.
+        compile_options: dict[str, str | int | bool | Callable[..., Any]] | None = None
+        if self._config.options is not None:
+            compile_options = dict(self._config.options)
 
         with self._decorated_forwards.compiling(self._orig_module):
             self._compiled_module = torch.compile(
@@ -188,7 +193,7 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
                 fullgraph=self._config.fullgraph,
                 dynamic=self._compile_dynamic,
                 mode=self._config.mode,
-                options=self._config.options,
+                options=compile_options,
             )
 
             self._select_infer_impl()

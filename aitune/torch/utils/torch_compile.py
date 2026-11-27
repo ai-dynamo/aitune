@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Shared torch.compile helpers."""
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import Literal
 
@@ -51,7 +51,7 @@ class DecoratedForwardBindings:
         self._forwards.clear()
 
     @contextmanager
-    def compiling(self, module: torch.nn.Module) -> Iterator[None]:
+    def compiling(self, module: torch.nn.Module) -> Generator[None]:
         """Keep bindings after compilation succeeds; roll back if compilation or warmup fails.
 
         Args:
