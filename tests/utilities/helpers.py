@@ -32,6 +32,16 @@ R = TypeVar("R")
 
 
 def require_keyword_forward(forward: Callable[P, R]) -> Callable[P, R]:
+    """Wrap a `forward` method so that it accepts keyword arguments only.
+
+    The wrapper models the keyword-only call contract of NeMo typed methods. Tests use it to check
+    that AITune calls a wrapped `forward` with keyword arguments only. The wrapper uses `wrapt`, so
+    the method keeps its signature and binding.
+
+    Raises:
+        TypeError: If the wrapped method is called with positional arguments.
+    """
+
     def require_keywords(
         wrapped: Callable[..., R],
         instance: object,
