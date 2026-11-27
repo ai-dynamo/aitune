@@ -201,6 +201,12 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
         Workaround pending a ``dynamic_shapes`` passthrough on ``torch_tensorrt.compile``;
         revert to ``torch_tensorrt.compile(...)`` once that lands upstream.
+
+        Compilation receives TensorRT profile descriptors, while serialization receives the actual
+        flat tensors captured during export.
+        Its shape rules are positional: unwrap the adapter's {"flat_inputs": (...)} mapping because
+        the compiled graph has explicit tensor parameters rather than one variadic flat_inputs parameter.
+        Reload the saved artifact before returning, so subsequent checks use the deployed representation.
         """
         logger.info("Start compiling torch module with Torch-TensorRT using torch_tensorrt.dynamo.compile.")
 
@@ -264,11 +270,12 @@ class TorchTensorRTAotBackend(Backend[TorchTensorRTAotBackendConfig]):
 
         with self._track_build_step(TorchTensorRTAotBuildStep.COMPILED_MODEL_SAVE) as result:
             self._exported_model_artifact = self._create_exported_model_artifact(cache_dir)
+            # The compiled graph takes positional tensors instead of the adapter's *flat_inputs.
             _save_compiled_model(
                 trt_model_compiled,
                 self._exported_model_artifact.path,
                 export_sample,
-                export_result.dynamic_shapes,
+                export_result.dynamic_shapes["flat_inputs"] if export_result.dynamic_shapes is not None else None,
                 self._config.pickle_protocol,
             )
             result["compiled_model_size_bytes"] = self._exported_model_artifact.path.stat().st_size
@@ -389,7 +396,7 @@ def _save_compiled_model(
     module: torch.fx.GraphModule,
     path: Path,
     sample: Sample,
-    dynamic_shapes: dict[str, Any] | None,
+    dynamic_shapes: dict[str, Any] | tuple[Any, ...] | None,
     pickle_protocol: int,
 ) -> None:
     """Save a compiled graph and retry known direct-export failures with retracing.
@@ -399,6 +406,10 @@ def _save_compiled_model(
     unrelated RuntimeError and filesystem failures propagate. The fallback uses explicit torch.export
     with the supplied sample and dynamic_shapes, preserving keyword values and shape rules that
     torch_tensorrt.save(retrace=True) cannot reliably handle on supported versions.
+
+    sample contains real flat example tensors, not torch_tensorrt.Input profile descriptors.
+    dynamic_shapes must describe this compiled graph's positional arguments, without the adapter's
+    outer flat_inputs key.
     """
     if torch_tensorrt is None:
         raise ImportError(_TORCH_TENSORRT_MISSING)

@@ -87,9 +87,12 @@ class RecordingModule:
             dynamic_shapes = self._resolve_and_validate_dynamic_shapes(inputs_metadata)
         # Binding is for metadata only: decorators may reject positional replay of valid keyword calls.
         sample_args, sample_kwargs = self._copy_inputs(args, kwargs)
-        snapshot_inputs = self._forward_signature.normalize(sample_args, sample_kwargs)
         graph_spec = self._graph_specs.get(inputs_metadata)
+        # One specification is captured per input graph. Subsequent samples extend shape
+        # observations without checking or replacing its mutation and alias rules.
+        # Calls grouped into the same graph must therefore share those rules.
         if graph_spec is None:
+            snapshot_inputs = self._forward_signature.normalize(sample_args, sample_kwargs)
             effects_capture = ForwardEffectsCapture.before_call(
                 forward_inputs.arguments,
                 snapshot_inputs.arguments,

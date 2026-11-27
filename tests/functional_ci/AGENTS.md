@@ -59,6 +59,7 @@ their own strategies.
 | `conftest.py` | `device` fixture, cleanup after each test, `matrix` marker and JSON writer |
 | `test_wrap_shared_weights.py` | `wrap` on modules from `inspect(..., call_tree=True)` on toys from `tests/toy_models/call_tree_models.py` with shared weights: without the call tree they fail after offloading, with it they match eager (`export` backends, which build ahead of time and offload) |
 | `test_transformers_static_cache.py` | Real Transformers `StaticCache` with lazy and initialized state on every backend: AOT tuning and checkpoint reload, plus JIT tuning and consecutive decode updates; no model downloads |
+| `test_transformers_encoder_decoder_cache.py` | Real `EncoderDecoderCache` with nested lazy or initialized static caches on every backend: AOT save/load, JIT tuning, cross-attention readiness, and independent callers; no model downloads |
 | `test_<use_case>.py` | One use case on all backends, one test per tuning type: `test_graph_breaks.py`, `test_multiple_graphs.py`, `test_pipelines.py`, `test_forward_hooks.py` |
 | other `test_*.py` | One file per feature area: lifecycle, shapes, topology, JIT, strategies, precision, ONNX input, pipelines, kernel selector, inspect call tree (`test_inspect_call_tree.py`, no backend) |
 
@@ -84,8 +85,10 @@ The backend id is the pytest parametrize id and the feature-matrix column.
 | `inductor-jit` | `TorchInductorJitBackend` | default | - |
 | `torch-tensorrt-jit` | `TorchTensorRTJitBackend` | `TENSORRT_FP32` | - |
 
-TensorRT-based configs run fp32 without TF32; `tensorrt` also runs without CUDA graphs. `tensorrt_backend(**overrides)` builds
-TensorRT variants; `test_precision.py` uses it for fp16, int8, fp8, nvfp4, and CUDA graphs.
+Torch-TensorRT AOT and JIT cases use the backend constructors with their default configuration, matching the
+user-facing setup. Do not override compilation settings to work around failures in these cases.
+Standalone `tensorrt` cases disable TF32 and CUDA graphs. `tensorrt_backend(**overrides)` builds TensorRT variants;
+`test_precision.py` uses it for fp16, int8, fp8, nvfp4, and CUDA graphs.
 
 To add a backend, add one `BACKENDS` entry. Give it `base` and only the tags that pass on CI.
 
