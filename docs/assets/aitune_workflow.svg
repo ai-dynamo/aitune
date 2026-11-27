@@ -11,8 +11,8 @@ SPDX-License-Identifier: Apache-2.0
     Tuning evaluates backend candidates for each module and its execution context, including TensorRT,
     Torch-TensorRT, Torch Inductor, and ONNX Runtime. Configured candidates can incorporate PTQ,
     kernel selection, or CUDA graphs where supported by the backend.
-    It checks numerical outputs, measures performance, and selects the best backend for the configured strategy
-    and objective before saving a tuned .ait artifact. Run in Python or deploy with Triton
+    It checks inference behavior, measures performance, and selects the best backend for the configured strategy
+    and objective before saving an AITune checkpoint (.ait). Run in Python or deploy with Triton
     or Dynamo as supported by the recipe.</desc>
   <style>
     :root { color-scheme: light dark; }
@@ -141,7 +141,7 @@ SPDX-License-Identifier: Apache-2.0
   </text>
   <text class="detail artifact-detail" x="1575" y="357">
     <tspan x="1575">Tuned</tspan>
-    <tspan x="1575" dy="30">Artifact</tspan>
+    <tspan x="1575" dy="30">Checkpoint</tspan>
   </text>
   <rect class="panel" x="1680" y="167" width="250" height="306" rx="8"/>
   <text class="heading" x="1805" y="211">

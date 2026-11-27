@@ -6,12 +6,12 @@
 # NVIDIA AITune
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.11--3.14-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.8+-red.svg)](https://pytorch.org/)
 
 **NVIDIA AITune automates inference tuning for PyTorch models and pipelines on NVIDIA GPUs.**
 It brings inference engines and acceleration techniques together under a single, extensible API. AITune combines
-backend evaluation, numerical validation, and performance measurement into one workflow, selecting implementations
+backend evaluation, correctness checks, and performance measurement into one workflow, selecting implementations
 for individual modules according to the configured tuning strategy.
 
 Start with a model from Hugging Face or timm, or bring your own model and checkpoint. For supported applications,
@@ -26,7 +26,7 @@ Find your model in the [recipe catalog](examples/README.md), or follow the
   backends and tuning strategies.
 - **Evaluate options per module.** Use default candidates that account for execution needs, or configure candidates
   explicitly. Different modules in a pipeline can use different backends.
-- **Select using measurements.** Check numerical outputs and measure performance on representative inputs. Choose
+- **Select using measurements.** Check output shapes and finite values, and measure performance on representative inputs. Choose
   strategies for throughput, latency, or a latency budget to guide selection.
 - **Prepare for deployment.** Reuse tuned modules in Python, generate Triton model repositories, or serve through
   Dynamo workers, as supported by the recipe.
@@ -38,7 +38,7 @@ AITune combines these stages into a workflow for each model or pipeline:
 1. **Inspect.** Provide a PyTorch model and representative inputs. AITune finds tunable `nn.Module` components
    and observes their inputs and execution.
 2. **Wrap.** Customize the selected modules' tuning strategies and backend configurations.
-3. **Tune.** Evaluate configured backend candidates, check numerical outputs against the original implementation,
+3. **Tune.** Evaluate configured backend candidates, check inference behavior against recorded metadata,
    and measure performance on representative inputs. Select a backend using the configured strategy. Candidates can
    incorporate post-training quantization (PTQ), kernel selection, or CUDA graphs where supported by the backend.
 4. **Run & deploy.** Run tuned modules in Python. Use the explicit workflow to save an `.ait` artifact for reuse
@@ -48,8 +48,7 @@ AITune combines these stages into a workflow for each model or pipeline:
   <img src="docs/assets/aitune_workflow.svg" alt="AITune workflow: inspect, wrap, evaluate backend candidates, validate outputs, measure performance, select the best backend for the configured strategy, and run or deploy." width="800" />
 </a>
 
-A shared tuning workflow brings supported backends and acceleration techniques together, with selection guided by
-the configured strategy.
+Compare the tuned and original pipelines on representative requests to assess numerical agreement and application quality.
 
 ## Install
 
@@ -97,7 +96,7 @@ AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning python your_script.py
 The example saves an image to `landscape.png`. Use representative prompts for your workload.
 Eligible modules use the selected implementations in the running application.
 A new process starts tuning again; use the explicit workflow below for saved artifacts.
-See the [JIT guide](https://docs.nvidia.com/aitune/guides/just-in-time-tuning/) for configuration and deferred tuning
+See the [JIT guide](https://docs.nvidia.com/aitune/guides/just-in-time/tune/) for configuration and deferred tuning
 for pipelines.
 
 ### Ahead-of-time (AOT): prepare a reusable tuning artifact
@@ -133,7 +132,7 @@ ait.save(pipe, "tuned_pipe.ait")
 
 This produces an image and a `tuned_pipe.ait` artifact that can be loaded into a compatible pipeline.
 Use representative prompts or data for your workload. See the
-[AOT guide](https://docs.nvidia.com/aitune/guides/ahead-of-time-tuning/) for tuning
+[AOT guide](https://docs.nvidia.com/aitune/guides/ahead-of-time/tune-pytorch/) for tuning
 configuration and the [checkpoint guide](https://docs.nvidia.com/aitune/guides/deployment/save-and-load-checkpoints/)
 for saving and loading.
 
@@ -150,7 +149,7 @@ with your own compatible checkpoint and data.
 ## Learn more
 
 - [Documentation](https://docs.nvidia.com/aitune/)
-- [Supported backends](https://docs.nvidia.com/aitune/learn/backends/)
+- [Supported backends](https://docs.nvidia.com/aitune/guides/backends/overview/)
 - [Multi-GPU tuning](https://docs.nvidia.com/aitune/guides/multi-gpu-integration/)
 - [Profiling and hardware metrics](https://docs.nvidia.com/aitune/guides/advanced/profiling-and-hardware-metrics/)
 - [Deployment overview](https://docs.nvidia.com/aitune/guides/deployment/overview/)

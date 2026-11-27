@@ -4,7 +4,8 @@
 title: "Ahead-of-Time Tuning Guide"
 ---
 
-Ahead-of-time tuning is a mode where you explicitly control which modules to tune. This method provides precise control over the tuning process and is recommended for production environments.
+Use ahead-of-time tuning to choose the modules, inputs, and strategies for a tuning run. If you are choosing
+between workflows, see the [AOT and JIT comparison table](../learn/concepts.md#when-to-use-aot-or-jit).
 
 ## Overview
 
@@ -26,7 +27,7 @@ This approach offers several advantages:
 
 Use `OnnxModule` to wrap an existing ONNX file. Dynamic strategy resolution automatically limits candidates to
 backends that accept ONNX input, currently `ONNXRuntimeBackend` and `TensorRTBackend`. See
-[ONNX Model Tuning](onnx_tuning.md) for a complete example and explicit-backend configuration.
+[Tune an existing ONNX model](onnx_tuning.md) for a complete example and explicit-backend configuration.
 
 ## Quick Start
 

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="652" viewBox="0 0 840 652"
+     role="img" aria-labelledby="title description">
+  <title id="title">AITune in the local Python environment</title>
+  <desc id="description">User code calls the PyTorch model with representative inputs. In the same environment,
+    AITune uses those calls to inspect execution and record calls to the modules the user wraps. A strategy
+    evaluates and selects a backend for each recorded graph. Users can supply their own strategy or backend
+    implementation. During inference, the user code calls the same model and wrapped modules run the selected backends.</desc>
+  <style>
+    text { font-family: system-ui, sans-serif; fill: #17200e; font-size: 16px; }
+    .heading { font-size: 20px; font-weight: 700; }
+    .title { font-size: 17px; font-weight: 700; text-anchor: middle; }
+    .detail { font-size: 15px; text-anchor: middle; }
+    .label { font-size: 14px; text-anchor: middle; }
+    .environment { fill: #f7faf4; stroke: #899080; }
+    .tuning { fill: #edf4e5; stroke: #538000; }
+    .card { fill: #fff; stroke: #65705d; stroke-width: 1.5; }
+    .stage { stroke: #538000; }
+    .optional { fill: #fff1d6; stroke: #9b742a; }
+    .optional-title { font-size: 15px; }
+    .optional-detail { font-size: 13px; }
+    .edge { fill: none; stroke: #538000; stroke-width: 2; marker-end: url(#arrow); }
+    .extension { stroke-dasharray: 5 4; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#538000" />
+    </marker>
+  </defs>
+
+  <rect class="environment" x="12" y="12" width="816" height="628" rx="16" />
+  <text class="heading" x="40" y="46">Local Python environment</text>
+
+  <rect class="card" x="40" y="70" width="760" height="64" rx="9" />
+  <text class="title" x="420" y="96">User code</text>
+  <text class="detail" x="420" y="118">Supplies representative inputs</text>
+  <text class="label" x="449" y="153">calls</text>
+  <path class="edge" d="M 420 134 V 164" />
+
+  <rect class="card" x="40" y="164" width="760" height="64" rx="9" />
+  <text class="title" x="420" y="190">PyTorch model or pipeline</text>
+  <text class="detail" x="420" y="212">Runs its modules as usual</text>
+
+  <rect class="tuning" x="40" y="275" width="760" height="160" rx="12" />
+  <text class="heading" x="60" y="307">AITune</text>
+  <rect class="card stage" x="56" y="331" width="224" height="88" rx="9" />
+  <text class="title" x="168" y="361">Inspect execution</text>
+  <text class="detail" x="168" y="385">Observe calls, timing,</text>
+  <text class="detail" x="168" y="405">and module relationships</text>
+  <rect class="card stage" x="308" y="331" width="224" height="88" rx="9" />
+  <text class="title" x="420" y="361">Wrap and record</text>
+  <text class="detail" x="420" y="385">Capture samples and graph</text>
+  <text class="detail" x="420" y="405">specs for selected modules</text>
+  <rect class="card stage" x="560" y="331" width="224" height="88" rx="9" />
+  <text class="title" x="672" y="361">Tune each graph</text>
+  <text class="detail" x="672" y="385">The strategy evaluates</text>
+  <text class="detail" x="672" y="405">and selects a backend</text>
+  <rect class="card optional" x="184" y="451" width="348" height="52" rx="8" />
+  <text class="title optional-title" x="358" y="473">Optional user-provided implementations</text>
+  <text class="detail optional-detail" x="358" y="491">Backend, strategy, or both</text>
+
+  <text class="label" x="550" y="251">Representative model calls</text>
+  <path class="edge" d="M 420 228 V 252 H 168 V 331" />
+  <path class="edge" d="M 280 375 H 308" />
+  <path class="edge" d="M 532 375 H 560" />
+  <path class="edge extension" d="M 532 477 H 604 V 419" />
+
+  <rect class="card" x="40" y="550" width="760" height="66" rx="9" />
+  <text class="title" x="420" y="577">User code runs inference</text>
+  <text class="detail" x="420" y="600">The same model runs wrapped modules with the selected backends</text>
+  <path class="edge" d="M 672 419 V 526 H 420 V 550" />
+</svg>

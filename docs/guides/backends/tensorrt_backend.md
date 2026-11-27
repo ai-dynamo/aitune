@@ -10,7 +10,7 @@ The TensorRT backend provides highly optimized inference using NVIDIA's TensorRT
 
 `TensorRTBackend` accepts an existing ONNX file through `OnnxModule` and builds an engine without PyTorch export. Export settings such as `use_dynamo` and `opset_version` do not apply to this path.
 
-Only `TensorRTBackend` and `ONNXRuntimeBackend` support tuning `OnnxModule`. Configure an explicit backend list, as shown in [ONNX Model Tuning](../onnx_tuning.md).
+Only `TensorRTBackend` and `ONNXRuntimeBackend` support tuning `OnnxModule`. Configure an explicit backend list, as shown in [Tune an existing ONNX model](../onnx_tuning.md).
 
 ## Overview
 
@@ -222,31 +222,9 @@ config = TensorRTBackendConfig(
 
 ### profiles
 
-Optimization profiles for dynamic shapes.
-
-```python
-from aitune.torch.backend.tensorrt import TensorRTProfile, TensorRTProfileMode
-
-# Single profile (default)
-config = TensorRTBackendConfig(
-    profiles=TensorRTProfileMode.SINGLE,
-)
-
-# Multiple profiles from samples
-config = TensorRTBackendConfig(
-    profiles=TensorRTProfileMode.SAMPLES_USED,
-)
-
-# Custom profiles
-config = TensorRTBackendConfig(
-    profiles=[
-        TensorRTProfile()
-            .add_input_shape("input", (1, 3, 224, 224), (4, 3, 224, 224), (8, 3, 224, 224)),
-    ]
-)
-```
-
-See [Optimization Profiles](#optimization-profiles) section for details.
+Controls how TensorRT configures the minimum, preferred, and maximum input shapes. The default is
+`TensorRTProfileMode.SINGLE`. See [TensorRT Optimization Profiles](tensorrt_optimization_profiles.md) for
+profile modes, sample collection, and custom shape ranges.
 
 ### device
 
@@ -393,107 +371,8 @@ capture overhead observed when the working set exceeds cache capacity. It is not
 
 ## Optimization Profiles
 
-Optimization profiles define the range of input shapes TensorRT will optimize for. They are essential for models with dynamic input sizes.
-
-### Profile Modes
-
-#### SINGLE (Default)
-
-Automatically generates a single profile from recorded samples:
-
-```python
-config = TensorRTBackendConfig(
-    profiles=TensorRTProfileMode.SINGLE,
-)
-```
-
-- **Min shape**: Minimum observed across all samples
-- **Opt shape**: Maximum observed across all samples
-- **Max shape**: Maximum observed across all samples
-
-#### SAMPLES_USED
-
-Generates one exact profile per unique recorded input shape. For dynamic inputs, a wide fallback follows the exact
-profiles and covers the observed range. If find-max-batch-size is enabled, it also covers the discovered batch bound.
-
-When the module defines explicit dynamic shapes, those definitions take precedence and produce one graph-derived
-profile instead of sample profiles.
-
-```python
-config = TensorRTBackendConfig(
-    profiles=TensorRTProfileMode.SAMPLES_USED,
-)
-```
-
-**Important**: Increase `max_num_samples_stored`:
-
-```python
-from aitune.torch.config import config as global_config
-
-global_config.max_num_samples_stored = 100  # Or float("inf")
-```
-
-**Use case**: When you have distinct input shape categories that need separate optimization.
-
-### Custom Profiles
-
-Define exact optimization profiles:
-
-These profiles assume the module defines `forward(input)`, so `input` is the path of its top-level tensor parameter:
-
-```python
-from aitune.torch.backend.tensorrt import TensorRTProfile
-
-profiles = [
-    # Profile for small inputs
-    TensorRTProfile()
-        .add_input_shape(
-            "input",
-            min_shape=(1, 3, 224, 224),
-            opt_shape=(4, 3, 224, 224),
-            max_shape=(8, 3, 224, 224),
-        ),
-    # Profile for large inputs
-    TensorRTProfile()
-        .add_input_shape(
-            "input",
-            min_shape=(1, 3, 512, 512),
-            opt_shape=(4, 3, 512, 512),
-            max_shape=(8, 3, 512, 512),
-        ),
-]
-
-config = TensorRTBackendConfig(profiles=profiles)
-```
-
-### Finding Input Paths
-
-Input tensor paths are shown in tuning logs. Top-level paths are forward parameter names; nested paths include all
-dictionary keys, sequence indices, or attributes:
-
-```text
-INFO - 🚀 Tuning graph `0` for module `my-model`:
-INFO -   graph_spec:
-INFO -     input_spec:
- Tensors:
-╒═══════════════╤═════════════════╤═══════════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
-│ Access Path   │ Semantic Path   │ Shape                         │ Min Shape        │ Max Shape        │ Dtype         │
-╞═══════════════╪═════════════════╪═══════════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
-│ input         │ input           │ ['batch0', 3, 'dim2', 'dim3'] │ [2, 3, 224, 224] │ [8, 3, 448, 448] │ torch.float32 │
-╘═══════════════╧═════════════════╧═══════════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
-```
-
-Use the string shown in the `Path` column as the profile key. For example, the top-level path `input` uses `"input"`,
-while a nested dictionary path uses `inputs["tokens"]`.
-
-### Best Practices for Profiles
-
-1. **Min < Opt < Max**: Ensure min ≤ opt ≤ max for all dimensions
-2. **Opt = Typical**: Set opt to your most common input size
-3. **Range Coverage**: Ensure your runtime inputs fall within [min, max]
-4. **Multiple Profiles**: Use for distinct size categories, not slight variations
-5. **Test Runtime Shapes**: Verify your production shapes are covered
-
+See the [TensorRT Optimization Profiles guide](tensorrt_optimization_profiles.md) to configure shape ranges
+for your workload.
 
 ## Troubleshooting
 

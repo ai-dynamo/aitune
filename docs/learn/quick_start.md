@@ -4,16 +4,8 @@
 title: "Quick Start"
 ---
 
-This quick start provides examples of tuning and deployment paths available in NVIDIA AITune.
-
-NVIDIA AITune enables seamless tuning of models for deployment (for example, converting them to TensorRT) without requiring changes to your original Python pipelines.
-
-NVIDIA AITune supports two modes:
-
-* Ahead-of-time tuning — provide a model or a pipeline, and a dataset/dataloader. You can either rely on `inspect` to detect promising modules to tune or manually select them.
-* Just-in-time tuning — set a special environment variable, run your script without changes, and AITune will, on the fly, detect modules and tune them one by one.
-
-Ahead-of-time mode is more powerful and allows you to tweak more settings, whereas just-in-time works out of the box but offers less control over the tuning process. For a more detailed comparison, see the [Comparison between AOT and JIT tuning](#comparison-between-ahead-of-time-and-just-in-time-tuning) section.
+Tune a Stable Diffusion pipeline with either workflow. Use the
+[AOT and JIT comparison table](concepts.md#when-to-use-aot-or-jit) to choose which example to follow.
 
 ## Enabling logging
 
@@ -195,43 +187,4 @@ pipe("A snowy mountain at sunset")
 pipe("A snowy mountain at sunset")
 ```
 
-See [JIT Tuning Guide](../guides/jit_tuning.md#tuning-modes) for a detailed comparison of the two modes.
-
-## Comparison between ahead-of-time and just-in-time tuning
-
-The ahead-of-time tuning gives you the most control over the tuning process:
-
-* it detects the batch axis and dynamic axes (axes that change shape independently of batch size, e.g., sequence length in LLMs)
-* allows picking modules to tune
-* you can pick a tuning strategy (e.g., best throughput) for the whole process or per-module
-* you can pick tuning backends (e.g., TensorRT, TorchInductor, TorchAO, ONNXRuntime) which will be used by the strategy
-* you can mix different backends in the same model/pipeline
-* you can manually verify the tuning process (note: AITune performs basic checks for NaNs and errors)
-* you can save the resulting artifact and later read it from disk
-
-The big advantage of just-in-time tuning is that you don't need to modify the user's script to tune a model. However, it has some disadvantages - since it cannot access data directly (you don't provide a dataloader):
-
-* it cannot deduce batch size nor do benchmarking
-* input/output shapes depend on the data seen, so for example, TRT backend will build a profile only for that data
-* it needs at least one inference call to record inputs before tuning; later calls use tuned modules where tuning succeeded
-* if you need dynamic axes (e.g., TRT backend), you need to provide two different batch sizes
-* benchmarking-based strategies are limited because JIT cannot extrapolate to controlled batch sizes
-* you can specify a global tune strategy for the whole model
-
-The following table summarizes the difference between modes:
-
-| Feature                 | Ahead-of-time         | Just-in-time                  |
-|-------------------------|-----------------------|-------------------------------|
-| Detecting dynamic axes  | Yes                   | Yes                           |
-| Extrapolating batches   | Yes                   | No                            |
-| Benchmarking            | Yes                   | No (no extrapolating batches) |
-| Modules for tuning      | User has full control | Picked automatically          |
-| Selecting tune strategy | Global or per module  | Global                        |
-| Available strategies    | All                   | Global only                   |
-| Tune time               | Slow                  | Quick                         |
-| Saving artifacts        | Yes                   | No                            |
-| Load tuned model time   | Quick                 | Re-tuning required            |
-| Code changes required   | Yes                   | No                            |
-| Caching                 | Yes                   | Build artifacts only          |
-
-Note: JIT mode writes build artifacts and logs under `jit_config.cache_dir` / `AITUNE_JIT_CACHE_DIR`, but it does not reuse them as tuned checkpoints across Python interpreter runs. Every new process starts tuning from scratch.
+See [JIT tuning modes](../guides/jit_tuning.md#tuning-modes) to compare eager and deferred tuning.

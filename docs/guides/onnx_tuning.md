@@ -1,10 +1,11 @@
 ---
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-title: "ONNX Model Tuning"
+title: "Tune an existing ONNX model"
 ---
 
-`OnnxModule` wraps an existing ONNX file as a PyTorch module so AITune can record inputs, tune it, and run inference.
+Use the [ahead-of-time tuning workflow](aot_tuning.md) when you already have an ONNX file. `OnnxModule` wraps
+the file as a PyTorch module so AITune can record inputs, tune it, and run inference.
 Only **`ONNXRuntimeBackend`** and **`TensorRTBackend`** support tuning `OnnxModule`. Both use the source ONNX file directly, without exporting it through PyTorch again.
 
 ## Load and run an ONNX model

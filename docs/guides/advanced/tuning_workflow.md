@@ -235,7 +235,7 @@ strategy = ait.FirstWinsStrategy([
 
 1. Try each backend in order
 2. Build the backend with the module and graph spec
-3. Validate correctness by comparing outputs
+3. Check inference behavior against recorded metadata
 4. Profile against the Torch eager baseline
 5. Return the first backend that passes the performance threshold
 
@@ -300,14 +300,11 @@ The backend's state is governed by the strategy and the user must not change it.
 
 After building a backend, the strategy tries to validate it. This is enabled by default and can be turned off with `strategy.enable_correctness_check(False)`.
 
-AITune validates correctness by running the tuned backend on sample data. These checks are required to ensure the backend is correctly built:
-
-1. Python basic types `int`, `float` must be finite.
-2. Tensors values must be finite.
-3. All nested structures are checked against points 1 and 2.
-4. Tensor shapes must match against original data i.e. static, dynamic and batch axes must match.
-
-This ensures tuning does not break the module.
+The checks run the candidate on recorded samples. They verify that outputs are finite and have the expected
+tensor shapes, and that recorded input changes match the expected tensor shapes and non-tensor values after the call.
+For graphs with detected dynamic axes, AITune also runs inference at the recorded minimum and maximum shapes and
+checks the output shapes. Compare the tuned and original pipelines on representative requests to assess numerical
+agreement and application quality.
 
 ### 6. Backend Activation
 
@@ -328,92 +325,7 @@ Now your model is ready for optimized inference!
 
 ## Workflow Customization
 
-The workflow can be adapted by implementing a custom strategy or a backend.
-
-### Custom Strategy
-
-If you would like to write a custom strategy, extend the `TuneStrategy` class and implement the `_tune` method:
-
-```python
-    def _tune(
-        self,
-        module: nn.Module,
-        name: str,
-        graph_spec: GraphSpec,
-        data: list[Sample],
-        device: torch.device,
-        cache_dir: Path,
-    ) -> Backend:
-        """Tunes given torch module with provided graph_spec and data.
-
-        Note: each tuning operation should perform a deep copy of a backend as tuning could be called multiple times for the
-        same module, i.e., if there are different graph specs
-
-        Returns:
-            The tuned and activated backend.
-
-        Raises:
-            RuntimeError: if the backend fails any check.
-        """
-        ...
-```
-
-If needed, you can also extend the`_pre_tune` and `_post_tune` methods, which are invoked before and after the `_tune`.
-
-### Custom Backend
-
-To write a custom backend, extend the `Backend` base class and `BackendConfig` data class which serves as a config for your custom backend. The following methods are required to be implemented:
-
-- `key()` - Returns a stable identifier for the backend/config combination; used for caching and lookup.
-- `describe()` - Returns a short human-readable description of the backend/config changes.
-- `to_dict()` - Serializes backend state; includes `ArtifactPath` objects for files or directories to bundle in
-  checkpoints.
-- `from_dict()` - Reconstructs a backend instance from the serialized state.
-- `_build()` - Builds backend artifacts for a specific module/graph and returns a ready backend.
-- `_activate()` - Loads/initializes the backend for inference after it was inactive or checkpoint-loaded.
-- `_deactivate()` - Releases runtime resources and makes the backend inactive.
-- `_deploy()` - Finalizes the backend for deployment; after this it cannot change state.
-- `_infer()` - Executes inference with the backend for the provided inputs.
-
-Every custom backend must declare its supported execution modes and build mode. Include `ExecutionMode.SINGLE_GPU` for
-ordinary modules and `ExecutionMode.MULTI_GPU` when the backend can preserve distributed module execution. If
-activation compiles or otherwise requires the original PyTorch module, declare the backend as just-in-time so AITune
-retains that module:
-
-```python
-from aitune.torch.backend import Backend, BuildMode, ExecutionMode
-
-
-class CustomJitBackend(Backend):
-    _execution_modes = frozenset({ExecutionMode.SINGLE_GPU})
-    _build_mode = BuildMode.JUST_IN_TIME
-```
-
-For serialization with `ait.load` and `ait.save`, the `to_dict` and `from_dict` methods are used. Anything placed in
-the dictionary will be saved and restored as checkpoint state. Files and directories are copied only when explicitly
-represented by `ArtifactPath`; ordinary `Path` values remain regular serialized configuration values.
-
-Create a planned artifact from its owning cache directory and relative path. Both arguments accept strings and
-`Path` objects, while the `path` property returns the effective filesystem location used by the backend:
-
-```python
-from aitune.torch.backend import ArtifactPath
-
-engine_artifact = ArtifactPath(cache_dir, "tensorrt/model.engine")
-build_engine(output_path=engine_artifact.path)
-
-
-def to_dict(self):
-    return {"engine_path": engine_artifact}
-```
-
-If another API returns the path of an artifact it has already created, use
-`ArtifactPath.from_existing(engine_path, root=cache_dir)`. The explicit root preserves the intended directory
-structure and prevents accidentally including a file outside that directory. A backend's `from_dict()` receives
-ready-to-use `ArtifactPath` objects, so it should not construct or rebase them itself.
-
-AITune preserves `tensorrt/model.engine` inside the checkpoint and rebases the artifact root when loading it from a
-different location.
+Use [Extending AITune](extending_aitune.md) to implement a backend or strategy in your own package.
 
 ## Monitoring the Workflow
 

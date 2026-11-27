@@ -42,3 +42,5 @@ done
 for file in CHANGELOG.md CONTRIBUTING.md LICENSE; do
   if [ -f "$src/$file" ]; then cp "$src/$file" "$dst/pages-dev/$file"; fi
 done
+
+python3 "$(dirname "$0")/sync_redirects.py" "$src/fern/docs.yml" "$dst/docs.yml" dev

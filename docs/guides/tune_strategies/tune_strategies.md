@@ -62,7 +62,7 @@ AITune provides five built-in strategies:
 
 For `OnnxModule`, dynamic resolution selects only candidates tagged for ONNX input: `ONNXRuntimeBackend` and
 `TensorRTBackend`. Explicit strategies must likewise contain only ONNX-compatible backends. See
-[ONNX Model Tuning](../onnx_tuning.md) for a complete example.
+[Tune an existing ONNX model](../onnx_tuning.md) for a complete example.
 
 ## Why Backends Can Fail
 
@@ -92,7 +92,7 @@ Use the table below as a quick decision guide. If you already know a backend is 
 | OneBackendStrategy        | Known backend works, production               | Fast        | High (if backend works) | Depends on backend              |
 | FirstWinsStrategy         | Want reliability, quick tuning                | Fast-Medium | Very High               | Good                            |
 | MaxThroughputStrategy     | Maximum throughput, batch workloads           | Slow        | High                    | Best throughput                 |
-| MinLatencyStrategy        | Minimum latency, fixed batch size workloads   | Slow        | High                    | Best latency at given batch size|
+| MinLatencyStrategy        | Minimum latency at batch size 1              | Slow        | High                    | Best latency at batch size 1    |
 | LatencyBudgetStrategy     | Maximum throughput with a latency SLO         | Slow        | High                    | Best throughput under budget    |
 
 ## OneBackendStrategy
@@ -138,7 +138,9 @@ ait.tune(model, input_data)
 
 ## FirstWinsStrategy
 
-Tries backends in priority order and returns the first one that successfully builds, passes correctness checks, and meets the performance threshold. If a backend fails or is slower than the Torch eager baseline, the strategy moves on to the next candidate instead of aborting. If all backends fail, the error is caught and the original model is used as-is. List backends from fastest to most compatible — for example, TensorRT first, then Torch Inductor.
+Tries backends in priority order and returns the first one that successfully builds, passes correctness checks, and meets the performance threshold. If a backend fails or is slower than the Torch eager baseline, the strategy moves on to the next candidate instead of aborting. If no candidate passes the configured checks, the strategy raises an error. By default, AOT `ait.tune()` keeps
+the original module when tuning fails. Set `ignore_failing_modules=False` to surface the error. Order candidates
+by your preference, such as TensorRT first and Torch Inductor second.
 
 ### Usage
 
@@ -150,10 +152,10 @@ from aitune.torch.backend import (
 )
 import aitune.torch as ait
 
-# List backends in priority order (fastest → most compatible)
+# List backends in the order you want to try them
 backends = [
-    TensorRTBackend(config=TensorRTBackendConfig()),  # Best performance, but may not support all models
-    TorchInductorJitBackend(),  # Good performance, broader compatibility
+    TensorRTBackend(config=TensorRTBackendConfig()),
+    TorchInductorJitBackend(),
 ]
 
 # Create strategy
@@ -177,7 +179,7 @@ ait.tune(model, input_data)
 
 - Experimentation with unknown or diverse models
 - CI/CD pipelines where different models may need different backends
-- Maximum reliability (if all backends fail, the original model is used as-is)
+- Trying a preferred backend before other candidates
 - Quick validation that *something* works before investing in backend-specific tuning
 
 ❌ **Not ideal for**:
@@ -188,9 +190,8 @@ ait.tune(model, input_data)
 
 ### Best Practices
 
-1. **Order by Performance**: Put fastest backends first
-2. **Automatic Fallback**: If all backends fail, the original model is used as-is
-3. **Similar Configurations**: Use compatible configs (e.g., all FP16)
+1. Put the candidates you prefer first.
+2. Make candidates comparable when practical, for example by using the same precision.
 
 ## MaxThroughputStrategy
 
