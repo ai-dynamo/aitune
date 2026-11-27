@@ -467,6 +467,9 @@ The functional workflows validate the examples.
 ## Comments and docstrings
 
 - Write Google-style docstrings for public modules, classes, and functions.
+- Keep docstrings and comments concise. Say each thing once. A simple function needs only a
+  one-line docstring. If you add an `Args:` section, ruff (`D417`) requires an entry for every
+  parameter.
 - Add an `Examples:` section to the docstring of each name in `aitune.torch.__all__`. For other
   public functions, add an example when the usage is not obvious from the signature.
 - Make examples runnable doctests (`>>>`). Pytest runs them on CPU in CI. If a statement needs a GPU
