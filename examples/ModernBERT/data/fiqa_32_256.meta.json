@@ -1,0 +1,20 @@
+{
+  "source": {
+    "repo": "BeIR/fiqa",
+    "revision": "979c07a7cb5ccc6ca009792241fa1250b98055dd",
+    "config": "corpus",
+    "split": "corpus",
+    "num_documents": 57638,
+    "num_documents_scanned": 3080,
+    "download": "dataset_server_rows",
+    "selection_assumption": "FiQA corpus rows are in strictly ascending numeric document ID order."
+  },
+  "tokenizer": {
+    "repo": "answerdotai/ModernBERT-base",
+    "revision": "8949b909ec900327062f0ebf497f51aef5e6f0c8"
+  },
+  "num_passages": 225,
+  "min_tokens": 32,
+  "max_tokens": 256,
+  "sha256": "0bf8e278075b824d8c8be4c308ff672a3b1c3444da6254ee1b5fc05265acf7ee"
+}

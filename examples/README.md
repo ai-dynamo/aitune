@@ -87,12 +87,19 @@ to find configurations and commands you can adapt with your own compatible check
       <td>AOT</td><td>-</td><td>Dynamo</td>
     </tr>
     <tr>
-      <th scope="row">Text encoding</th>
+      <th scope="rowgroup" rowSpan="2">Text encoding</th>
       <td><a href="./BERT/README.md">BERT-base-uncased</a></td>
       <td><a href="https://huggingface.co/docs/transformers/index">Transformers</a> / <a href="https://onnx.ai/">ONNX file</a></td>
       <td><a href="https://huggingface.co/google-bert/bert-base-uncased">Hugging Face</a></td>
       <td>FP32</td>
       <td>AOT</td><td>-</td><td>Triton</td>
+    </tr>
+    <tr>
+      <td><a href="./ModernBERT/README.md">ModernBERT-base</a></td>
+      <td><a href="https://huggingface.co/docs/transformers/index">Transformers</a></td>
+      <td><a href="https://huggingface.co/answerdotai/ModernBERT-base">Hugging Face</a></td>
+      <td>-</td>
+      <td>-</td><td>-</td><td>-</td>
     </tr>
     <tr>
       <th scope="row">Text embeddings</th>
