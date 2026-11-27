@@ -4,12 +4,14 @@
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from functools import cached_property
+from typing import Any, Literal, cast
 
 from aitune.torch.dynamic_shapes import BatchDim, DynamicShapes, ShapeDefinition
 from aitune.torch.module.forward_effects_spec import ForwardEffectsSpec, InputMutation, TensorMutationPolicy
-from aitune.torch.module.forward_signature import ForwardSignature
+from aitune.torch.module.forward_signature import ForwardInputPath, ForwardSignature
 from aitune.torch.module.locator import Locator
+from aitune.torch.module.output_reconstruction import OutputReconstruction
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tensor_spec import TensorSpec
 from aitune.torch.utils.tensor import format_tensor_name
@@ -98,6 +100,7 @@ class GraphSpec:
             arguments,
             self.output_spec,
             tensor_mutation_policies,
+            output_reconstruction=self._output_reconstruction,
         )
 
     def make_batch(self, args: tuple, kwargs: dict[str, Any], batch_size: int) -> tuple[tuple, dict[str, Any]]:
@@ -118,7 +121,7 @@ class GraphSpec:
 
     def get_shape_definition(self, locator: Locator) -> ShapeDefinition | None:
         """Return the explicit shape definition for an input tensor, if configured."""
-        return self.dynamic_shapes.get(locator.path)
+        return self.dynamic_shapes.get(cast(ForwardInputPath, locator.path))
 
     def get_effective_input_shapes(
         self, locator: Locator, tensor_spec: TensorSpec
@@ -227,3 +230,14 @@ class GraphSpec:
     def __repr__(self) -> str:
         """Return representation of GraphSpec."""
         return self.__str__()
+
+    @cached_property
+    def _output_reconstruction(self) -> OutputReconstruction | None:
+        """Prepare once for this graph's fixed template; rebuild lazily after checkpoint loading.
+
+        Aliased outputs need current caller-owned objects, so they retain locator reconstruction.
+        The recipe stores neither the source template nor tensor results from previous calls.
+        """
+        if self.forward_effects_spec.output_input_aliases:
+            return None
+        return OutputReconstruction.prepare(self.output_spec, self.forward_effects_spec.output_template)

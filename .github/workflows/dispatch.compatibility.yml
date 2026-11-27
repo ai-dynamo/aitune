@@ -95,7 +95,7 @@ jobs:
             uv_torch_backend: cu128
             cuda_image: 12.9.2-devel-ubuntu24.04
             cuda_major: 12
-            uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 cupy-cuda12x --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
+            uv_extra_args: nvidia-cuda-runtime-cu13==0.0.0a0 cupy-cuda12x tensorrt-cu12 --excludes ./cu12-excludes.txt --reinstall-package tensorrt-cu12 --reinstall-package tensorrt-cu12-bindings --reinstall-package tensorrt-cu12-libs
           - &cu130
             uv_torch_backend: cu130
             cuda_image: 13.0.3-devel-ubuntu24.04

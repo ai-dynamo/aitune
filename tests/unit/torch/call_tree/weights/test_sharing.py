@@ -263,7 +263,7 @@ def test_a_method_unit_does_not_report_its_own_forward_as_reader():
             return x * self.w
 
     unit = Unit()
-    tree = record(unit, lambda: unit(torch.randn(2, 8)), iterations=1)
+    tree = record(unit, lambda: unit(torch.randn(2, 8)), num_samples=1)
     assert shared_weights_of(tree, "forward > step") == []
 
 
@@ -445,7 +445,7 @@ def test_a_device_lookup_inside_the_unit_is_not_reported():
             return x * self.w
 
     unit = Unit()
-    tree = record(unit, lambda: unit(torch.randn(2, 8)), iterations=1)
+    tree = record(unit, lambda: unit(torch.randn(2, 8)), num_samples=1)
     assert shared_weights_of(tree, unit) == []
 
 
@@ -495,7 +495,7 @@ def test_buffer_only_unit_moved_from_outside_is_reported():
         unit(torch.randn(2, 8))
         unit.double()
 
-    tree = record(unit, infer, iterations=1)
+    tree = record(unit, infer, num_samples=1)
     (weight,) = shared_weights_of(tree, unit)
     assert weight.name == "scale"
     assert weight.accesses == [(infer.__qualname__, "move")]
@@ -559,7 +559,7 @@ def test_buffer_read_before_a_cast_during_recording_is_reported():
         model.double()
         unit(torch.randn(2, 8).double()).sum()
 
-    tree = record(model, infer, iterations=1)
+    tree = record(model, infer, num_samples=1)
 
     (bias, scale, weight) = shared_weights_of(tree, unit)
 
@@ -602,7 +602,7 @@ def test_a_parameter_given_new_storage_without_apply_is_still_reported():
             unit.weight.data = unit.weight.data.clone()
         F.linear(torch.randn(2, 8), unit.weight)
 
-    tree = record(model, infer, iterations=1)
+    tree = record(model, infer, num_samples=1)
     ((weight, tensor_id),) = shared_weights_with_ids(tree, unit)
     assert weight.name == "unit.weight"
     assert weight.accesses == [(infer.__qualname__, "read")]
@@ -620,7 +620,7 @@ def test_a_parameter_replaced_on_its_owner_is_still_reported():
             unit._parameters["weight"] = torch.nn.Parameter(unit.weight.detach().clone())
         F.linear(torch.randn(2, 8), unit.weight)
 
-    tree = record(model, infer, iterations=1)
+    tree = record(model, infer, num_samples=1)
     ((weight, tensor_id),) = shared_weights_with_ids(tree, unit)
     assert weight.name == "unit.weight"
     assert weight.accesses == [(infer.__qualname__, "read")]

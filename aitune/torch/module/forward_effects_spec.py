@@ -28,6 +28,7 @@ from typing import Any
 import torch
 
 from aitune.torch.module.locator import Locator
+from aitune.torch.module.output_reconstruction import OutputReconstruction
 from aitune.torch.module.sample_metadata import SampleMetadata
 
 
@@ -50,14 +51,16 @@ class InputMutationKind(str, Enum):
 class TensorMutationPolicy(str, Enum):
     """How a backend result should update a changed input tensor.
 
-    PRESERVE_INPUT copies COPY_TENSOR results into the existing tensor. REPLACE_INPUT installs the
-    backend's result at the input path instead; retained references to the old tensor may stay unchanged.
+    PRESERVE_INPUT copies COPY_TENSOR results into the existing tensor. REPLACE_INPUT requests assignment
+    of the backend's result when the path reaches a caller-owned mutable container; retained references
+    to the old tensor may stay unchanged. For direct arguments or paths containing only tuples,
+    COPY_TENSOR falls back to copying values because rebinding would not update the caller's state.
     REPLACE_TENSOR mutations always assign the result, regardless of this policy.
 
     Mutation kind describes the recorded model behavior; this policy selects backend restoration.
     AOT Inductor and Torch-TensorRT AOT keep the default PRESERVE_INPUT so references to an in-place
-    mutation target remain valid. ONNX Runtime and standalone TensorRT choose REPLACE_INPUT to use
-    returned buffers as the current state rather than copy values back into old leaves. That choice
+    mutation target remain valid. ONNX Runtime and standalone TensorRT request REPLACE_INPUT to use
+    returned buffers as the current state where a mutable container permits assignment. That choice
     preserves the containing object, but provides weaker tensor identity guarantees. Output-buffer
     ownership alone does not require replacement.
 
@@ -72,7 +75,12 @@ class TensorMutationPolicy(str, Enum):
 
 @dataclass(frozen=True)
 class InputMutation:
-    """One observable input change made by a module call.
+    """One observable input leaf change made by a module call.
+
+    ``output_index`` selects a tensor from the flat backend outputs, including
+    appended state outputs when the tensor is not a user output. ``value`` holds
+    the recorded replacement for a non-tensor leaf; it is replayed as a constant,
+    not recomputed from runtime inputs.
 
     Attributes:
         locator: Path into normalized arguments where restoration applies the change.
@@ -85,6 +93,24 @@ class InputMutation:
     kind: InputMutationKind
     output_index: int | None = None
     value: Any = None
+
+    def can_replace_input(self, arguments: dict[str, Any]) -> bool:
+        """Return whether replacement reaches a mutable container owned by the caller.
+
+        Check the containers between the argument binding and the changed leaf. Exclude the
+        normalized arguments dictionary, which is internal to AITune, and the leaf itself.
+        Replacement reaches the caller if at least one of those containers is mutable.
+
+        For example, state={"cache": tensor}, state={"cache": (tensor,)}, and
+        state=({"cache": tensor},) all permit replacement through the caller's dictionary.
+        A tuple containing the tensor can be rebuilt and assigned into that dictionary.
+
+        For direct arguments or paths containing only tuples, such as state=tensor,
+        state=(tensor,), or state=((tensor,),), replacement would change only the internal
+        argument binding. COPY_TENSOR therefore falls back to copying values into the original tensor.
+        """
+        steps = tuple(self.locator.path_iter())
+        return any(not isinstance(Locator(steps[:depth]).get_value(arguments), tuple) for depth in range(1, len(steps)))
 
 
 @dataclass(frozen=True)
@@ -103,6 +129,22 @@ class OutputInputAlias:
 @dataclass(frozen=True)
 class ForwardEffectsSpec:
     """Recorded output structure and input changes for one graph.
+
+    Recording creates this contract on the first call for an input graph. Later
+    calls must agree on which inputs change, how they change, and which outputs
+    are the same objects as inputs. Updating observed shapes does not record a
+    new contract.
+
+    Tensor changes are restored by copying into existing inputs or replacing
+    tensor leaves. Backends may request replacement for copy mutations when the
+    leaf belongs to a caller-owned mutable container. Non-tensor replacements
+    reuse recorded constants. Output aliases return the same input tensors or
+    containers. They do not rebuild arbitrary tensor views that share storage.
+
+    The contract covers values reached by Locator, including explicitly
+    registered mutation fields. It does not describe leaf deletion, arbitrary
+    Python side effects, or hidden module attributes and buffers; module state
+    remains the responsibility of the exporter and backend.
 
     Example:
         If forward assigns ``cache[0] = x + 1`` and returns ``x * 2``, compiled execution returns
@@ -148,6 +190,8 @@ class ForwardEffectsSpec:
         arguments: dict[str, Any],
         output_spec: SampleMetadata,
         tensor_mutation_policies: Mapping[int, TensorMutationPolicy] | None = None,
+        *,
+        output_reconstruction: OutputReconstruction | None = None,
     ) -> Any:
         """Apply input changes and rebuild the structured module output.
 
@@ -159,10 +203,14 @@ class ForwardEffectsSpec:
             flat_outputs: User tensor results followed by extra mutation results in recorded order.
                 A single tensor is also accepted for a one-result interface.
             arguments: Live normalized arguments from this inference call. Recorded paths update their
-                tensors and nested containers; replacing a top-level binding only changes this dictionary.
+                tensors and nested containers. COPY_TENSOR changes to direct arguments or paths with only
+                tuple ancestors use copy-back, since assigning a binding would only change this dictionary.
             output_spec: Metadata defining user tensor output paths and order, excluding extra results.
             tensor_mutation_policies: Optional policies keyed by flat output index. Defaults to copying
-                COPY_TENSOR results into existing tensors. Backends can instead install their output buffers.
+                COPY_TENSOR results into existing tensors. Backends can request buffer replacement when
+                the path reaches a caller-owned mutable container; other COPY_TENSOR paths use copy-back.
+            output_reconstruction: Optional recipe prepared by GraphSpec for its fixed output template.
+                Outputs with preserved input aliases retain the general reconstruction path.
 
         Returns:
             The structured user output with recorded input/output identities preserved.
@@ -186,7 +234,8 @@ class ForwardEffectsSpec:
                 mutation.output_index,
                 TensorMutationPolicy.PRESERVE_INPUT,
             )
-            if mutation.kind == InputMutationKind.COPY_TENSOR and policy == TensorMutationPolicy.PRESERVE_INPUT:
+            replace_input = policy == TensorMutationPolicy.REPLACE_INPUT and mutation.can_replace_input(arguments)
+            if mutation.kind == InputMutationKind.COPY_TENSOR and not replace_input:
                 target = mutation.locator.get_value(arguments)
                 if not isinstance(target, torch.Tensor):
                     raise TypeError(
@@ -196,6 +245,9 @@ class ForwardEffectsSpec:
                     target.copy_(value)
             else:
                 mutation.locator.set_value(arguments, value)
+
+        if output_reconstruction is not None and not self.output_input_aliases:
+            return output_reconstruction.unflatten_tensors(flat_outputs[:user_output_count])
 
         return output_spec.unflatten_tensors(
             flat_outputs[:user_output_count],

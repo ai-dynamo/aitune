@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Test helpers: wrap methods so they report to a CallRecorder, and build call trees by hand."""
+"""Test helpers: wrap methods so they report to the active call recorder, and record call trees."""
 
 import functools
 from contextlib import contextmanager
@@ -10,26 +10,21 @@ from torch import nn
 
 from aitune.torch.call_tree.call_tree import CallTree
 from aitune.torch.call_tree.methods import user_defined_methods
-from aitune.torch.call_tree.nodes import CallNode
-from aitune.torch.call_tree.recorder import CallRecorder
-from tests.toy_models.call_tree_models import Block, NoWeights
+from aitune.torch.call_tree.nodes import CallNode, CallPath, Sample
+from aitune.torch.call_tree.recording import CallRecorder, StructureRecorder
 
 
-def wrap_method(recorder: CallRecorder, obj, name: str, label: str, restore: list):
-    """Replace ``obj.<name>`` with a wrapper reporting to ``recorder``; remember how to restore it."""
+def wrap_method(obj, name: str, label: str, restore: list):
+    """Replace ``obj.<name>`` with a wrapper reporting to the active recorder; remember how to restore it."""
     original = getattr(obj, name)
     was_instance = name in vars(obj)
 
     @functools.wraps(original)
     def wrapper(*args, **kwargs):
-        frame = recorder.begin_call(label, obj, name, args, kwargs)
-        try:
-            result = original(*args, **kwargs)
-        except BaseException:
-            recorder.end_call(frame)
-            raise
-        recorder.end_call(frame, result)
-        return result
+        recorder = CallRecorder.active()
+        if recorder is None:
+            return original(*args, **kwargs)
+        return recorder.call(original, args, kwargs, label=label, obj=obj, method=name)
 
     setattr(obj, name, wrapper)
     restore.append((obj, name, was_instance, original))
@@ -51,7 +46,7 @@ def invisible_to_recorder():
 
 
 @contextmanager
-def instrumented(recorder: CallRecorder, root, root_label: str = "root"):
+def instrumented(recorder: StructureRecorder, root, root_label: str = "root"):
     """Wrap ``forward`` and user methods of every module under ``root`` (and ``root``'s own methods)."""
     restore: list = []
     objects = [(root_label, root)]
@@ -67,92 +62,42 @@ def instrumented(recorder: CallRecorder, root, root_label: str = "root"):
         for label, obj in objects:
             if isinstance(obj, nn.Module):
                 recorder.register_module(label, obj)
-                wrap_method(recorder, obj, "forward", f"{label}.forward", restore)
+                wrap_method(obj, "forward", f"{label}.forward", restore)
             for name in user_defined_methods(obj):
-                wrap_method(recorder, obj, name, f"{label}.{name}", restore)
+                wrap_method(obj, name, f"{label}.{name}", restore)
         yield
     finally:
         restore_methods(restore)
 
 
-def record(root, call, iterations: int = 2, root_label: str = "root") -> CallTree:
-    """Record ``call()`` for ``iterations`` iterations with ``root`` instrumented."""
-    recorder = CallRecorder()
+def record(root, call, num_samples: int = 2, root_label: str = "root") -> CallTree:
+    """Record ``call()`` for ``num_samples`` samples with ``root`` instrumented."""
+    recorder = StructureRecorder()
     with instrumented(recorder, root, root_label), recorder:
-        for _ in range(iterations):
-            recorder.begin_iteration()
-            call()
-            recorder.end_iteration()
+        for _ in range(num_samples):
+            with recorder.record_sample():
+                call()
     return recorder.result()
 
 
-def make_tree(spec: dict, iterations: int = 1, modules: dict | None = None) -> CallTree:
-    """Build a call tree from ``{label: (calls, time_ms, children_spec)}``, nested; labels end in ``.method``.
+def tree_of(
+    nodes: list[CallNode],
+    calls_per_sample: dict[CallPath, list[int]] | None = None,
+    time_ms_per_sample: dict[CallPath, list[float]] | None = None,
+) -> CallTree:
+    """A ``CallTree`` of ``nodes`` whose samples give them ``calls_per_sample``/``time_ms_per_sample``.
 
-    ``modules`` maps labels to the ``nn.Module`` the node belongs to.
+    A node's call count is stored only where it is > 0, and its time only where ``time_ms_per_sample`` has an
+    entry, so a node can be untimed (``time_ms_per_sample`` None) or timed on some samples (trailing 0.0s come
+    from the missing keys).
     """
-    modules = modules or {}
-    tree = CallTree(iterations=iterations)
-    order = [0]
-
-    def add(parent_path, label, calls, time_ms, children):
-        path = (*parent_path, label)
-        method = label.rsplit(".", 1)[-1]
-        module = modules.get(label)
-        node = CallNode(
-            path=path,
-            label=label,
-            owner_class=type(module).__name__ if module is not None else label.rsplit(".", 2)[-2],
-            method=method,
-            module=module,
-            calls=calls,
-            time_ms=time_ms,
-            first_seen=order[0],
+    counts, times = calls_per_sample or {}, time_ms_per_sample or {}
+    n_samples = max((len(v) for v in [*counts.values(), *times.values()]), default=0)
+    samples = [
+        Sample(
+            calls={path: c[i] for path, c in counts.items() if i < len(c) and c[i] > 0},
+            time_ms={path: t[i] for path, t in times.items() if i < len(t)},
         )
-        order[0] += 1
-        tree.nodes[path] = node
-        if parent_path:
-            tree.nodes[parent_path].children.append(path)
-        for child_label, child_spec in children.items():
-            add(path, child_label, *child_spec)
-
-    for label, node_spec in spec.items():
-        add((), label, *node_spec)
-    for label, module in modules.items():
-        tree.modules.append((label.rsplit(".", 1)[0], module))
-    tree.sequences = [[] for _ in range(iterations)]
-    return tree
-
-
-def linear():
-    return nn.Linear(2, 2)
-
-
-def vla_tree(loop_calls: int = 5):
-    """root -> vision, llm (4 blocks), dit_forward x5 -> (dit, t_embedder); weight-less positions."""
-    modules = {
-        "root.forward": nn.Module(),
-        "root.vision.forward": linear(),
-        "root.llm.forward": nn.Module(),
-        "root.positions.forward": NoWeights(),
-        "root.dit.forward": linear(),
-        "root.t_embedder.forward": linear(),
-        **{f"root.llm.layers.{i}.forward": Block() for i in range(4)},
-    }
-    spec = {
-        "root.forward": (
-            1,
-            100.0,
-            {
-                "root.vision.forward": (1, 20.0, {}),
-                "root.positions.forward": (1, 5.0, {}),
-                "root.llm.forward": (1, 30.0, {f"root.llm.layers.{i}.forward": (1, 7.0, {}) for i in range(4)}),
-                "root.dit_forward": (
-                    loop_calls,
-                    45.0,
-                    {"root.dit.forward": (loop_calls, 41.0, {}), "root.t_embedder.forward": (loop_calls, 4.0, {})},
-                ),
-            },
-        )
-    }
-    return make_tree(spec, modules=modules)
+        for i in range(n_samples)
+    ]
+    return CallTree(nodes={n.path: n for n in nodes}, samples=samples)

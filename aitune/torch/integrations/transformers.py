@@ -12,10 +12,17 @@ and is_initialized=True. The compiled graph supplies the tensor; restoration ass
 initialization fields to the caller's layer. These non-tensor fields stay out of ordinary SampleMetadata
 traversal so they do not become tensor inputs or ordinary graph-matching data. They are recorded values,
 not dynamic updates to arbitrary Python state. DynamicCache remains excluded from this traversal.
+
+EncoderDecoderCache needs a different registration: its is_updated flags select whether cross-attention
+initializes or reuses its cache, so ordinary strict metadata must see those flags as well as both nested
+static caches. Registration does not select cache implementations or compile unrecorded phases.
+Strict metadata separates readiness states both with ordinary graph matching and when cache_position
+activates LLM phase matching. Phase matching ignores tensor metadata but retains strict non-tensor values,
+so cross-attention initialization and reuse can select different graphs within the same decode phase.
 """
 
 try:
-    from transformers import DynamicCache, StaticCache, StaticLayer, StaticSlidingWindowLayer
+    from transformers import DynamicCache, EncoderDecoderCache, StaticCache, StaticLayer, StaticSlidingWindowLayer
 
     from aitune.torch.module.locator import Locator
 
@@ -47,6 +54,14 @@ try:
         only_tensors=True,
         mutation_fields=_STATIC_LAYER_INITIALIZATION_FIELDS,
     )
+    # Whisper's static cache wraps separate self-attention and cross-attention caches.
+    # Keep the wrapper's non-tensor is_updated flags visible: they select whether
+    # cross-attention initializes its cache or reuses it. Strict metadata separates these
+    # states even within the same LLM phase selected by cache_position. Nested StaticCache
+    # objects retain tensor-only inspection.
+    # Cache selection remains the caller's responsibility; nested DynamicCache
+    # objects remain unsupported and ignored below.
+    Locator.register_user_type(EncoderDecoderCache)
     # disable inspection of dynamic cache as it is not supported by neither jit nor aot backends
     # the only exception is TorchEagerBackend as it is basically passthrough with some dtype casts
     Locator.ignore_type(DynamicCache)

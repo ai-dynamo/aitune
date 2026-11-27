@@ -10,7 +10,7 @@ from aitune.torch.call_tree.nodes import TensorLeaf
 from tests.functional_ci.models import seeded
 from tests.toy_models.call_tree_models import HIDDEN, VlaToy, vla_inputs
 
-ITERATIONS = 3
+ITERATIONS = 4  # any count times every depth: the timing pass replays each sample once per call-path depth
 
 
 def _vla(device: torch.device):
@@ -34,19 +34,19 @@ def _inspect(model, fn, dataset, call_tree: bool):
 
 @pytest.mark.matrix("inspecting.call-tree/aot")
 def test_call_tree_records_the_calls_and_their_cuda_times(device: torch.device):
-    """The tree has the model's calls with per-iteration counts, and every recorded call has a CUDA time."""
+    """The tree has the model's calls with per-sample counts, and every recorded call has a CUDA time."""
     model, fn, dataset = _vla(device)
 
     tree = _inspect(model, fn, dataset, call_tree=True).call_tree
 
     assert tree is not None
-    assert tree.iterations == ITERATIONS
-    assert tree.nodes[("root.forward",)].calls == ITERATIONS
-    assert tree.nodes[("root.forward", "root.dit_forward")].calls == 5 * ITERATIONS
+    assert all(len(node.calls_per_sample) == ITERATIONS for node in tree.nodes.values())
+    assert tree.nodes[("root.forward",)].total_calls == ITERATIONS
+    assert tree.nodes[("root.forward", "root.dit_forward")].total_calls == 5 * ITERATIONS
     assert ("root.forward", "root.dit_forward", "root.dit.forward") in tree.nodes
-    assert all(node.time_ms > 0 for node in tree.nodes.values())
+    assert all(node.total_time_ms is not None and node.total_time_ms > 0 for node in tree.nodes.values())
     [dit] = tree.nodes_of(model.dit)
-    assert dit.bytes_in > 0 and dit.bytes_out > 0
+    assert dit.total_bytes_in > 0 and dit.total_bytes_out > 0
 
 
 @pytest.mark.matrix("inspecting.call-tree/aot")
@@ -82,12 +82,29 @@ def test_call_tree_records_the_signatures_at_the_llm_to_dit_cut(device: torch.de
         "x": TensorLeaf("x", "torch.Tensor", torch.float32, (2, HIDDEN)),
         "t": TensorLeaf("t", "torch.Tensor", torch.float32, (2, 1)),
     }
-    assert tree.iteration_starts()[dit_key] == [0, 5, 10]
+    assert tree.nodes[dit_key].calls_per_sample == [5] * ITERATIONS
 
     exported = tree.to_dict()
     [dit] = [node for node in exported["nodes"] if node["call_path"] == "forward > dit_forward"]
-    assert dit["iteration_starts"] == [0, 5, 10]
+    assert dit["calls_per_sample"] == [5] * ITERATIONS
     assert dit["signatures"][0]["inputs"]["t"] == {"type": "torch.Tensor", "dtype": "torch.float32", "shape": [2, 1]}
     tied = {"weight": {"dtype": "torch.float32", "shape": [16, HIDDEN]}}
     assert exported["modules"]["lm_head"]["parameters"] == tied
     assert exported["modules"]["llm.embed"]["parameters"] == tied
+
+
+@pytest.mark.matrix("inspecting.call-tree/aot")
+def test_call_tree_reports_times_per_sample(device: torch.device):
+    """Timed nodes get a time per sample, one entry per recorded sample summing to ``total_time_ms``."""
+    model, fn, dataset = _vla(device)
+
+    tree = _inspect(model, fn, dataset, call_tree=True).call_tree
+
+    assert tree is not None
+    assert len(tree.samples) == ITERATIONS
+    assert all("args[0]" in sample.inputs for sample in tree.samples)
+    for node in tree.nodes.values():
+        assert node.total_time_ms is not None and node.total_time_ms > 0
+        per_sample = node.time_ms_per_sample
+        assert per_sample is not None and len(per_sample) == ITERATIONS
+        assert sum(per_sample) == pytest.approx(node.total_time_ms)

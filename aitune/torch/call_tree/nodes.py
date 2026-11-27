@@ -101,18 +101,18 @@ class CallSignature:
         inputs: The signature's argument leaves by ``Leaf.name``.
         outputs: The signature's result leaves by ``Leaf.name``, or None when the calls raised.
         call_indices: The indices (0-based) of the node's calls with exactly this signature. Indices count the node's
-            calls in the order they started, across all iterations — the order ``CallTree.sequences`` records —
-            not reset per iteration.
+            calls in the order they started, across all samples — the order ``CallNode.calls_per_sample`` counts —
+            not reset per sample.
 
     Example:
         >>> import torch
-        >>> from aitune.torch.call_tree.recorder import CallRecorder
+        >>> from aitune.torch.call_tree.recording import StructureRecorder
         >>> class Cache: ...
         >>> class Layer(torch.nn.Module):
         ...     def forward(self, x, state=None):
         ...         return x
-        >>> recorder, layer = CallRecorder(), Layer()
-        >>> with recorder:
+        >>> recorder, layer = StructureRecorder(), Layer()
+        >>> with recorder, recorder.record_sample():
         ...     for args in (
         ...         ((torch.zeros(1, 4, 8),), {"state": Cache()}),
         ...         ((torch.zeros(1, 4, 8),), {}),
@@ -144,13 +144,12 @@ class CallSignature:
 class CallNode:
     """One node of the call tree.
 
-    ``bytes_in`` and ``bytes_out`` measure the tensor data passed into and returned from the node's calls. Only
-    tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
-    inside lists, tuples, dicts and ``ModelOutput`` count too; ``UserDict``s, such as transformers'
-    ``BatchFeature`` and ``BatchEncoding``, are walked into their values, and dataclass instances into their fields.
-    Everything else counts as 0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache`` or
-    ``StaticCache``, including the tensors they hold. The ``signatures`` are recorded by the same walk and also list
-    the non-tensor objects by type.
+    ``total_bytes_in`` and ``total_bytes_out`` measure the tensor data passed into and returned from the node's calls.
+    Only tensors count, each as ``numel() * element_size()``, and a tensor passed twice in one call counts once. Tensors
+    inside lists, tuples, dicts and ``ModelOutput`` count too; ``UserDict``s, such as transformers' ``BatchFeature`` and
+    ``BatchEncoding``, are walked into their values, and dataclass instances into their fields. Everything else counts
+    as 0 bytes: numbers, strings, ``None``, and objects such as a ``DynamicCache`` or ``StaticCache``, including the
+    tensors they hold. The ``signatures`` are recorded by the same walk and also list the non-tensor objects by type.
 
     Attributes:
         path: Labels of the calling chain, outermost first. Identifies the node and must not change after creation:
@@ -159,16 +158,18 @@ class CallNode:
         owner_class: Class name of the object the method belongs to.
         method: Name of the called method (``forward`` for module calls).
         module: Module the method belongs to, or None for methods of plain objects.
-        calls: Number of calls over all recorded iterations.
-        time_ms: Time in milliseconds over all recorded iterations.
-        bytes_in: Tensor bytes in the arguments, summed over all recorded iterations. Bytes per call:
-            ``bytes_in / calls``.
-        bytes_out: Tensor bytes in the results, summed over all recorded iterations.
+        total_bytes_in: Total tensor bytes in the arguments over all calls and recorded samples. Bytes per call:
+            ``total_bytes_in / total_calls``.
+        total_bytes_out: Total tensor bytes in the results over all calls and recorded samples.
         signatures: The distinct ``CallSignature``s of the node's calls, in first-seen order; each records the
-            start-order indices of the calls that had it, so ``sum(len(s.call_indices)) == calls`` and every index
+            start-order indices of the calls that had it, so ``sum(len(s.call_indices)) == total_calls`` and every index
             appears exactly once. A signature whose calls raised has ``outputs`` None.
         children: Call paths of the called nodes in first-call order.
         first_seen: Position of the node's first call among all nodes.
+        inside_compiled_part: Whether the call runs inside a compiled part, so the timing pass cannot time it (it
+            runs compiled there). The compiled part's own call is not inside it and is timed as one call. Calls
+            below a ``torch.compiler.disable``'d call inside a compiled part count as inside too: they run
+            eagerly, but the timing pass does not see the disabled call, so it cannot match them to their nodes.
 
     Example:
         >>> node = CallNode(
@@ -186,13 +187,59 @@ class CallNode:
     owner_class: str
     method: str
     module: nn.Module | None = None
-    calls: int = 0
-    time_ms: float = 0.0
-    bytes_in: int = 0
-    bytes_out: int = 0
+    total_bytes_in: int = 0
+    total_bytes_out: int = 0
     signatures: list[CallSignature] = field(default_factory=list)
     children: list[CallPath] = field(default_factory=list)
     first_seen: int = 0
+    inside_compiled_part: bool = False
+    # the tree's ``samples`` list itself, set by ``CallTree``; None for a node outside a tree
+    _samples: list[Sample] | None = field(default=None, repr=False, compare=False)
+
+    def _tree_samples(self) -> list[Sample]:
+        """The tree's samples, which the per-sample values are read from."""
+        if self._samples is None:
+            raise ValueError(f"{self.path_str} is not part of a CallTree, so it has no per-sample values")
+        return self._samples
+
+    @property
+    def calls_per_sample(self) -> list[int]:
+        """Number of the node's calls in each sample: entry ``i`` is for ``CallTree.samples[i]``.
+
+        Read from the tree's samples: 0 for a sample that made no call of the node. ``CallSignature.call_indices``
+        number the calls across samples in this order.
+
+        Raises:
+            ValueError: If the node is not part of a ``CallTree``.
+        """
+        return [sample.calls.get(self.path, 0) for sample in self._tree_samples()]
+
+    @property
+    def time_ms_per_sample(self) -> list[float] | None:
+        """Time of the node's timed calls in each sample, in milliseconds: entry ``i`` is for ``CallTree.samples[i]``.
+
+        Read from the tree's samples: 0.0 for a sample in which the node was not timed. None when the node was never
+        timed: it runs inside a compiled part, lies deeper than ``max_timing_depth``, or no replay ran it.
+
+        The times come from the timing pass's replays, the calls from the structure pass. On a node the
+        diverged-replay warning names, the two can describe different calls, so ``time_ms_per_sample[i] /
+        calls_per_sample[i]`` is not the mean time per call there.
+
+        Raises:
+            ValueError: If the node is not part of a ``CallTree``.
+        """
+        samples = self._tree_samples()
+        if not any(self.path in sample.time_ms for sample in samples):
+            return None
+        return [sample.time_ms.get(self.path, 0.0) for sample in samples]
+
+    @property
+    def total_time_ms(self) -> float | None:
+        """Time of the node's calls over all samples, in milliseconds; None when the node was never timed.
+
+        The sum of ``time_ms_per_sample``. Per call: ``total_time_ms / total_calls``.
+        """
+        return None if self.time_ms_per_sample is None else sum(self.time_ms_per_sample)
 
     def calls_passing(self, name: str, side: Literal["inputs", "outputs"] = "inputs") -> list[int]:
         """The sorted indices of the calls that passed the argument ``name`` on ``side``.
@@ -222,6 +269,11 @@ class CallNode:
         return seen
 
     @property
+    def total_calls(self) -> int:
+        """Number of the node's calls over all samples: the sum of ``calls_per_sample``."""
+        return sum(self.calls_per_sample)
+
+    @property
     def parent_path(self) -> CallPath:
         """Call path of the calling node; empty for outermost calls."""
         return self.path[:-1]
@@ -230,3 +282,29 @@ class CallNode:
     def path_str(self) -> str:
         """The call path in written form (``forward > dit_forward``): its call labels, outermost first."""
         return format_call_path(self.path)
+
+
+@dataclass
+class Sample:
+    """One recorded sample: the arguments the inference function received, and the calls and times recorded on it.
+
+    ``inputs`` follows the rules of ``CallSignature.inputs``: tensors become ``TensorLeaf``s with dtype and shape,
+    other objects ``Leaf``s with their type, and primitives such as numbers and strings are left out. Positional
+    arguments are named ``args[0]``, ``args[1]``, ..., keyword arguments by their name, with the usual suffixes for
+    nested values, such as ``args[0]['pixel_values']``. A keyword argument named ``args`` becomes ``kwargs['args']``,
+    so it cannot collide with the positional arguments.
+
+    Attributes:
+        inputs: The sample's argument leaves by ``Leaf.name``, described when the sample started. ``inspect`` warns
+            when the timing pass reads different inputs for a sample, for example from a shuffling ``DataLoader``;
+            the check runs before every replay, so it also catches an inference that changes its inputs in place.
+            Inputs that differ only in their values, not in types, dtypes or shapes, are not detected.
+        calls: Number of calls per node in this sample, by call path, written by the structure pass. A missing
+            node made no call.
+        time_ms: Timed milliseconds per node in this sample, by call path, written by the timing pass. A missing
+            node was not timed in this sample.
+    """
+
+    inputs: dict[str, Leaf] = field(default_factory=dict)
+    calls: dict[CallPath, int] = field(default_factory=dict)
+    time_ms: dict[CallPath, float] = field(default_factory=dict)
