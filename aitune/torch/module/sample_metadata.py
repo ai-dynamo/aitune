@@ -136,10 +136,12 @@ class SampleMetadata:
         - for outputs - use SampleMetadata.from_outputs(output)
 
     2. In order to support Hugging Face integrations with kv cache the following behavior is changed:
-        - the equality and hash operator ignore all tensors and return value corresponding to the llm_graph_type,
-        which is either "prefill" or "decode". This is deduced based on the cache_position tensor. It cannot be
+        - equality and hashing ignore tensor metadata and use the LLM phase, either "prefill" or "decode",
+        together with non-tensor values captured in strict mode. The phase is deduced from cache_position. It cannot be
         done otherwise because even though kv cache is lazily initialized, it can be cached on subsequent generate
         calls i.e. it can always have tensors irrespective of the phase.
+        - strict mode still distinguishes values such as encoder-decoder cache readiness flags, which select
+        different Python branches within a phase. Non-strict mode continues to match only the phase.
 
 
     See Also:
@@ -177,19 +179,23 @@ class SampleMetadata:
         if not isinstance(__value, type(self)):
             return False
 
+        # Prefill, decode, and ordinary metadata (None) use distinct graph identities.
+        # Check both phases before choosing a comparison mode so equality is symmetric.
+        if self._llm_phase != __value._llm_phase:
+            return False
+
         if self._llm_phase is None:
             return dict(self._tensor_data) == dict(__value._tensor_data) and dict(self._other_data) == dict(
                 __value._other_data
             )
-        # LLM integration: check only LLM phase
-        return self._llm_phase == __value._llm_phase
+        # Tensor structure may change as caches initialize. Strict Python values still select distinct graphs.
+        return dict(self._other_data) == dict(__value._other_data)
 
     def __hash__(self) -> int:
         """Compute hash of sample metadata."""
         if self._llm_phase is None:
             return hash(frozenset(self._tensor_data)) ^ self._hash_other_data()
-        # LLM integration: hash only LLM phase
-        return hash(self._llm_phase)
+        return hash(self._llm_phase) ^ self._hash_other_data()
 
     def _hash_other_data(self) -> int:
         """Compute an order-independent hash for non-tensor data."""

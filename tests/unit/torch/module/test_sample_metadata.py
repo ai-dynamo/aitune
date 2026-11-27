@@ -3,11 +3,13 @@
 """Unit tests for sample metadata."""
 
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 import torch
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
+from aitune.torch.config import config
 from aitune.torch.module.sample_metadata import SampleMetadata, batch_tensor
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
 
@@ -146,7 +148,7 @@ def test_make_batch():
     constant_tensor_scalar = torch.tensor(3.14)
 
     # given input data, where 3rd axis is batch axis with multipliers 1, 2, 3
-    inputs_bs2 = {
+    inputs_bs2: dict[str, Any] = {
         "values": (
             torch.randn(1, 2, 2),  # tensor, multiplier 1
             constant_tensor,
@@ -158,7 +160,7 @@ def test_make_batch():
         "z": "abc",
     }
 
-    inputs_bs3 = {
+    inputs_bs3: dict[str, Any] = {
         "values": [
             torch.randn(1, 2, 3),  # tensor, multiplier 1
             constant_tensor,
@@ -293,25 +295,39 @@ def test_hash_strict_with_unhashable_inputs_is_a_valid_dict_key():
     assert cache[different_metadata] == "different"
 
 
-def test_hash_llm_dynamic():
-    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.randn(5)}, strict=True)
-    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.randn(5)}, strict=True)
-    m3 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.randn(6)}, strict=True)
-    assert hash(m1) == hash(m2), "other inputs should be ignored"
+@pytest.mark.parametrize("strict", [False, True])
+def test_hash_llm_dynamic(monkeypatch, strict):
+    monkeypatch.setattr(config, "enable_transformers_integration", True)
+    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([1])}, strict=strict)
+    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.tensor([1])}, strict=strict)
+    m3 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.tensor([2, 3])}, strict=strict)
+    assert len({m1, m2}) == (2 if strict else 1), "strict mode must distinguish non-tensor inputs"
     assert hash(m2) == hash(m3), "cache position should not affect hash"
 
-    m1 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1), "cache_position": torch.randn(5)})
-    m2 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1, 2), "cache_position": torch.randn(5)})
+    m1 = SampleMetadata.from_inputs(
+        {"hidden_states": torch.randn(1), "cache_position": torch.tensor([1])}, strict=strict
+    )
+    m2 = SampleMetadata.from_inputs(
+        {"hidden_states": torch.randn(1, 2), "cache_position": torch.tensor([2, 3])}, strict=strict
+    )
+    assert m1 == m2
     assert hash(m1) == hash(m2), "other tensor inputs should be ignored"
 
 
-def test_hash_llm_static():
-    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([0])}, strict=True)
-    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.tensor([0])}, strict=True)
-    assert hash(m1) == hash(m2), "other inputs should be ignored"
+@pytest.mark.parametrize("strict", [False, True])
+def test_hash_llm_static(monkeypatch, strict):
+    monkeypatch.setattr(config, "enable_transformers_integration", True)
+    m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([0])}, strict=strict)
+    m2 = SampleMetadata.from_inputs({"hidden_states": "b", "cache_position": torch.tensor([0])}, strict=strict)
+    assert len({m1, m2}) == (2 if strict else 1), "strict mode must distinguish non-tensor inputs"
 
-    m1 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1), "cache_position": torch.tensor([0])})
-    m2 = SampleMetadata.from_inputs({"hidden_states": torch.randn(1, 2), "cache_position": torch.tensor([0])})
+    m1 = SampleMetadata.from_inputs(
+        {"hidden_states": torch.randn(1), "cache_position": torch.tensor([0])}, strict=strict
+    )
+    m2 = SampleMetadata.from_inputs(
+        {"hidden_states": torch.randn(1, 2), "cache_position": torch.tensor([0])}, strict=strict
+    )
+    assert m1 == m2
     assert hash(m1) == hash(m2), "other tensor inputs should be ignored"
 
     m1 = SampleMetadata.from_inputs({"hidden_states": "a", "cache_position": torch.tensor([0])})

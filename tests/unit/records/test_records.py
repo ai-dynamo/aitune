@@ -49,6 +49,7 @@ def test_dtype_vocabulary_is_stable_and_frontend_neutral():
         "int16",
         "int32",
         "int64",
+        "bfloat16",
         "float16",
         "float32",
         "float64",

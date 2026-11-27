@@ -21,10 +21,7 @@ from aitune.torch.backend import (
     TorchInductorAotBackend,
     TorchInductorJitBackend,
     TorchTensorRTAotBackend,
-    TorchTensorRTAotBackendConfig,
-    TorchTensorRTConfig,
     TorchTensorRTJitBackend,
-    TorchTensorRTJitBackendConfig,
 )
 from tests.functional_ci.lifecycle import TENSORRT_FP32, Tolerance
 
@@ -48,24 +45,6 @@ class BackendCase:
     def __post_init__(self):
         """Keep the `export` tags and `artifact_format` in step."""
         assert ("export" in self.tags) == (self.artifact_format is not None), "set both or neither"
-
-
-def _torch_tensorrt_config() -> TorchTensorRTConfig:
-    """Convert the whole graph in fp32 without TF32."""
-    return TorchTensorRTConfig(min_block_size=1, disable_tf32=True, require_full_compilation=True)
-
-
-def _torch_tensorrt_aot() -> Backend:
-    """Build a Torch-TensorRT AOT backend."""
-    return TorchTensorRTAotBackend(TorchTensorRTAotBackendConfig(compile_config=_torch_tensorrt_config()))
-
-
-def _torch_tensorrt_jit() -> Backend:
-    """Build a Torch-TensorRT JIT backend."""
-    # Dynamic batch compilation fails the max-shape correctness check (sympy `Infinity` bound), so compile per shape.
-    return TorchTensorRTJitBackend(
-        TorchTensorRTJitBackendConfig(compile_config=_torch_tensorrt_config(), dynamic=False)
-    )
 
 
 def tensorrt_backend(**overrides) -> Backend:
@@ -107,7 +86,7 @@ BACKENDS: dict[str, BackendCase] = {
         artifact_format="pt2",
     ),
     "torch-tensorrt-aot": BackendCase(
-        _torch_tensorrt_aot,
+        TorchTensorRTAotBackend,
         TENSORRT_FP32,
         _tags(
             "base",
@@ -148,7 +127,7 @@ BACKENDS: dict[str, BackendCase] = {
         ),
     ),
     "torch-tensorrt-jit": BackendCase(
-        _torch_tensorrt_jit,
+        TorchTensorRTJitBackend,
         TENSORRT_FP32,
         _tags(
             "base",

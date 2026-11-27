@@ -40,6 +40,12 @@ def check_dynamic_shape_boundary_inference(
 ):
     """Check dynamic-shape boundary inference.
 
+    Each boundary call receives an independent copy of its positional and keyword arguments together.
+    Copying the pair preserves shared objects across the two: if infer(state, mask=state) depends on
+    identity, separate copies would validate a different call. Copies also prevent one boundary's
+    temporary mutations from advancing the next boundary's state. These checks validate output shapes,
+    not the full sequence of state changes across repeated calls.
+
     Args:
         sample: Sample inputs used as a template for min and max shape checks.
         graph_spec: Recorded graph metadata used to construct and validate boundary inputs.
@@ -59,7 +65,8 @@ def check_dynamic_shape_boundary_inference(
         with coordinator.raise_if_any_rank_fails(f"Dynamic shape correctness check ({boundary_name})"):
             try:
                 with torch.no_grad():
-                    outputs = infer(*copy.deepcopy(args), **copy.deepcopy(kwargs))
+                    call_args, call_kwargs = copy.deepcopy((args, kwargs))
+                    outputs = infer(*call_args, **call_kwargs)
             except Exception as exc:
                 raise CorrectnessDynamicShapeError(
                     f"Dynamic shape correctness check failed with {boundary_name} input shapes for {name}: "

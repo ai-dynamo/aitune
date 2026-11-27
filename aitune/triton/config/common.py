@@ -41,6 +41,7 @@ _DTYPES = {
     DType.INT16: TritonDataType.INT16,
     DType.INT32: TritonDataType.INT32,
     DType.INT64: TritonDataType.INT64,
+    DType.BFLOAT16: TritonDataType.BFLOAT16,
     DType.FLOAT16: TritonDataType.FLOAT16,
     DType.FLOAT32: TritonDataType.FLOAT32,
     DType.FLOAT64: TritonDataType.FLOAT64,
