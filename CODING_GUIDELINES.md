@@ -109,6 +109,77 @@ Run `make lint` before you push. It runs these checks:
 If a tool and this file do not agree, follow the tool and update this file.
 Do not disable a tool rule for a line (`# noqa`, `# pyrefly: ignore`) unless you also write the reason.
 
+## Layout
+
+Put the public API first, so a reviewer finds the entry points without scrolling. Put the private
+helpers after it, in the order in which the code above them first calls them. Then a reader can
+read the file from the top down, and each helper comes after its first caller.
+
+### Module layout
+
+Use this order in a module:
+
+1. Imports.
+2. Constants and `logger = logging.getLogger(__name__)`.
+3. Public classes and functions.
+4. Private helpers (names that start with `_`), in the order of their first call.
+
+Python must define a name before a definition at module level uses it, for example as a base
+class, a decorator, or a default value. Put such a private name before the public definition that
+uses it.
+
+### Class layout
+
+Use this order in a class:
+
+1. Class attributes.
+2. `__new__`, `__init__`, and `__post_init__`.
+3. Methods that implement an `@abstractmethod` of a base class, public and private.
+4. Other public methods, properties, and special methods (for example `__call__` and `__repr__`).
+5. Other private methods (names that start with `_`).
+
+Order the other private methods by the first time that the code above them calls them. If two
+methods call the same helper, the first call decides where the helper goes.
+
+**Why:** The public API is what a module or class offers, so a reviewer starts there. The abstract
+methods show how a class fills the base class interface, so they come first, also when they are
+private. Ordering the helpers by their first call keeps the file readable from the top down, and the
+reviewer does not have to search for a helper. With the same order in every file, a reviewer knows
+where to look.
+
+**Good** (a simplified sketch of `aitune/torch/backend/onnx_runtime_backend.py`, not the real code):
+
+```python
+class ONNXRuntimeBackend(Backend):
+    def __init__(self, config: ONNXRuntimeBackendConfig) -> None:
+        self._config = config
+
+    # Implements the abstract Backend.key.
+    def key(self) -> str: ...
+
+    # Implements the abstract Backend.describe.
+    def describe(self) -> str: ...
+
+    # Implements the abstract Backend._build.
+    def _build(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> Self:
+        self._export_onnx(module, graph_spec, samples, cache_dir)
+        self._warmup(samples)
+        return self
+
+    # Implements the abstract Backend._infer.
+    def _infer(self, *args: Any, **kwargs: Any) -> Any:
+        inputs = self._prepare_inputs(kwargs)
+        ...
+
+    def _export_onnx(self, module: nn.Module, graph_spec: GraphSpec, samples: SampleStore, cache_dir: Path) -> None: ...
+
+    def _warmup(self, samples: SampleStore) -> None:
+        self._prepare_inputs(...)
+        ...
+
+    def _prepare_inputs(self, arguments: dict[str, Any]) -> dict[str, Any]: ...
+```
+
 ## Control flow
 
 ### Use guard clauses
