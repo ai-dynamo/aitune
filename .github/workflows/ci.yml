@@ -425,7 +425,8 @@ jobs:
       - name: Functional CI tests
         run: |
           python -m pip install --force-reinstall --no-deps --break-system-packages dist/*.whl
-          python -m pytest -n 4 -rfEs --durations=0 tests/functional_ci --junitxml=functional-ci.test-report.xml
+          # Run serially so worker shutdowns cannot hide the underlying lifecycle failure.
+          python -m pytest -n 0 -rfEs --durations=0 tests/functional_ci --junitxml=functional-ci.test-report.xml
         env:
           AITUNE_MATRIX_RESULTS: functional-ci.matrix-updates.json
       - if: always()

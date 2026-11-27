@@ -16,7 +16,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample, SampleStore
 from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
-from aitune.torch.utils.torch_compile import TorchCompileMode, resolve_compile_dynamic
+from aitune.torch.utils.torch_compile import DecoratedForwardBindings, TorchCompileMode, resolve_compile_dynamic
 
 logger = getLogger(__name__)
 
@@ -119,6 +119,7 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
 
         # build variables
         self._compiled_module = None
+        self._decorated_forwards = DecoratedForwardBindings()
         self._orig_module = None
         self._required_casting_dtype = None
         self._samples: SampleStore | None = None
@@ -181,17 +182,18 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
         logger.info("Start compiling torch module.")
         move_module_to_device(self._orig_module, self.device)
 
-        self._compiled_module = torch.compile(
-            self._orig_module,
-            fullgraph=self._config.fullgraph,
-            dynamic=self._compile_dynamic,
-            mode=self._config.mode,
-            options=self._config.options,
-        )
+        with self._decorated_forwards.compiling(self._orig_module):
+            self._compiled_module = torch.compile(
+                self._orig_module,
+                fullgraph=self._config.fullgraph,
+                dynamic=self._compile_dynamic,
+                mode=self._config.mode,
+                options=self._config.options,
+            )
 
-        self._select_infer_impl()
-        for args, kwargs in self._samples.iter_samples(self.device):
-            self._infer_impl(*args, **kwargs)
+            self._select_infer_impl()
+            for args, kwargs in self._samples.iter_samples(self.device):
+                self._infer_impl(*args, **kwargs)
         logger.info("Module has been compiled.")
 
     def _activate(self):
@@ -254,6 +256,7 @@ class TorchInductorJitBackend(Backend[TorchInductorJitBackendConfig]):
     def _deactivate(self):
         """Deactivates backend."""
         self._compiled_module = None
+        self._decorated_forwards.restore()
 
     def _deploy(self):
         """Deploys the backend."""

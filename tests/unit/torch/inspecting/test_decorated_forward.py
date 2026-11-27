@@ -2,12 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from copy import deepcopy
+from functools import partial
 
 import pytest
 import torch
+import wrapt
+from packaging.version import Version
 
 import aitune.torch as ait
+from aitune.torch.backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
+from aitune.torch.utils.torch_compile import DecoratedForwardBindings
 from tests.toy_models.decorated_forward_models import ToyDecoratedSpeechModel
+from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store
 
 
 @pytest.mark.parametrize("inspect_first", [False, True], ids=["fresh", "inspected"])
@@ -35,7 +41,8 @@ def test_inspection_restores_decorated_forward(instance_forward, inference_fails
     sample = torch.ones(2, 8)
     original_forward = model.encoder.forward
     if instance_forward:
-        model.encoder.forward = original_forward
+        # Exercise an explicit instance override of wrapt's class descriptor.
+        vars(model.encoder)["forward"] = original_forward
 
     with torch.no_grad():
         expected = model(sample)
@@ -71,6 +78,12 @@ def test_inspection_restores_decorated_forward(instance_forward, inference_fails
 
 
 @pytest.mark.parametrize("inspect_first", [False, True], ids=["fresh", "inspected"])
+@pytest.mark.xfail(
+    Version(torch.__version__) >= Version("2.13.0a0"),
+    raises=pytest.RaisesExc(AssertionError, match="FuncDefaultsGuardAccessor: Not a function"),
+    reason="Dynamo cannot guard defaults on wrapt class descriptors (aitune#260); AITune binds them for compilation",
+    strict=True,
+)
 def test_dynamo_compiles_decorated_forward_without_aitune_backend(inspect_first):
     model = ToyDecoratedSpeechModel().eval()
     sample = torch.ones(2, 8)
@@ -85,4 +98,106 @@ def test_dynamo_compiles_decorated_forward_without_aitune_backend(inspect_first)
             compiled = torch.compile(model, backend="eager", fullgraph=False, dynamic=False)
             torch.testing.assert_close(compiled(sample), expected)
     finally:
+        torch._dynamo.reset()
+
+
+@pytest.mark.parametrize("inspect_first", [False, True], ids=["fresh", "inspected"])
+def test_compilation_with_bound_decorated_forwards(inspect_first):
+    model = ToyDecoratedSpeechModel().eval()
+    sample = torch.ones(2, 8)
+    if inspect_first:
+        ait.inspect(model, [sample], number_of_iterations=1, warmup_iterations=1)
+
+    bindings = DecoratedForwardBindings()
+    torch._dynamo.reset()
+    try:
+        with torch.no_grad():
+            expected = model(sample)
+            with bindings.compiling(model):
+                compiled = torch.compile(model, backend="eager", fullgraph=False, dynamic=False)
+                torch.testing.assert_close(compiled(sample), expected)
+            # Guards must remain valid after warmup, including when compilation is requested again.
+            with bindings.compiling(model):
+                torch.testing.assert_close(compiled(sample), expected)
+            torch.testing.assert_close(compiled(sample + 1), model(sample + 1))
+            # Binding must retain the decorator and its default and explicit arguments.
+            torch.testing.assert_close(model.encoder(sample, scale=3), model.encoder(sample) * 1.5)
+    finally:
+        bindings.restore()
+        torch._dynamo.reset()
+
+    assert "forward" not in vars(model.encoder)
+    with torch.no_grad():
+        torch.testing.assert_close(deepcopy(model)(sample), expected)
+
+
+def test_failed_compilation_restores_decorated_forward():
+    model = ToyDecoratedSpeechModel().eval()
+    bindings = DecoratedForwardBindings()
+    with pytest.raises(RuntimeError, match="Compilation failed"):
+        with bindings.compiling(model):
+            raise RuntimeError("Compilation failed")
+
+    assert "forward" not in vars(model.encoder)
+    sample = torch.ones(2, 8)
+    with torch.no_grad():
+        torch.testing.assert_close(deepcopy(model)(sample), model(sample))
+
+
+def test_bound_forward_preserves_runtime_decorator_checks():
+    checks_enabled = [False]
+
+    @wrapt.decorator(enabled=lambda: checks_enabled[0])
+    def checked(wrapped, instance, args, kwargs):
+        raise ValueError("Runtime check rejected the input")
+
+    class CheckedModule(torch.nn.Module):
+        # wrapt exposes a descriptor, although it remains callable as nn.Module.forward.
+        @checked
+        def forward(self, value):  # pyrefly: ignore[bad-override]
+            return value + 1
+
+    model = CheckedModule()
+    bindings = DecoratedForwardBindings()
+    try:
+        bindings.bind(model)
+        torch.testing.assert_close(model(torch.ones(1)), torch.full((1,), 2.0))
+        checks_enabled[0] = True
+        with pytest.raises(ValueError, match="Runtime check rejected the input"):
+            model(torch.ones(1))
+    finally:
+        bindings.restore()
+
+
+def test_decorated_forward_backend_checkpoint_reactivation(monkeypatch, tmp_path):
+    # Use real Dynamo guards on CPU; GPU functional tests cover the compiled kernels.
+    monkeypatch.setattr(torch, "compile", partial(torch.compile, backend="eager"))
+    model = ToyDecoratedSpeechModel().eval()
+    sample = torch.ones(2, 8)
+    samples = make_sample_store([((sample,), {})], tmp_path)
+    graph_spec = make_recorded_graph_spec(model, ((sample,), {}))
+    backend = TorchInductorJitBackend(TorchInductorJitBackendConfig(dynamic=False))
+    restored = None
+    torch._dynamo.reset()
+    try:
+        with torch.no_grad():
+            expected = model(sample)
+        backend.build(model, graph_spec, samples, device=torch.device("cpu"), cache_dir=tmp_path)
+        torch.testing.assert_close(backend.infer(sample), expected)
+        state = backend.to_dict()
+        backend.deactivate()
+        torch.testing.assert_close(deepcopy(model)(sample), expected)
+
+        fresh = ToyDecoratedSpeechModel(seed=1).eval()
+        restored = TorchInductorJitBackend.from_dict(fresh, state)
+        restored.activate()
+        torch.testing.assert_close(restored.infer(sample), expected)
+        restored.deactivate()
+        restored.activate()
+        torch.testing.assert_close(restored.infer(sample + 1), model(sample + 1))
+    finally:
+        if backend.is_active:
+            backend.deactivate()
+        if restored is not None and restored.is_active:
+            restored.deactivate()
         torch._dynamo.reset()
