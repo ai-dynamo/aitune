@@ -7,6 +7,7 @@ title: "Changelog"
 
 ## 0.8.0 (unreleased)
 
+- fix: export tensor-parallel modules for AOT backends, which Torch Export rejected with a `DTensorSpec` error
 - fix: reuse Voxtral Realtime decode graphs across `generate()` calls by tracking the tensors in the convolution padding cache
 - fix: support Torch-TensorRT 2.15, whose `CompilationSettings` rejects `enabled_precisions` and `use_explicit_typing`; remove both settings from the Torch-TensorRT backend configs
 - fix: preserve tensor batches returned by custom data collators as one positional input during tuning

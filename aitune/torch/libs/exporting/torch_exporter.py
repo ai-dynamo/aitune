@@ -8,7 +8,9 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 from torch._dynamo.exc import UserError, UserErrorType
+from torch.distributed.tensor._dtensor_spec import DTensorSpec
 from torch.fx.experimental.symbolic_shapes import ConstraintViolationError
+from torch.utils import _pytree
 from torch.utils._pytree import tree_map
 
 from aitune.torch.libs.exporting.dynamic_shapes import (
@@ -19,6 +21,7 @@ from aitune.torch.libs.exporting.dynamic_shapes import (
 from aitune.torch.libs.exporting.preparation import prepare_tensor_export
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import Sample
+from aitune.torch.utils.module import is_distributed_module
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +82,8 @@ class TorchExporter:
     ) -> TorchExportResult:
         """Prepare a tensor-only example call and export the module."""
         dynamic_shapes = build_dynamic_shapes(graph_spec, use_auto=self.use_auto)
+        if is_distributed_module(module):
+            _register_dtensor_spec_as_constant()
 
         strict_modes = (True, False) if self.strict is None else (self.strict,)
         strict_error: Exception | None = None
@@ -118,6 +123,19 @@ class TorchExporter:
                     return TorchExportResult(exported_program=exported_program, dynamic_shapes=attempt_shapes)
 
         raise AssertionError("Torch Export tracing modes must not be empty")
+
+
+def _register_dtensor_spec_as_constant() -> None:
+    """Let Torch Export trace ``DTensor.from_local`` calls made by tensor-parallel hooks.
+
+    Export rejects the ``DTensorSpec`` these calls pass unless it is a pytree constant
+    (https://github.com/pytorch/pytorch/issues/175467). The registration is process-wide and stays in place
+    because the exported program needs it to run.
+    """
+    if DTensorSpec in _pytree.SUPPORTED_NODES:
+        return
+    _pytree.register_constant(DTensorSpec)
+    logger.info("Registered DTensorSpec as a pytree constant for distributed Torch Export.")
 
 
 def _is_constraint_violation(error: Exception) -> bool:
