@@ -764,59 +764,10 @@
       "severity": "error"
     },
     {
-      "column": 48,
-      "path": "aitune/torch/jit/patched_module.py",
-      "name": "bad-assignment",
-      "concise_description": "`TunedModule` is not assignable to attribute `_wrapper` with type `RecordingModule`",
-      "severity": "error"
-    },
-    {
-      "column": 48,
-      "path": "aitune/torch/jit/patched_module.py",
-      "name": "bad-assignment",
-      "concise_description": "`PassthroughModule` is not assignable to attribute `_wrapper` with type `RecordingModule`",
-      "severity": "error"
-    },
-    {
       "column": 94,
       "path": "aitune/torch/jit/patched_module.py",
       "name": "bad-argument-type",
       "concise_description": "Argument `device` is not assignable to parameter `device` with type `str` in function `aitune.torch.module.passthrough_module.PassthroughModule.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 37,
-      "path": "aitune/torch/jit/patched_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `PatchedModule` is not assignable to parameter `object` with type `Self@PatchedModule` in function `list.append`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "aitune/torch/jit/patched_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Iterator[PatchedModule]` is not assignable to parameter `iterable` with type `Iterable[Self@PatchedModule]` in function `list.extend`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "aitune/torch/jit/patched_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[PatchedModule]` is not assignable to parameter `iterable` with type `Iterable[Self@PatchedModule]` in function `list.extend`",
-      "severity": "error"
-    },
-    {
-      "column": 29,
-      "path": "aitune/torch/jit/patched_module.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `PatchedModule` is not assignable to parameter `object` with type `Self@PatchedModule` in function `list.append`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/jit/patcher.py",
-      "name": "not-callable",
-      "concise_description": "Expected a callable, got `None`",
       "severity": "error"
     },
     {

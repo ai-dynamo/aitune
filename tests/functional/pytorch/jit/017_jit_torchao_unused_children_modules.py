@@ -40,8 +40,6 @@ def create_model():
 
 @collect_tuning_data(__file__)
 def test_jit_torchao_unused_child():
-    model = create_model()
-
     strategy = OneBackendStrategy(
         backend=TorchAOBackend(config=TorchAOBackendConfig(quantization="int8wo")),
     )
@@ -54,6 +52,8 @@ def test_jit_torchao_unused_child():
     config.dry_run = False
     config.detect_graph_breaks = False
     config.batch_axis_required = False
+
+    model = create_model()
 
     with torch.no_grad():
         model(torch.randn(2, 16, device="cuda", dtype=torch.float16))

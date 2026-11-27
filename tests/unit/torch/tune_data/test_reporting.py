@@ -9,9 +9,17 @@ from unittest.mock import MagicMock
 import pytest
 
 from aitune.__version__ import __version__
-from aitune.torch.config import DEFAULT_TUNING_DATA_OUTPUT_PATH, AITuneConfig, AITuneMode
+from aitune.torch.config import (
+    DEFAULT_TUNING_DATA_OUTPUT_PATH,
+    AITuneConfig,
+    AITuneMode,
+)
 from aitune.torch.dynamic_shapes import BatchDim
-from aitune.torch.tune_data.report_models import SCHEMA_VERSION, ExceptionInfo, ModuleInspectionReport
+from aitune.torch.tune_data.report_models import (
+    SCHEMA_VERSION,
+    ExceptionInfo,
+    ModuleInspectionReport,
+)
 from aitune.torch.tune_data.reporting import (
     _active_graph,
     _active_module,

@@ -15,6 +15,19 @@ Just-in-time tuning provides a zero-code-change approach to model tuning:
 - **Hierarchical Tuning**: Recursively tunes modules from top to bottom
 - **Configurable**: Fine-tune behavior through environment variables or configuration
 
+### Explicit Registration
+
+For models that already exist—for example, loaded or prepared by Flex Tensor before AITune is imported—use explicit
+registration. This wraps the module instances you pass instead of wrapping modules during their construction.
+
+- **Existing Modules**: Register instances created by your application's model constructor, factory, or `from_pretrained()`
+- **Explicit Targets**: Select the exact modules to wrap without enabling constructor interception or discovering later modules
+- **Independent Targets**: Treat each supplied module as a top-level tuning target, with its owned children compiled as part of that target
+- **Runtime Tuning**: Record real application calls and follow the configured eager or deferred tuning lifecycle
+- **Live Status**: Inspect reports, state counts, and the `all_tuned` snapshot for the selected targets
+
+See [Registering Existing Modules](#registering-existing-modules) for examples and the registration contract.
+
 ## Quick Start
 
 ### Enabling Just-in-Time Tuning
@@ -47,6 +60,10 @@ pipe.to("cuda")
 # Tuning happens automatically during inference
 images = pipe("A beautiful landscape")
 ```
+
+Activation installs constructor interception; tuning binds to `jit_config.mode` when the first eligible module is
+constructed. You can configure deferred or inspection mode after activation and before constructing the model.
+Once a module is registered, keep that mode for the worker lifetime. Use a new Python process to change it.
 
 ### Using Annotation (Decorator)
 
@@ -81,6 +98,89 @@ This approach allows you to:
 
 - Enable just-in-time tuning for specific functions only
 - Keep the rest of your code unchanged
+
+### Registering Existing Modules
+
+The environment, import, and decorator activation methods discover modules while those modules are being constructed.
+Explicit registration attaches JIT wrappers to module instances that already exist. For example, another runtime such
+as Flex Tensor may have loaded or prepared the model before AITune is imported. Register the final instances after
+those preparation steps. The following example loads a pipeline before importing AITune, then selects its UNet:
+
+```python
+from diffusers import DiffusionPipeline
+
+pipe = DiffusionPipeline.from_pretrained("stable-diffusion-v1-5/stable-diffusion-v1-5").to("cuda")
+
+from aitune.torch import register_for_jit_tuning
+
+# Wrap only this existing module; constructor interception is not enabled.
+registration = register_for_jit_tuning([pipe.unet])
+```
+
+For a single module, pass a one-element iterable such as `[model]`. For a collection of existing modules, pass the
+iterable directly. A `ModuleList`, such as `model.blocks`, can be passed without converting it to a list:
+
+```python
+registration = register_for_jit_tuning(model.blocks)
+```
+
+Explicit registration does not patch `torch.nn.Module.__init__`, does not affect modules created later, and does not
+require `import aitune.torch.jit.enable`. Every registered module is an independent top-level tuning target. Owned
+children are compiled as part of that target, so selected roots must have disjoint ownership trees. Repeated instances
+in the supplied iterable are deduplicated by identity. Supply the complete target set in one call: another explicit
+registration is rejected, including after a target is skipped or falls back to eager execution.
+
+Do not import `aitune.torch.jit.enable` or set `AUTOWRAPT_BOOTSTRAP=aitune_enable_jit_tuning` in a process using explicit
+registration. Choose automatic discovery or explicit registration for the worker lifetime.
+
+The returned registration exposes non-blocking, live snapshots for the selected targets:
+
+```python
+for report in registration.reports:
+    print(report.module_name, report.state)
+
+print(registration.state_counts)
+if registration.all_tuned:
+    print("All registered modules reached the tuned state")
+```
+
+`all_tuned` describes JIT wrapper state; it does not by itself prove acceleration or a performance improvement. An eager
+backend or successful dry-run simulation can also produce the tuned state. Use `state_counts` to distinguish tuned,
+skipped and eager-fallback targets; a target that has never been called has not completed startup.
+
+Configure tuning before registration and keep the prepared model tree fixed afterward. Input, mode, exclusion and
+ownership validation run before wrapper installation. If setup fails after installation begins, the original exception
+propagates and earlier wrappers can remain installed. Stop that worker and start a fresh Python process. There is no
+registration rollback, reset, extension or retry API. Ordinary backend candidate failures can still select another
+candidate or fall back to the prepared original forward.
+
+JIT uses the ordinary top-level tuning report lifecycle and process-exit diagnostics. Nesting registration inside an
+unrelated AOT report or replacing its active report during serving is outside this contract.
+
+The registration API accepts existing instances without depending on their provider. Flex Tensor manager discovery
+and replanning integration are deferred until a public Flex Tensor release exposes the required manager APIs.
+
+#### Compiler budget
+
+For many targets sharing a Python forward implementation or multiple input routes, configure finite TorchDynamo limits
+before compilation. The application owns these process-wide settings for the worker lifetime; AITune does not reserve,
+release or restore capacity. Include backend candidates, optional graph-break detection, lazy serving compilation and
+guard changes when choosing a budget. Preserve any higher limit already configured by the application.
+
+For example, with a budget chosen for your workload:
+
+```python
+import torch._dynamo.config as dynamo_config
+
+budget = 256
+for name in ("recompile_limit", "accumulated_recompile_limit", "cache_size_limit", "accumulated_cache_size_limit"):
+    if hasattr(dynamo_config, name):
+        setattr(dynamo_config, name, max(getattr(dynamo_config, name), budget))
+```
+
+The supported names depend on the installed PyTorch version; older cache-limit names can be aliases. A finite budget
+does not guarantee arbitrary guard churn will fit. Warm representative serving routes and check actual compiled
+backend selection before accepting startup.
 
 ## How Just-in-Time Tuning Works
 

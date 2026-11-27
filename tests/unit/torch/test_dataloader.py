@@ -1,12 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-from typing import cast
-
 import datasets
 import numpy as np
 import pytest
 import torch
-from transformers import AutoTokenizer, PreTrainedTokenizerBase
+from tokenizers.pre_tokenizers import ByteLevel
+from transformers import GPT2Tokenizer
 from transformers.data.data_collator import DataCollatorWithPadding
 
 from aitune.torch.dataloader import (
@@ -18,7 +17,6 @@ from aitune.torch.dataloader import (
     ensure_enough_samples,
     samples_generator,
 )
-from tests.utilities.prompts import PROMPTS_PATH
 
 
 def simulate_tuning_loop(dataset: DatasetLike, batch_sizes: list[int]):
@@ -246,7 +244,9 @@ def test_dynamic_shapes_fails():
 
 
 def test_llm_padding_collator():
-    tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained("gpt2"))
+    vocab = {token: index for index, token in enumerate(ByteLevel.alphabet())}
+    vocab["<|endoftext|>"] = len(vocab)
+    tokenizer = GPT2Tokenizer(vocab=vocab, merges=[])
 
     # Add padding token (fix for gpt2)
     tokenizer.pad_token = tokenizer.eos_token
@@ -260,9 +260,9 @@ def test_llm_padding_collator():
             return_tensors=None,  # Important: don't return tensors here
         )
 
-    # Load raw dataset first
-    dataset = datasets.load_dataset("json", data_files=str(PROMPTS_PATH), split="train[:100]").map(
-        tokenize, remove_columns=["prompt", "act"]
+    # No merges means one token per byte: these batches exercise padding and truncation.
+    dataset = datasets.Dataset.from_dict({"prompt": ["a", "a b", "a b c", "long " * 128] * 25}).map(
+        tokenize, remove_columns=["prompt"]
     )
 
     dl_config = DataLoaderFactory(dataset, collate_fn=DataCollatorWithPadding(tokenizer=tokenizer, padding=True))
@@ -282,6 +282,9 @@ def test_llm_padding_collator():
     assert kwargs["input_ids"].shape[0] == 4  # Batch size
     assert kwargs["attention_mask"].shape[0] == 4  # Batch size
     assert kwargs["input_ids"].shape == kwargs["attention_mask"].shape  # Same shape for both tensors
+    assert kwargs["input_ids"].shape[1] == 128
+    assert kwargs["attention_mask"].sum(dim=1).tolist() == [1, 3, 5, 128]
+    assert torch.all(kwargs["input_ids"][kwargs["attention_mask"] == 0] == tokenizer.pad_token_id)
 
 
 def test_custom_dataloader_shuffled_dataset():
