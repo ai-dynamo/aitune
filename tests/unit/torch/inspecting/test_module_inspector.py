@@ -119,6 +119,20 @@ def test_reset(simple_model):
     assert inspector._inspected_objects == set()
 
 
+def test_reusing_an_inspector_for_a_new_object_path_updates_the_labels(simple_model):
+    """``reset()`` clears the cached forward labels: the same module inspected under a new path labels anew."""
+    inspector = ModuleInspector()
+    inspector.inspect(simple_model)
+    child = simple_model[0]
+    first_label = inspector._forward_label(child)
+    assert first_label == "root.0.forward"
+
+    inspector.reset()
+    inspector.inspect({"moved": child})
+
+    assert inspector._forward_label(child) == "root.moved.forward"
+
+
 def test_inspect_simple_model(mocker, simple_model):
     """Test inspecting a simple model."""
 

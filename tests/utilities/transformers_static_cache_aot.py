@@ -58,12 +58,13 @@ def _make_cache(device: torch.device, batch_size: int = 1) -> StaticCache:
 
 
 def _validate_cache_updates(module: Module, device: torch.device) -> None:
-    """Run two decode calls and compare their outputs and cache mutations with eager."""
+    """Interleave independent caches and compare their updates with eager execution."""
     eager_module = StaticCacheModule().eval().to(device)
-    eager_cache = _make_cache(device)
-    tuned_cache = _make_cache(device)
+    eager_caches = [_make_cache(device), _make_cache(device)]
+    tuned_caches = [_make_cache(device), _make_cache(device)]
 
-    for cache_position, scale in enumerate((1.0, 3.0)):
+    for cache_index, cache_position, scale in ((0, 0, 1.0), (1, 0, 7.0), (0, 1, 3.0)):
+        eager_cache, tuned_cache = eager_caches[cache_index], tuned_caches[cache_index]
         key = torch.full((1, NUM_HEADS, 1, HEAD_DIM), scale, device=device)
         value = key * 2
         position = torch.tensor([cache_position], device=device)
@@ -94,8 +95,13 @@ def _validate_cache_updates(module: Module, device: torch.device) -> None:
 
         torch.testing.assert_close(actual["keys"], expected["keys"])
         torch.testing.assert_close(actual["values"], expected["values"])
-        torch.testing.assert_close(runtime_layer.keys, reference_layer.keys)
-        torch.testing.assert_close(runtime_layer.values, reference_layer.values)
+        # Updating one cache must not modify state retained by another caller.
+        for actual_cache, expected_cache in zip(tuned_caches, eager_caches, strict=True):
+            actual_layer, expected_layer = actual_cache.layers[0], expected_cache.layers[0]
+            assert isinstance(actual_layer, StaticLayer)
+            assert isinstance(expected_layer, StaticLayer)
+            torch.testing.assert_close(actual_layer.keys, expected_layer.keys)
+            torch.testing.assert_close(actual_layer.values, expected_layer.values)
         assert actual["past_key_values"] is tuned_cache
         assert full_cache_copies == [], (
             f"A single-position decode update copied complete caller-owned KV-cache tensors: {full_cache_copies}."

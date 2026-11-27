@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Weight accesses: which code reads each weight, checks its device, or moves it during call-tree recording.
 
-A weight is a parameter or a buffer. While a ``CallRecorder`` records (``with recorder:``), ``WeightAccessMode`` (a
+A weight is a parameter or a buffer. While a ``StructureRecorder`` records (its ``with`` block), ``WeightAccessMode`` (a
 ``TorchFunctionMode``) sees every torch op. Each op whose arguments touch a weight's storage is recorded as an access
 by the innermost recorded call, or by the calling code if no recorded call is running.
 
@@ -85,7 +85,7 @@ class WeightAccess(NamedTuple):
 
 
 class WeightAccessLog:
-    """Weight accesses recorded by ``WeightAccessMode``, kept by weight name and accumulated over recording passes.
+    """Weight accesses recorded by ``WeightAccessMode``, kept by weight name and accumulated over structure passes.
 
     The log keeps two tables, rebuilt by ``start()`` at the beginning of each pass:
 
@@ -122,7 +122,7 @@ class WeightAccessLog:
         self._untracked: dict[int, weakref.ref[torch.Tensor]] = {}
 
     def start(self, modules: Iterable[tuple[str, nn.Module]]) -> None:
-        """Start a recording pass: rebuild the owner table and the storage map from ``modules``."""
+        """Start a structure pass: rebuild the owner table and the storage map from ``modules``."""
         self._owners = {}
         seen: set[str] = set()
         for prefix, module in modules:
@@ -199,14 +199,14 @@ class WeightAccessLog:
             return True
 
     def snapshot(self) -> dict[str, set[WeightAccess]]:
-        """Accesses of all recording passes so far, keyed by weight name, as ``WeightAccess`` records."""
+        """Accesses of all structure passes so far, keyed by weight name, as ``WeightAccess`` records."""
         return {name: set(records) for name, records in self._accesses.items()}
 
 
 class WeightAccessMode(TorchFunctionMode):
     """Record a ``"read"`` or ``"device"`` access for each torch op that touches a weight's storage.
 
-    The recorder enters it for one recording pass (its ``with`` block). For each op, it skips metadata ops
+    The recorder enters it for one structure pass (its ``with`` block). For each op, it skips metadata ops
     (``METADATA_OPS``), classifies device lookups (``DEVICE_OPS``) and reads, and records a ``WeightAccess`` in ``log``
     for every tracked weight among the op's tensors. The access is credited to the innermost recorded call, or to the
     code found by ``unrecorded_caller()`` when no recorded call is running. Inside ``paused()`` it records nothing.
