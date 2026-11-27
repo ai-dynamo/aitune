@@ -843,8 +843,6 @@ def test_compiled_child_inspects_and_its_calls_appear_in_the_tree(dataset):
 
 def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(dataset):
     """``torch.compile(module)``: the ``OptimizedModule``'s ``forward`` is the node; ``_orig_mod`` adds none."""
-    from typing import cast
-
     from aitune.torch.call_tree import shared_weights_of
 
     class Inner(nn.Module):
@@ -880,7 +878,8 @@ def test_torch_compiled_child_is_one_node_and_resolves_for_shared_weights(datase
         "forward > child.forward": ITERATIONS,
         "forward > child.forward > child._orig_mod.lin.forward": ITERATIONS,
     }
-    assert shared_weights_of(_tree(info), cast(nn.Module, model.child)) == []
+    assert isinstance(model.child, nn.Module)
+    assert shared_weights_of(_tree(info), model.child) == []
 
 
 def test_module_compiled_child_is_recorded_once_and_counts_stay_unchanged(dataset):

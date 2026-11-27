@@ -2,29 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 """Exercise real ONNX tracing of the keyword-only call contract required by NeMo."""
 
-from typing import Any, cast
-
 import onnxruntime as ort
 import pytest
 import torch
-import wrapt
 
 from aitune.torch.libs.exporting import ONNXExporter
 from aitune.torch.utils.tensor import format_tensor_name
-from tests.utilities.helpers import make_graph_spec
-
-
-@wrapt.decorator
-def typed_forward(wrapped, instance, args, kwargs):
-    # Match NeMo's public call restriction without requiring its model weights or CUDA.
-    if args:
-        raise TypeError("All arguments must be passed by kwargs only for typed methods")
-    return wrapped(**kwargs)
+from tests.utilities.helpers import make_graph_spec, require_keyword_forward
 
 
 class SpeechModel(torch.nn.Module):
-    # wrapt preserves the wrapped method signature and binding at runtime.
-    @cast(Any, typed_forward)
+    @require_keyword_forward
     def forward(
         self,
         input_signal: torch.Tensor | None = None,

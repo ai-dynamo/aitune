@@ -4,7 +4,6 @@
 
 from functools import partial
 from importlib import import_module
-from typing import cast
 
 import pytest
 import torch
@@ -62,7 +61,8 @@ def test_backend_lifecycle_jit(case: BackendCase, device: torch.device):
         model(make_input(device, batch_size=2))
     (head,) = PatchedModule.heads
     assert head._state == ModuleState.TUNED
-    (selected,) = cast(TunedModule, head._wrapper).backends.values()
+    assert isinstance(head._wrapper, TunedModule)
+    (selected,) = head._wrapper.backends.values()
     assert type(selected) is type(backend)
     assert_matches_eager(model, reference, device, case.tolerance, batch_sizes=(2,))
 
