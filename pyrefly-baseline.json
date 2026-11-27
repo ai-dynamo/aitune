@@ -862,13 +862,6 @@
       "severity": "error"
     },
     {
-      "column": 40,
-      "path": "aitune/torch/module/graph_spec.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `int | str | tuple[int | str, ...]` is not assignable to parameter `key` with type `str | tuple[int | str, ...]` in function `dict.get`",
-      "severity": "error"
-    },
-    {
       "column": 38,
       "path": "aitune/torch/module/onnx_module.py",
       "name": "bad-argument-type",

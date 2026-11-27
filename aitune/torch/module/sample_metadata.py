@@ -5,6 +5,8 @@
 import copy
 import pickle
 from collections.abc import Mapping
+from functools import cached_property
+from operator import itemgetter
 from typing import Any, Literal, cast
 
 import torch
@@ -12,7 +14,7 @@ from tabulate import tabulate
 
 from aitune.global_context import BATCH_SIZE_KEY, global_context
 from aitune.torch.config import config
-from aitune.torch.module.locator import Locator
+from aitune.torch.module.locator import Locator, ObjectType
 from aitune.torch.module.tensor_spec import InfoLevel, TensorSpec
 from aitune.utils.serialization import json_serialize
 
@@ -236,10 +238,16 @@ class SampleMetadata:
         Export and inference must use the same recorded paths, rather than rediscovering leaves from
         each runtime value. Otherwise a tensor can be passed to the wrong compiled input or shape rule.
 
-        Each call walks the recorded paths in Python without copying tensor data. Inference overhead
-        therefore depends on the number and depth of tensor paths, rather than tensor size.
+        Top-level indexed paths use a prepared itemgetter; nested and attribute paths retain locator
+        traversal. Neither path copies tensor data, so cost depends on path count and depth, not tensor size.
         """
-        tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
+        getter = self._top_level_tensor_itemgetter
+        if getter is None:
+            tensors = tuple(locator.get_value(value) for locator, _ in self._tensor_data)
+        elif len(self._tensor_data) == 1:
+            tensors = (getter(value),)
+        else:
+            tensors = getter(value)
         for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
             if not isinstance(tensor, torch.Tensor):
                 raise TypeError(f"Recorded tensor path {locator} resolved to {type(tensor).__name__}, not a tensor.")
@@ -271,6 +279,18 @@ class SampleMetadata:
         for (locator, _), tensor in zip(self._tensor_data, tensors, strict=True):
             if not isinstance(tensor, torch.Tensor):
                 raise TypeError(f"Recorded tensor path {locator} received {type(tensor).__name__}, not a tensor.")
+
+        # Every slot is replaced, so a plain tensor tuple needs neither a copied template nor
+        # grouped locator replacements. Check the recorded order once; matching counts alone
+        # would lose constants or put tensors in the wrong slots. Tuple subclasses keep their
+        # existing reconstruction, including named-tuple fields and custom instance state.
+        if (
+            type(template) is tuple
+            and not preserved_values
+            and len(template) == len(tensors)
+            and self._is_flat_tensor_sequence
+        ):
+            return tensors
 
         tensor_memo = {}
         for locator, _ in self._tensor_data:
@@ -474,6 +494,36 @@ class SampleMetadata:
     def has_batch_axis(self) -> bool:
         """Check if metadata has batch axis."""
         return all(tensor_spec.has_batch_axis() for tensor_spec in self.tensor_specs)
+
+    @cached_property
+    def _top_level_tensor_itemgetter(self) -> itemgetter | None:
+        """Cache an itemgetter when all recorded tensors are at top-level indices or keys.
+
+        The getter reads tensors in recorded order and holds no sample values. Checkpoints store
+        the locators, which are used to rebuild the getter on first use after loading.
+        """
+        # itemgetter requires at least one index or key and reads directly from the root object
+        # using value[index_or_key]. A root tensor has an empty path. Nested paths and attribute
+        # access also require the general locator path, so one such tensor rules out the shortcut.
+        if not self._tensor_data or any(
+            locator.depth != 1 or next(locator.path_iter())[1] not in (ObjectType.SEQUENCE, ObjectType.DICT)
+            for locator, _ in self._tensor_data
+        ):
+            return None
+        # Each locator has exactly one step, so accessor_at(0) is the index or key on the root.
+        return itemgetter(*(locator.accessor_at(0) for locator, _ in self._tensor_data))
+
+    @cached_property
+    def _is_flat_tensor_sequence(self) -> bool:
+        """Whether tensor paths cover consecutive top-level sequence slots in recorded order.
+
+        Paths remain fixed when shape observations change. Lazy preparation also supports metadata
+        restored from older checkpoints without adding a required serialized field or retaining tensors.
+        """
+        return bool(self._tensor_data) and all(
+            tuple(locator.path_iter()) == ((index, ObjectType.SEQUENCE),)
+            for index, (locator, _) in enumerate(self._tensor_data)
+        )
 
 
 def batch_tensor(tensor: torch.Tensor, tensor_spec: TensorSpec, batch_size: int) -> torch.Tensor:
