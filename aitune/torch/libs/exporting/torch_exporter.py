@@ -83,6 +83,9 @@ class TorchExporter:
         """Prepare a tensor-only example call and export the module."""
         dynamic_shapes = build_dynamic_shapes(graph_spec, use_auto=self.use_auto)
         if is_distributed_module(module):
+            # The registered DTensorSpec keeps the traced shapes, so the exported program would fail to run.
+            if dynamic_shapes is not None:
+                raise ValueError("Torch Export of distributed modules requires static input shapes.")
             _register_dtensor_spec_as_constant()
 
         strict_modes = (True, False) if self.strict is None else (self.strict,)

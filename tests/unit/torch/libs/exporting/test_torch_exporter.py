@@ -186,6 +186,16 @@ def test_export_supports_tensor_parallel_modules(strict, single_rank_mesh, dtens
     torch.testing.assert_close(output, (expected,))
 
 
+def test_export_rejects_dynamic_shapes_for_tensor_parallel_modules(single_rank_mesh, dtensor_spec_registry):
+    model = parallelize_module(torch.nn.Linear(3, 4), single_rank_mesh, ColwiseParallel()).eval()
+    samples = [((torch.randn(2, 3),), {}), ((torch.randn(4, 3),), {})]
+    graph_spec = make_graph_spec(model.forward, samples[0], model(*samples[0][0]), batch_size=2)
+    update_input_spec(graph_spec, samples[1], batch_size=4)
+
+    with pytest.raises(ValueError, match="requires static input shapes"):
+        TorchExporter().export(model, samples[0], graph_spec)
+
+
 def test_export_does_not_register_dtensor_spec_for_local_modules(dtensor_spec_registry):
     if DTensorSpec in _pytree.SUPPORTED_NODES:
         pytest.skip("DTensorSpec is already registered in this process")
