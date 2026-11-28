@@ -9,6 +9,7 @@ import torch
 
 from aitune.torch.backend import Backend
 from aitune.torch.backend.torch_eager import TorchEagerBackend
+from aitune.torch.distributed import DistributedOutcome
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, ProfilingConfig, ProfilingResultEvent
 from aitune.torch.task.profiling.measuring_strategy import MeasuringStrategy
@@ -229,6 +230,30 @@ def test_combined_score_selects_batch_but_reports_min_shape(tmp_path):
         "latency": pytest.approx(6),
         "selected_batch_size": 2,
     }
+
+
+def test_max_throughput_selects_batch_using_worst_rank_at_each_boundary(tmp_path, mocker):
+    _, graph, samples, config, _ = setup_profile(tmp_path, {1: (1, 100), 2: (60, 60)})
+    peer_latencies = {1: BoundaryLatencies(25, 25), 2: BoundaryLatencies(60, 60)}
+
+    def collect_results(local_latencies, local_error):
+        assert local_error is None
+        return DistributedOutcome((None, None)), [local_latencies, peer_latencies]
+
+    coordinator = mocker.patch("aitune.torch.tune_strategy.max_throughput_strategy.coordinator")
+    coordinator.collect_results.side_effect = collect_results
+    strategy = MaxThroughputStrategy(backends=[TorchEagerBackend()], profiling_config=config)
+    strategy.enable_find_max_batch_size(False)
+    strategy.enable_correctness_check(False)
+    strategy.enable_performance_validation(False)
+
+    strategy.tune(torch.nn.Identity(), "model", graph, samples, torch.device("cpu"), tmp_path)
+
+    measurements = strategy.backend_results
+    assert measurements is not None
+    assert measurements[0]["selected_batch_size"] == 2
+    assert measurements[0]["throughput"] == pytest.approx(2000 / 60)
+    assert measurements[0]["latency"] == pytest.approx(60)
 
 
 def test_batch_discovery_keeps_min_shape_policy_while_strategy_uses_both_shapes(tmp_path):

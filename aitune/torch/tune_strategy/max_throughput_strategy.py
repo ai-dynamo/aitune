@@ -19,7 +19,7 @@ from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.task.profiling.metrics import (
     BoundaryLatencies,
-    aggregate_throughput_per_batch_size,
+    get_matching_batch_sizes,
     throughput_speedup,
 )
 from aitune.torch.task.profiling.profiling import ProfilingStatus, profile_backend
@@ -93,7 +93,6 @@ class MaxThroughputStrategy(ProfilingTuneStrategy):
         )
         local_error: Exception | None = None
         latencies_by_batch: dict[int, BoundaryLatencies] = {}
-        batch_scores: dict[int, float] = {}
         try:
             if profiling_status.status != ProfilingStatus.Status.SUCCESS:
                 raise profiling_status.error or RuntimeError("Profiling failed")
@@ -103,20 +102,23 @@ class MaxThroughputStrategy(ProfilingTuneStrategy):
                     profiling_cfg.measurement_stop_strategy
                 ).items()
             }
-            batch_scores = {
-                batch_size: latencies.throughput_score(batch_size)
-                for batch_size, latencies in latencies_by_batch.items()
-            }
         except Exception as error:
             local_error = error
 
-        outcome, gathered_scores = coordinator.collect_results(batch_scores, local_error)
+        outcome, gathered_latencies = coordinator.collect_results(latencies_by_batch, local_error)
         outcome.raise_if_failed(f"Processing profiling results for {backend.describe()}", local_error)
-        ranked_batches = aggregate_throughput_per_batch_size(gathered_scores)
-        if not ranked_batches:
+        batch_sizes = get_matching_batch_sizes(gathered_latencies)
+        if not batch_sizes:
             raise ValueError(f"No throughput data found for backend {backend.describe()}")
 
-        batch_size, _ = ranked_batches[0]
+        # Choose a batch using the same rank reduction as final backend comparison.
+        batch_scores = {
+            batch_size: BoundaryLatencies.worst_across_ranks([
+                rank[batch_size] for rank in gathered_latencies
+            ]).throughput_score(batch_size)
+            for batch_size in batch_sizes
+        }
+        batch_size = min(batch_sizes, key=lambda size: (-batch_scores[size], size))
         latencies = latencies_by_batch[batch_size]
         return MaxThroughputProfilingResult(
             throughput=batch_size * 1000 / latencies.min_shape,

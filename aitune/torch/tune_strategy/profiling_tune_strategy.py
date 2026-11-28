@@ -236,12 +236,11 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             updates["throughput"] = min(candidate.throughput for candidate in gathered_results)
         if hasattr(result, "latency"):
             updates["latency"] = max(candidate.latency for candidate in gathered_results)
-        boundaries = [candidate.boundary_latencies for candidate in gathered_results]
-        if all(boundary is not None for boundary in boundaries):
-            updates["boundary_latencies"] = BoundaryLatencies(
-                max(boundary.min_shape for boundary in boundaries if boundary is not None),
-                max(boundary.max_shape for boundary in boundaries if boundary is not None),
-            )
+        boundaries = [
+            candidate.boundary_latencies for candidate in gathered_results if candidate.boundary_latencies is not None
+        ]
+        if len(boundaries) == len(gathered_results):
+            updates["boundary_latencies"] = BoundaryLatencies.worst_across_ranks(boundaries)
         if updates:
             return replace(result, **updates)
 
