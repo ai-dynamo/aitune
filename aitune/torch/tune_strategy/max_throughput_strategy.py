@@ -22,7 +22,6 @@ from aitune.torch.task.profiling.metrics import (
     aggregate_throughput_per_batch_size,
     throughput_speedup,
 )
-from aitune.torch.task.profiling.profiling import ProfilingStatus, profile_backend
 from aitune.torch.tune_strategy.profiling_tune_strategy import BackendProfilingResult, ProfilingTuneStrategy
 from aitune.torch.utils.shape_samples import shape_boundary_samples
 
