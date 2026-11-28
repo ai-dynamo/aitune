@@ -2,10 +2,37 @@
 # SPDX-License-Identifier: Apache-2.0
 """Metrics for profiling."""
 
+from dataclasses import dataclass
+from statistics import geometric_mean
+
 import numpy as np
 
 from aitune.torch.task.profiling.events import ProfilingResultEvent
 from aitune.utils import validation
+
+
+@dataclass(frozen=True)
+class BoundaryLatencies:
+    """Mean latencies in milliseconds at the two shapes of a single batch.
+
+    Static shapes have equal values. Combined scores are internal ranking values;
+    callers report min_shape and use it for the existing eager speedup output.
+    """
+
+    min_shape: float
+    max_shape: float
+
+    @classmethod
+    def from_samples(cls, latencies: tuple[float, ...]) -> "BoundaryLatencies":
+        """Interpret the boundary workflow's primary sample and optional maximum sample."""
+        if len(latencies) not in (1, 2):
+            raise ValueError("Boundary scoring requires one static sample or two boundary samples")
+        return cls(latencies[0], latencies[-1])
+
+    @property
+    def latency_score(self) -> float:
+        """Return the geometric-mean latency used to rank candidates; lower is better."""
+        return geometric_mean((self.min_shape, self.max_shape))
 
 
 def is_throughput_saturated(
