@@ -5,7 +5,6 @@
 # ///
 
 from pathlib import Path
-from typing import cast
 
 import datasets
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
@@ -16,7 +15,9 @@ PROMPTS_PATH = Path(__file__).parent.parent.parent / "fixtures/chatgpt_prompts_1
 
 
 def test_huggingface_dataset():
-    tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained("gpt2"))
+    loaded_tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    assert isinstance(loaded_tokenizer, PreTrainedTokenizerBase)
+    tokenizer = loaded_tokenizer
     tokenizer.pad_token = tokenizer.eos_token
 
     def tokenize_function(examples):
