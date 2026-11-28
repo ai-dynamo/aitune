@@ -1,24 +1,19 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Shared torch.compile helpers."""
+"""Bind decorated forward methods for torch.compile."""
 
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Literal
 
 import torch
 import wrapt
-
-from aitune.torch.module.graph_spec import GraphSpec
-
-TorchCompileMode = Literal["default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"]
 
 
 class DecoratedForwardBindings:
     """Keep wrapt forwards bound while a compiled backend is active.
 
     Dynamo's FuncDefaultsGuardAccessor rejects wrapt class descriptors in newer PyTorch
-    versions (aitune#260). Instance binding preserves the decorator, including its runtime
+    versions. Instance binding preserves the decorator, including its runtime
     checks, while giving Dynamo a bound-method source. Restore before copying the model:
     bound wrapt proxies do not support deepcopy. Checkpoints store state dictionaries, so
     every backend activation must bind the fresh model again.
@@ -64,20 +59,3 @@ class DecoratedForwardBindings:
             # Compilation may be interrupted; never leave temporary forwards after a failed build.
             self.restore()
             raise
-
-
-def resolve_compile_dynamic(config_dynamic: bool | None, graph_spec: GraphSpec) -> bool | None:
-    """Resolve effective dynamic compilation setting without mutating backend config.
-
-    Args:
-        config_dynamic: Explicit dynamic setting from backend config.
-        graph_spec: Graph specification used for dynamic-axis detection.
-
-    Returns:
-        Effective value to pass to ``torch.compile(dynamic=...)``.
-    """
-    if config_dynamic is not None:
-        return config_dynamic
-    if graph_spec.input_spec.detected_dynamic_axis():
-        return True
-    return None

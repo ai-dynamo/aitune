@@ -21,9 +21,9 @@ from aitune.torch.backend import (
     TorchTensorRTJitBackend,
     TorchTensorRTJitBackendConfig,
 )
+from aitune.torch.libs.torch_compile import DecoratedForwardBindings
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
-from aitune.torch.utils.torch_compile import DecoratedForwardBindings
 from tests.toy_models.decorated_forward_models import ToyDecoratedSpeechModel
 from tests.utilities.helpers import make_recorded_graph_spec, make_sample_store
 
