@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Metrics for profiling."""
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from statistics import geometric_mean
 
@@ -28,6 +29,11 @@ class BoundaryLatencies:
         if len(latencies) not in (1, 2):
             raise ValueError("Boundary scoring requires one static sample or two boundary samples")
         return cls(latencies[0], latencies[-1])
+
+    @classmethod
+    def worst_across_ranks(cls, latencies: Sequence["BoundaryLatencies"]) -> "BoundaryLatencies":
+        """Return the slowest latency at each shape, which may come from different ranks."""
+        return cls(max(rank.min_shape for rank in latencies), max(rank.max_shape for rank in latencies))
 
     @property
     def latency_score(self) -> float:
@@ -155,12 +161,19 @@ def aggregate_throughput_per_batch_size(
     Raises:
         RuntimeError: If ranks report different sets of batch sizes.
     """
-    batch_sizes = set(gathered_throughputs[0])
-    if any(set(candidate) != batch_sizes for candidate in gathered_throughputs[1:]):
-        details = ", ".join(f"rank {rank}: {sorted(candidate)}" for rank, candidate in enumerate(gathered_throughputs))
-        raise RuntimeError(f"Distributed profiled batch sizes differ across ranks: {details}")
-
+    batch_sizes = get_matching_batch_sizes(gathered_throughputs)
     aggregated = [
         (batch_size, min(candidate[batch_size] for candidate in gathered_throughputs)) for batch_size in batch_sizes
     ]
     return sorted(aggregated, key=lambda result: (-result[1], result[0]))
+
+
+def get_matching_batch_sizes(gathered_measurements: Sequence[Mapping[int, object]]) -> set[int]:
+    """Return the profiled batch sizes and raise if any rank measured a different set."""
+    batch_sizes = set(gathered_measurements[0])
+    if any(set(measurements) != batch_sizes for measurements in gathered_measurements[1:]):
+        details = ", ".join(
+            f"rank {rank}: {sorted(measurements)}" for rank, measurements in enumerate(gathered_measurements)
+        )
+        raise RuntimeError(f"Distributed profiled batch sizes differ across ranks: {details}")
+    return batch_sizes
