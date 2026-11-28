@@ -212,6 +212,28 @@ For `MaxThroughputStrategy`, `MinLatencyStrategy`, and `LatencyBudgetStrategy`, 
 selection decision. `DIAGNOSTIC` records the eager comparison but selects the best successful user backend.
 `DISABLED` skips eager profiling and also selects among successful user backends only.
 
+The profiler can measure one or more caller-prepared samples within each batch size. `profile()` and
+`profile_backend()` keep their original single-sample defaults. A backend caller can explicitly provide a
+`sample_preparer` to expand the recorded input into a group of samples; the profiler measures that group in order.
+The first sample is primary for default saturation decisions.
+
+`MaxThroughputStrategy`, `MinLatencyStrategy`, and `LatencyBudgetStrategy` explicitly prepare minimum and maximum
+recorded non-batch shapes, with minimum first. Identical shapes produce one sample. Profiling retains the measurements
+normally; at backend comparison time, enabled validation
+requires both boundary speedups to reach at least 0.95 relative to the matching boundary of eager's selected result.
+Rejected backends retain their reported metrics and speedup. Diagnostic mode records the same comparison without
+excluding the backend. Latency-budget tuning requires both latencies to satisfy the budget before scoring a batch.
+Batches and eligible backends are ranked by geometric-mean throughput or latency.
+Geometric-mean batch ranking belongs to the tuning strategy. The shared max-batch discovery helper continues
+to choose its batch using min-shape throughput.
+These combined scores are internal selection values: existing metrics, log values, and speedups continue to use
+the minimum-shape measurement. Saturation uses only minimum-shape measurements, after both shapes are collected;
+either shape exceeding the latency budget stops a latency-budget scan.
+The existing flat `ProfilingResults.entries` remains available. Grouped measurements are in `ProfilingResults.batches`;
+each `BatchProfilingResults` contains its `batch_size` and `sample_events`, one event list per input sample. A batch is
+retained only after every supplied sample has been measured. Warmup and stability windows are applied independently
+to each sample. Shape-specific interpretation and combined scoring belong to the strategy, not the profiler.
+
 In `DIAGNOSTIC` mode, profiling strategies can still use eager as a fallback when no user backend succeeds. The mode
 prevents performance comparison from affecting selection; it does not remove the available fallback.
 

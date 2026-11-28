@@ -144,6 +144,19 @@ def test_latency_budget_profiling_stop_strategy_stops_after_budget_is_exceeded()
     ])
 
 
+@pytest.mark.parametrize("minimum,maximum,expected", [(16, 8, True), (8, 16, True), (15, 15, False)])
+def test_latency_budget_boundary_stop_checks_each_latency(minimum, maximum, expected):
+    stop_strategy = _LatencyBudgetProfilingStopStrategy(
+        latency_budget_ms=15,
+        measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1, warmup_samples=1),
+        base_strategy=AllSamplesProfilingStopStrategy(),
+    )
+    min_events = [ProfilingResultEvent(0, "model", "backend", 1, "inference", execution_time=minimum * 1e6)]
+    max_events = [ProfilingResultEvent(0, "model", "backend", 1, "inference", execution_time=maximum * 1e6)]
+
+    assert stop_strategy.should_stop_samples((min_events, max_events)) is expected
+
+
 def test_get_profiling_config_wraps_existing_stop_strategy(mock_backend):
     """LatencyBudgetStrategy preserves the configured stop strategy while adding the latency budget stop."""
     profiling_config = _profiling_config()
