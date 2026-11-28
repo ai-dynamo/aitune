@@ -13,11 +13,13 @@ from aitune.torch.task.profiling.profiling_stop_strategy import (
 )
 
 
-@dataclass
+@dataclass(init=False)
 class ProfilingConfig:
     """Configuration for profiling.
 
-    Note: all profiling configuration strategies are deepcopied before use.
+    Each scan copies the profiling stop policy, and each boundary measurement
+    copies the measurement stop policy. Their counters and windows are isolated;
+    the measuring_strategy instance itself is reused.
 
     Attributes:
         batch_sizes: List of batch sizes to profile.
@@ -27,26 +29,37 @@ class ProfilingConfig:
         profiling_stop_strategy: Strategy to stop profiling.
     """
 
-    batch_sizes: list[int] | Generator[int, None, None]
+    batch_sizes: list[int]
+    batching: bool
+    measuring_strategy: MeasuringStrategy
+    measurement_stop_strategy: MeasuringStopStrategy
+    profiling_stop_strategy: ProfilingStopStrategy
 
-    batching: bool = True
-    measuring_strategy: MeasuringStrategy | None = None
-    measurement_stop_strategy: MeasuringStopStrategy | None = None
-    profiling_stop_strategy: ProfilingStopStrategy | None = None
+    def __init__(
+        self,
+        batch_sizes: list[int] | Generator[int, None, None],
+        batching: bool = True,
+        measuring_strategy: MeasuringStrategy | None = None,
+        measurement_stop_strategy: MeasuringStopStrategy | None = None,
+        profiling_stop_strategy: ProfilingStopStrategy | None = None,
+    ):
+        """Resolve optional inputs once; constructed strategy fields are never None.
 
-    def __post_init__(self):
-        """Post-init."""
-        if isinstance(self.batch_sizes, Generator):
-            self.batch_sizes = list(self.batch_sizes)
-
+        Keep explicit None arguments compatible with the generated initializer
+        previously used by this dataclass, including dataclasses.replace().
+        """
+        self.batch_sizes = list(batch_sizes) if isinstance(batch_sizes, Generator) else batch_sizes
         if not self.batch_sizes:
             raise ValueError("batch_sizes must be provided")
-
-        if self.measuring_strategy is None:
-            self.measuring_strategy = ModelExecutionTimeMeasuringStrategy()
-
-        if self.measurement_stop_strategy is None:
-            self.measurement_stop_strategy = NumStepsMeasuringStopStrategy()
-
-        if self.profiling_stop_strategy is None:
-            self.profiling_stop_strategy = ThroughputSaturatedProfilingStopStrategy()
+        self.batching = batching
+        self.measuring_strategy = (
+            measuring_strategy if measuring_strategy is not None else ModelExecutionTimeMeasuringStrategy()
+        )
+        self.measurement_stop_strategy = (
+            measurement_stop_strategy if measurement_stop_strategy is not None else NumStepsMeasuringStopStrategy()
+        )
+        self.profiling_stop_strategy = (
+            profiling_stop_strategy
+            if profiling_stop_strategy is not None
+            else ThroughputSaturatedProfilingStopStrategy()
+        )

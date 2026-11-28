@@ -932,27 +932,6 @@
       "severity": "error"
     },
     {
-      "column": 34,
-      "path": "aitune/torch/task/find_max_batch_size.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `entries`",
-      "severity": "error"
-    },
-    {
-      "column": 70,
-      "path": "aitune/torch/task/find_max_batch_size.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `MeasuringStopStrategy | None` is not assignable to parameter `measuring_stop_strategy` with type `MeasuringStopStrategy` in function `get_throughput_per_batch_size`",
-      "severity": "error"
-    },
-    {
-      "column": 12,
-      "path": "aitune/torch/task/find_max_batch_size.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `tuple[int, float, ProfilingResults | None]` is not assignable to declared return type `tuple[int, float, ProfilingResults]`",
-      "severity": "error"
-    },
-    {
       "column": 33,
       "path": "aitune/torch/task/profiling/measuring_strategy.py",
       "name": "bad-argument-type",
@@ -967,34 +946,6 @@
       "severity": "error"
     },
     {
-      "column": 37,
-      "path": "aitune/torch/task/profiling/profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `should_stop`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "aitune/torch/task/profiling/profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `do_measurement`",
-      "severity": "error"
-    },
-    {
-      "column": 33,
-      "path": "aitune/torch/task/profiling/profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `should_stop`",
-      "severity": "error"
-    },
-    {
-      "column": 92,
-      "path": "aitune/torch/task/profiling/profiling.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[ProfilingResultEvent] | None` is not assignable to parameter `events` with type `list[ProfilingResultEvent]` in function `aitune.torch.task.profiling.events.get_inference_events`",
-      "severity": "error"
-    },
-    {
       "column": 51,
       "path": "aitune/torch/tune_data/reporting.py",
       "name": "bad-argument-type",
@@ -1006,55 +957,6 @@
       "path": "aitune/torch/tune_data/reporting.py",
       "name": "unsupported-operation",
       "concise_description": "`-` is not supported between `float` and `None`",
-      "severity": "error"
-    },
-    {
-      "column": 34,
-      "path": "aitune/torch/tune_strategy/latency_budget_strategy.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `entries`",
-      "severity": "error"
-    },
-    {
-      "column": 13,
-      "path": "aitune/torch/tune_strategy/latency_budget_strategy.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `MeasuringStopStrategy | None` is not assignable to parameter `measuring_stop_strategy` with type `MeasuringStopStrategy` in function `_find_best_latency_budget_candidate`",
-      "severity": "error"
-    },
-    {
-      "column": 43,
-      "path": "aitune/torch/tune_strategy/latency_budget_strategy.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `MeasuringStopStrategy | None` is not assignable to parameter `measurement_stop_strategy` with type `MeasuringStopStrategy` in function `_LatencyBudgetProfilingStopStrategy.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 31,
-      "path": "aitune/torch/tune_strategy/latency_budget_strategy.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `ProfilingStopStrategy | None` is not assignable to parameter `base_strategy` with type `ProfilingStopStrategy` in function `_LatencyBudgetProfilingStopStrategy.__init__`",
-      "severity": "error"
-    },
-    {
-      "column": 27,
-      "path": "aitune/torch/tune_strategy/max_throughput_strategy.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `get_events`",
-      "severity": "error"
-    },
-    {
-      "column": 18,
-      "path": "aitune/torch/tune_strategy/min_latency_strategy.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `get_events`",
-      "severity": "error"
-    },
-    {
-      "column": 34,
-      "path": "aitune/torch/tune_strategy/min_latency_strategy.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `entries`",
       "severity": "error"
     },
     {
