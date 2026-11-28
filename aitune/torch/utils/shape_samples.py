@@ -63,7 +63,7 @@ def resize_sample_to_shape(
 
 
 def _resize_tensor(tensor: torch.Tensor, target_shape: list[int]) -> torch.Tensor:
-    """Resize a tensor by slicing or repeating each axis to match a target shape.
+    """Resize each axis and fill with zeros when expanding an empty tensor.
 
     Note: These samples are intended only for validating min and max shapes. Their tensor values may be
     numerically invalid and can produce NaN or Inf outputs.
@@ -72,6 +72,8 @@ def _resize_tensor(tensor: torch.Tensor, target_shape: list[int]) -> torch.Tenso
         current_size = tensor.shape[axis]
         if current_size == target_size:
             continue
+        if current_size == 0:
+            return tensor.new_zeros(target_shape)
         slice_indices = [slice(None)] * tensor.ndim
         if current_size > target_size:
             slice_indices[axis] = slice(target_size)
