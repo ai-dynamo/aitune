@@ -19,6 +19,7 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
     ProfilingResultEvent,
     ProfilingResults,
+    ProfilingStatus,
     StableWindowMeasuringStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
@@ -162,14 +163,14 @@ def test_max_throughput_measures_latency_at_selected_batch_size(monkeypatch, moc
     """Use the same measured samples for selected-batch latency and throughput."""
     results = ProfilingResults(
         entries=[
-            ProfilingResultEvent(0.0, "model", "backend", 1, "inference", execution_time=5e6),
+            ProfilingResultEvent(0.0, "model", "backend", 1, "inference", execution_time=10e6),
             ProfilingResultEvent(0.0, "model", "backend", 4, "inference", execution_time=100e6),
             ProfilingResultEvent(0.0, "model", "backend", 4, "inference", execution_time=20e6),
         ]
     )
     monkeypatch.setattr(
-        "aitune.torch.tune_strategy.max_throughput_strategy.find_max_throughput_for_backend",
-        lambda *args: (4, 200.0, results),
+        "aitune.torch.tune_strategy.max_throughput_strategy.profile_backend",
+        lambda *args, **kwargs: ProfilingStatus(status=ProfilingStatus.Status.SUCCESS, results=results),
     )
     profiling_config = _profiling_config(
         measurement_stop_strategy=NumStepsMeasuringStopStrategy(num_steps=1, warmup_samples=1)

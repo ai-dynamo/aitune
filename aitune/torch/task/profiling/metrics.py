@@ -34,6 +34,15 @@ class BoundaryLatencies:
         """Return the geometric-mean latency used to rank candidates; lower is better."""
         return geometric_mean((self.min_shape, self.max_shape))
 
+    def throughput_score(self, batch_size: int) -> float:
+        """Return geometric-mean throughput for ranking; higher is better.
+
+        Both shapes use the same batch size, so the geometric mean of their
+        throughputs equals batch_size / geometric_mean(latencies). Convert the
+        millisecond latencies to samples per second.
+        """
+        return batch_size * 1000 / self.latency_score
+
 
 def is_throughput_saturated(
     profiling_result: list[ProfilingResultEvent],
@@ -116,3 +125,42 @@ def get_throughput(results: list[ProfilingResultEvent], batch_size: int | None =
     """
     batch_size = batch_size or get_batch_size(results)
     return batch_size * get_mean_executions_per_second(results)
+
+
+def throughput_speedup(
+    candidate_latency: float, eager_latency: float, *, candidate_batch_size: int, eager_batch_size: int
+) -> float:
+    """Compare throughput at each backend's selected batch size.
+
+    Both latencies use the same units, so the conversion to seconds cancels out.
+    """
+    candidate_throughput = candidate_batch_size / candidate_latency
+    eager_throughput = eager_batch_size / eager_latency
+    return candidate_throughput / eager_throughput
+
+
+def aggregate_throughput_per_batch_size(
+    gathered_throughputs: list[dict[int, float]],
+) -> list[tuple[int, float]]:
+    """Rank scalar batch-throughput scores by the worst rank, breaking ties by batch size.
+
+    Args:
+        gathered_throughputs: One batch-size-to-throughput mapping per rank. Each
+            rank must have measured the same batch sizes.
+
+    Returns:
+        Batch size and worst-rank throughput pairs, ordered by decreasing
+        throughput and then increasing batch size.
+
+    Raises:
+        RuntimeError: If ranks report different sets of batch sizes.
+    """
+    batch_sizes = set(gathered_throughputs[0])
+    if any(set(candidate) != batch_sizes for candidate in gathered_throughputs[1:]):
+        details = ", ".join(f"rank {rank}: {sorted(candidate)}" for rank, candidate in enumerate(gathered_throughputs))
+        raise RuntimeError(f"Distributed profiled batch sizes differ across ranks: {details}")
+
+    aggregated = [
+        (batch_size, min(candidate[batch_size] for candidate in gathered_throughputs)) for batch_size in batch_sizes
+    ]
+    return sorted(aggregated, key=lambda result: (-result[1], result[0]))

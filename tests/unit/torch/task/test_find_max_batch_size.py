@@ -4,7 +4,6 @@
 import pytest
 
 from aitune.torch.task.find_max_batch_size import (
-    _aggregate_throughput_per_batch_size,
     find_max_batch_size,
     get_throughput_per_batch_size,
 )
@@ -15,6 +14,7 @@ from aitune.torch.task.profiling import (
     ProfilingConfig,
 )
 from aitune.torch.task.profiling.events import ProfilingResultEvent
+from aitune.torch.task.profiling.metrics import aggregate_throughput_per_batch_size
 from tests.toy_models.torch_models import ToyTorchModel
 
 
@@ -106,7 +106,7 @@ def test_get_throughput_per_batch_size(mock_profiling_config):
 
 
 def test_aggregate_throughput_uses_worst_rank_and_shared_optimum():
-    results = _aggregate_throughput_per_batch_size([
+    results = aggregate_throughput_per_batch_size([
         {1: 10.0, 2: 20.0},
         {1: 9.0, 2: 8.0},
     ])
@@ -116,7 +116,7 @@ def test_aggregate_throughput_uses_worst_rank_and_shared_optimum():
 
 def test_aggregate_throughput_rejects_different_profiled_batches():
     with pytest.raises(RuntimeError, match="profiled batch sizes differ"):
-        _aggregate_throughput_per_batch_size([
+        aggregate_throughput_per_batch_size([
             {1: 10.0, 2: 20.0},
             {1: 9.0},
         ])
