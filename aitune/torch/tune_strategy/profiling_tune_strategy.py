@@ -13,7 +13,7 @@ import logging
 import shutil
 import traceback
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,7 @@ from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.onnx_module import OnnxModule
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
+from aitune.torch.task.profiling.metrics import BoundaryLatencies
 from aitune.torch.tune_data.reporting import report_backend_metric, report_graph_baseline_metric
 from aitune.torch.tune_strategy.formatting import fmt_speedup_comparison, fmt_speedup_msg
 from aitune.torch.tune_strategy.multi_backend_strategy import MultiBackendStrategy
@@ -42,9 +43,16 @@ class _TuneCandidate:
 
 @dataclass(kw_only=True)
 class BackendProfilingResult(ABC):
-    """Profiled backend result returned by profiling strategies."""
+    """A selected batch's reported metric and internal boundary measurements.
+
+    metric and to_json_dict() retain min-shape values for logs and reports.
+    selection_score can combine both shapes without changing those outputs.
+    """
 
     selected_batch_size: int
+    # Optional for strategies that still produce a single metric. Boundary means
+    # support selection and eager validation; raw timing events stay in the profiler.
+    boundary_latencies: BoundaryLatencies | None = field(default=None, repr=False)
 
     @property
     @abstractmethod
@@ -58,6 +66,11 @@ class BackendProfilingResult(ABC):
             metric_label: self.metric,
             "selected_batch_size": self.selected_batch_size,
         }
+
+    @property
+    def selection_score(self) -> float:
+        """Return the internal ranking score; metric remains the reported min-shape value."""
+        return self.metric
 
 
 @dataclass
@@ -161,9 +174,43 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         """Returns the speedup of ``result`` relative to ``baseline_result`` (>1 is faster)."""
         ...
 
+    def _boundary_speedup(
+        self, candidate_latency: float, eager_latency: float, *, candidate_batch_size: int, eager_batch_size: int
+    ) -> float:
+        """Compare one measured boundary using the strategy's performance metric.
+
+        Strategies that attach boundary measurements must supply this comparison.
+        """
+        raise NotImplementedError(f"{type(self).__name__} must define how to compare boundary measurements")
+
     def _fmt(self, value: float) -> str:
         """Formats a metric value with its unit, e.g. ``12.34 samples/s``."""
         return f"{format(value, self._value_fmt)} {self._metric_unit}"
+
+    def _passes_boundary_validation(self, batch_size: int, latencies: BoundaryLatencies) -> bool:
+        """Compare both boundaries against eager after measurements are available.
+
+        Keep main's baseline policy: compare with eager's selected result. The
+        caller records this outcome in every comparison mode; only enabled mode
+        excludes a failing result from selection.
+        """
+        baseline = self._baseline_result
+        if baseline is None or baseline.boundary_latencies is None:
+            return True
+        eager = baseline.boundary_latencies
+        return all(
+            self._boundary_speedup(
+                candidate_latency,
+                eager_latency,
+                candidate_batch_size=batch_size,
+                eager_batch_size=baseline.selected_batch_size,
+            )
+            >= 0.95
+            for candidate_latency, eager_latency in (
+                (latencies.min_shape, eager.min_shape),
+                (latencies.max_shape, eager.max_shape),
+            )
+        )
 
     def _fmt_result(self, result: BackendProfilingResult) -> str:
         """Include mean latency when a throughput result also records it."""
@@ -184,11 +231,17 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             details = ", ".join(f"rank {rank}: {batch_size!r}" for rank, batch_size in enumerate(batch_sizes))
             raise RuntimeError(f"Distributed selected profiling batch size differs across ranks: {details}")
 
-        updates = {}
+        updates: dict[str, Any] = {}
         if hasattr(result, "throughput"):
             updates["throughput"] = min(candidate.throughput for candidate in gathered_results)
         if hasattr(result, "latency"):
             updates["latency"] = max(candidate.latency for candidate in gathered_results)
+        boundaries = [candidate.boundary_latencies for candidate in gathered_results]
+        if all(boundary is not None for boundary in boundaries):
+            updates["boundary_latencies"] = BoundaryLatencies(
+                max(boundary.min_shape for boundary in boundaries if boundary is not None),
+                max(boundary.max_shape for boundary in boundaries if boundary is not None),
+            )
         if updates:
             return replace(result, **updates)
 
@@ -375,7 +428,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                 batch_size = result.selected_batch_size
                 perf_result = self._record_perf_result(built, result)
                 speedup = (
-                    fmt_speedup_comparison(perf_result.speedup, perf_result.passed)
+                    fmt_speedup_comparison(perf_result.speedup, perf_result.speedup >= 1.0)
                     if perf_result is not None
                     else "n/a"
                 )
@@ -388,6 +441,15 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                     depth=2,
                     sink=self._sink,
                 )
+                if (
+                    self.performance_validation_mode is PerformanceValidationMode.ENABLED
+                    and result.boundary_latencies is not None
+                    and perf_result is not None
+                    and not perf_result.passed
+                ):
+                    # Measurements and min-shape speedup have already been reported.
+                    # Only eligibility changes here; diagnostic mode keeps the backend.
+                    continue
                 if best is None or self._is_better(result, best.result):
                     log(
                         "🎯 new best %s for %s is %s, speedup=%s, batch size: %s",
@@ -405,7 +467,12 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
         return best
 
     def _record_perf_result(self, backend: Backend, result: BackendProfilingResult) -> BackendPerfResult | None:
-        """Records and returns the eager comparison so profiling logs use the same speedup."""
+        """Record min-shape speedup and the separate boundary-validation outcome.
+
+        The reported speedup remains based on metric. When both results include
+        boundaries, passed requires both speedups to reach the boundary threshold.
+        The caller applies that gate only in enabled mode, after reporting.
+        """
         metric = result.metric
         if self._baseline_result is None or self._baseline_result.metric <= 0 or metric <= 0:
             return None
@@ -415,7 +482,11 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
             metric=metric,
             baseline_metric=self._baseline_result.metric,
             speedup=speedup,
-            passed=speedup >= 1.0,
+            passed=(
+                self._passes_boundary_validation(result.selected_batch_size, result.boundary_latencies)
+                if result.boundary_latencies is not None and self._baseline_result.boundary_latencies is not None
+                else speedup >= 1.0
+            ),
         )
         self.perf_validation_results.append(perf_result)
         return perf_result
