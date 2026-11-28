@@ -13,6 +13,10 @@ on:
         description: Run CUDA Python matrix
         type: boolean
         default: true
+      run_functional_ci:
+        description: Run functional CI tests
+        type: boolean
+        default: false
   merge_group:
     branches: [main]
   workflow_call:
@@ -48,7 +52,7 @@ jobs:
   pytorch-gpu-nvcr-container:
     name: PyTorch GPU on nvcr ${{ matrix.nvcr }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
-    timeout-minutes: 45
+    timeout-minutes: 60
     if: inputs.run_nvcr_container == true
     strategy:
       fail-fast: false
@@ -77,11 +81,14 @@ jobs:
           nvidia-smi
           python .github/scripts/sanity/check_gpu_stack.py
           pytest -n 4
+          if [[ '${{ inputs.run_functional_ci }}' == 'true' ]]; then
+            pytest -n 4 -rfEs --durations=0 tests/functional_ci
+          fi
 
   pytorch-gpu-cuda-python-matrix:
     name: ${{ matrix.cuda.uv_torch_backend }} py${{ matrix.python_version }} ${{ matrix.torch }}
     runs-on: prod-aitune-tester-rtx-pro-4500-v1
-    timeout-minutes: 45
+    timeout-minutes: 60
     if: inputs.run_cuda_matrix == true
     env:
       SETUPTOOLS_SCM_PRETEND_VERSION_FOR_AITUNE: 0.0.0a0
@@ -158,3 +165,6 @@ jobs:
           .venv/bin/python .github/scripts/sanity/check_gpu_stack.py
           .venv/bin/python .github/scripts/sanity/check_onnxruntime_cuda.py --cuda-major-version=${{ matrix.cuda.cuda_major }}
           .venv/bin/python -m pytest -q -rf -n 4
+          if [[ '${{ inputs.run_functional_ci }}' == 'true' ]]; then
+            .venv/bin/python -m pytest -n 4 -rfEs --durations=0 tests/functional_ci
+          fi
