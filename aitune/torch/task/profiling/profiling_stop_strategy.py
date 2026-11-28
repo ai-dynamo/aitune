@@ -3,6 +3,7 @@
 """Profiling stop strategies for profiling."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from aitune.torch.task.profiling.events import ProfilingResultEvent
@@ -12,6 +13,10 @@ from aitune.utils import validation
 
 class ProfilingStopStrategy(ABC):
     """Strategy when to stop profiling."""
+
+    def should_stop_samples(self, samples: Sequence[list[ProfilingResultEvent]]) -> bool:
+        """Use the caller-designated primary sample after the whole batch is measured."""
+        return self.should_stop(samples[0])
 
     @abstractmethod
     def should_stop(self, results: list[ProfilingResultEvent]) -> bool:
