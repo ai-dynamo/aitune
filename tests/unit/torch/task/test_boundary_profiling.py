@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from aitune.torch.backend import Backend
+from aitune.torch.backend.torch_eager import TorchEagerBackend
 from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, ProfilingConfig, ProfilingResultEvent
 from aitune.torch.task.profiling.measuring_strategy import MeasuringStrategy
@@ -21,6 +22,7 @@ from aitune.torch.tune_strategy.latency_budget_strategy import LatencyBudgetProf
 from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputProfilingResult, MaxThroughputStrategy
 from aitune.torch.tune_strategy.min_latency_strategy import MinLatencyStrategy
 from aitune.torch.utils.shape_samples import shape_boundary_samples
+from tests.toy_backends import SleepBackend
 from tests.utilities.helpers import make_graph_spec, make_sample_store, update_input_spec
 
 
@@ -100,6 +102,19 @@ def test_static_shapes_are_measured_once(tmp_path):
     assert timings.order == [(1, 4), (2, 4)]
     assert all(len(batch.sample_events) == 1 for batch in status.results.batches)
     assert status.results.batch_latencies(config.measurement_stop_strategy)[1] == (2,)
+
+
+def test_empty_recorded_axis_expands_to_max_shape(torch_device):
+    model = torch.nn.Identity()
+    first = ((torch.empty(1, 0, dtype=torch.int64, device=torch_device),), {})
+    graph = make_graph_spec(model.forward, first, batch_size=1)
+    larger = torch.ones(1, 8, dtype=torch.int64, device=torch_device)
+    update_input_spec(graph, ((larger,), {}), batch_size=1)
+
+    (min_args, _), (max_args, _) = shape_boundary_samples(first, graph, preserve_batch_axes=True)
+
+    assert min_args[0].shape == (1, 0)
+    torch.testing.assert_close(max_args[0], torch.zeros_like(larger))
 
 
 def test_backend_profile_defaults_to_one_recorded_sample_even_with_dynamic_shapes(tmp_path):
@@ -355,3 +370,33 @@ def test_backend_selection_uses_score_while_speedup_logging_uses_min_shape(tmp_p
     assert comparison.speedup == pytest.approx((2000 / 6) / 350)
     assert "333.33 samples/s" in strategy._fmt_result(result)
     assert "geometric" not in strategy._fmt_result(result)
+
+
+@pytest.mark.parametrize(
+    "latencies,number,label,passed",
+    [((5, 20), "2.00x", "faster", False), ((10.4, 5), "0.96x", "slower", True)],
+)
+def test_min_latency_log_labels_min_shape_speedup(tmp_path, latencies, number, label, passed):
+    _, graph, samples, config, candidate_timings = setup_profile(tmp_path, {1: latencies})
+    eager_timings = ShapeTimings({1: (10, 10)})
+
+    class BackendTimings(MeasuringStrategy):
+        def do_measurement(self, batch_size, model, sample, **kwargs):
+            timings = eager_timings if kwargs["backend_details"].startswith("TorchEagerBackend(") else candidate_timings
+            return timings.do_measurement(batch_size, model, sample, **kwargs)
+
+    messages = []
+    config.measuring_strategy = BackendTimings()
+    strategy = MinLatencyStrategy(
+        backends=[SleepBackend(sleep_time=0)],
+        profiling_config=config,
+        sink=lambda message, *args: messages.append(message % args if args else message),
+    )
+    strategy.enable_correctness_check(False)
+    selected = strategy.tune(torch.nn.Identity(), "model", graph, samples, torch.device("cpu"), tmp_path)
+
+    message = next(message for message in messages if "backend profiled" in message)
+    assert f"speedup={number}" in message
+    assert label in message
+    assert strategy.perf_validation_results[0].passed is passed
+    assert isinstance(selected, TorchEagerBackend if not passed else SleepBackend)
