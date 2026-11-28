@@ -14,13 +14,13 @@ from aitune.exceptions import AITuneError
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
 from aitune.torch.backend.torch_tensorrt_logging import torch_tensorrt_warnings
 from aitune.torch.distributed import distributed_output_path
+from aitune.torch.libs.torch_compile import DecoratedForwardBindings, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.cuda_utils import assert_is_available as assert_cuda_is_available
 from aitune.torch.utils.cuda_utils import get_device as get_cuda_device
 from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device
-from aitune.torch.utils.torch_compile import resolve_compile_dynamic
 
 try:
     import torch_tensorrt
@@ -149,6 +149,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
 
         # build variables
         self._compiled_module = None
+        self._decorated_forwards = DecoratedForwardBindings()
         self._orig_module = None
         self._samples: SampleStore | None = None
         self._compile_dynamic = self._config.dynamic
@@ -206,18 +207,23 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
         else:
             compile_options.pop("device", None)
 
-        with torch_tensorrt_warnings(torch_tensorrt):
-            self._compiled_module = torch.compile(
-                self._orig_module,
-                backend="torch_tensorrt",
-                options=compile_options,
-                fullgraph=self._config.fullgraph,
-                dynamic=self._compile_dynamic,
-            )
+        try:
+            with self._decorated_forwards.compiling(self._orig_module), torch_tensorrt_warnings(torch_tensorrt):
+                self._compiled_module = torch.compile(
+                    self._orig_module,
+                    backend="torch_tensorrt",
+                    options=compile_options,
+                    fullgraph=self._config.fullgraph,
+                    dynamic=self._compile_dynamic,
+                )
 
-            self._select_infer_impl()
-            for args, kwargs in self._samples.iter_samples(self.device):
-                self._infer_impl(*args, **kwargs)
+                self._select_infer_impl()
+                for args, kwargs in self._samples.iter_samples(self.device):
+                    self._infer_impl(*args, **kwargs)
+        except BaseException:
+            # Activation retries compile only when there is no cached callable.
+            self._compiled_module = None
+            raise
         logger.info("Module has been compiled.")
 
     def _infer_with_autocast(self, *args: Any, **kwargs: Any) -> Any:
@@ -260,6 +266,7 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
     def _deactivate(self):
         """Deactivate backend and cleanup."""
         self._compiled_module = None
+        self._decorated_forwards.restore()
 
     def _deploy(self):
         """Deploys the backend."""

@@ -36,11 +36,11 @@ except ImportError:
 
 
 from aitune.torch.backend.backend import Backend, BackendConfig, BackendState, BuildMode, ExecutionMode
+from aitune.torch.libs.torch_compile import DecoratedForwardBindings, TorchCompileMode, resolve_compile_dynamic
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.utils.memory import gc_collect
 from aitune.torch.utils.module import move_module_to_device, offload
-from aitune.torch.utils.torch_compile import TorchCompileMode, resolve_compile_dynamic
 from aitune.utils.hashing import hash_string
 from aitune.utils.serialization import json_serialize
 
@@ -227,6 +227,7 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
 
         # build variables
         self._quant_module = None
+        self._decorated_forwards = DecoratedForwardBindings()
         self._orig_module = None
         self._samples: SampleStore | None = None
         self._compile_dynamic = self._config.dynamic
@@ -271,6 +272,7 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
     def _deactivate(self):
         """Deactivates backend."""
         self._quant_module = None
+        self._decorated_forwards.restore()
 
     def _deploy(self):
         """Deploys the backend."""
@@ -328,15 +330,16 @@ class TorchAOBackend(Backend[TorchAOBackendConfig]):
         if quantization_config is None:
             raise RuntimeError("quantization_config must be set by TorchAOBackendConfig.__post_init__")
         quantize_(model, config=quantization_config, device=self.device, filter_fn=self._config.filter_fn)
-        self._quant_module = torch.compile(
-            model=model,
-            fullgraph=self._config.fullgraph,
-            dynamic=self._compile_dynamic,
-            mode=self._config.mode,
-        )
-        with torch.no_grad():
-            for args, kwargs in self._samples.iter_samples(self.device):
-                self._quant_module(*args, **kwargs)
+        with self._decorated_forwards.compiling(model):
+            self._quant_module = torch.compile(
+                model=model,
+                fullgraph=self._config.fullgraph,
+                dynamic=self._compile_dynamic,
+                mode=self._config.mode,
+            )
+            with torch.no_grad():
+                for args, kwargs in self._samples.iter_samples(self.device):
+                    self._quant_module(*args, **kwargs)
 
     def _check_hardware_compatibility(self, module: nn.Module) -> None:
         """Check hardware and model constraints for the selected quantization format.

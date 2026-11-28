@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Shared torch.compile helpers."""
+"""Shared torch.compile settings for AITune backends."""
 
 from typing import Literal
 

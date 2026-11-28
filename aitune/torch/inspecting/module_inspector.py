@@ -128,6 +128,7 @@ class ModuleInspector:
         """
         self._module_info: dict[Any, ModuleInfo] = {}
         self._original_forward: dict[Any, Any] = {}
+        self._modules_with_instance_forward: set[torch.nn.Module] = set()
         self._original_compiled_call: dict[Any, Any] = {}
         # ids of modules whose next forward entry an outer wrapper reports or times (see _reported_by_outer)
         self._reported_by_outer_call: set[int] = set()
@@ -156,8 +157,12 @@ class ModuleInspector:
         for module, original_forward in self._original_forward.items():
             if isinstance(module, Module):
                 module.set_proxy_forward(original_forward)
-            else:
+            elif module in self._modules_with_instance_forward:
                 module.forward = original_forward
+            else:
+                # Preserve class descriptor binding. Saving a bound wrapt forward on the instance
+                # changes method lookup and prevents deepcopy of an otherwise copyable model.
+                del module.forward
         for module, original_compiled_call in self._original_compiled_call.items():
             module._compiled_call_impl = original_compiled_call
         self._restore_methods()
@@ -167,6 +172,7 @@ class ModuleInspector:
         self._module_info.clear()
         self._forward_labels.clear()
         self._original_forward.clear()
+        self._modules_with_instance_forward.clear()
         self._original_compiled_call.clear()
 
     def warn_about_compiled_modules(self) -> None:
@@ -429,6 +435,8 @@ class ModuleInspector:
 
         original_forward = module.forward
         self._original_forward[module] = original_forward
+        if "forward" in vars(module):
+            self._modules_with_instance_forward.add(module)
         orig_mod = module._orig_mod if isinstance(module, optimized_module_type()) else None
 
         @wraps(original_forward)

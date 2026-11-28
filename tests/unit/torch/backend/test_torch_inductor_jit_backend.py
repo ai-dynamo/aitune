@@ -9,9 +9,9 @@ import torch
 
 from aitune.torch.backend.torch_inductor_jit_backend import TorchInductorJitBackend, TorchInductorJitBackendConfig
 from aitune.torch.checkpoint.storage_tasks import TorchLoadTask, TorchSaveTask
+from aitune.torch.libs.torch_compile import TorchCompileMode
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
-from aitune.torch.utils.torch_compile import TorchCompileMode
 from tests.toy_models import ToyTorchModel
 from tests.utilities.helpers import make_sample_store, requires_cuda
 
