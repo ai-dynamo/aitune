@@ -207,18 +207,23 @@ class TorchTensorRTJitBackend(Backend[TorchTensorRTJitBackendConfig]):
         else:
             compile_options.pop("device", None)
 
-        with self._decorated_forwards.compiling(self._orig_module), torch_tensorrt_warnings(torch_tensorrt):
-            self._compiled_module = torch.compile(
-                self._orig_module,
-                backend="torch_tensorrt",
-                options=compile_options,
-                fullgraph=self._config.fullgraph,
-                dynamic=self._compile_dynamic,
-            )
+        try:
+            with self._decorated_forwards.compiling(self._orig_module), torch_tensorrt_warnings(torch_tensorrt):
+                self._compiled_module = torch.compile(
+                    self._orig_module,
+                    backend="torch_tensorrt",
+                    options=compile_options,
+                    fullgraph=self._config.fullgraph,
+                    dynamic=self._compile_dynamic,
+                )
 
-            self._select_infer_impl()
-            for args, kwargs in self._samples.iter_samples(self.device):
-                self._infer_impl(*args, **kwargs)
+                self._select_infer_impl()
+                for args, kwargs in self._samples.iter_samples(self.device):
+                    self._infer_impl(*args, **kwargs)
+        except BaseException:
+            # Activation retries compile only when there is no cached callable.
+            self._compiled_module = None
+            raise
         logger.info("Module has been compiled.")
 
     def _infer_with_autocast(self, *args: Any, **kwargs: Any) -> Any:

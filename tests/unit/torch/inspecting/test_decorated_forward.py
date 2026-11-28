@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections import OrderedDict
+from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial
 
@@ -17,6 +18,8 @@ from aitune.torch.backend import (
     TorchAOBackendConfig,
     TorchInductorJitBackend,
     TorchInductorJitBackendConfig,
+    TorchTensorRTJitBackend,
+    TorchTensorRTJitBackendConfig,
 )
 from aitune.torch.module.sample_metadata import SampleMetadata
 from aitune.torch.module.tuned_module import TunedModule
@@ -212,14 +215,33 @@ def test_decorated_forward_backend_checkpoint_reactivation(monkeypatch, tmp_path
         torch._dynamo.reset()
 
 
-def test_decorated_forward_checkpoint_activation_retries_after_warmup_failure(monkeypatch, tmp_path):
-    compile_eager = partial(torch.compile, backend="eager")
-    monkeypatch.setattr(torch, "compile", compile_eager)
+@pytest.mark.parametrize(
+    "backend_type,config_type",
+    [
+        pytest.param(TorchInductorJitBackend, TorchInductorJitBackendConfig, id="inductor-jit"),
+        pytest.param(TorchTensorRTJitBackend, TorchTensorRTJitBackendConfig, id="torch-tensorrt-jit"),
+    ],
+)
+def test_decorated_forward_checkpoint_activation_retries_after_warmup_failure(
+    mocker, tmp_path, backend_type, config_type
+):
+    if backend_type is TorchTensorRTJitBackend:
+        mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.assert_cuda_is_available")
+        tensorrt = mocker.patch("aitune.torch.backend.torch_tensorrt_jit_backend.torch_tensorrt")
+        tensorrt.logging.warnings.return_value = nullcontext()
+        mocker.patch.object(TorchTensorRTJitBackend, "_devices", ["cpu"])
+
+    torch_compile = torch.compile
+
+    def compile_eager(module, *, fullgraph, dynamic, **_):
+        return torch_compile(module, backend="eager", fullgraph=fullgraph, dynamic=dynamic)
+
+    compile_mock = mocker.patch.object(torch, "compile", side_effect=compile_eager)
     model = ToyDecoratedSpeechModel().eval()
     sample = torch.ones(2, 8)
     samples = make_sample_store([((sample,), {})], tmp_path)
     graph_spec = make_recorded_graph_spec(model, ((sample,), {}))
-    backend = TorchInductorJitBackend(TorchInductorJitBackendConfig(dynamic=False))
+    backend = backend_type(config_type(dynamic=False))
     restored = None
     try:
         with torch.no_grad():
@@ -227,22 +249,23 @@ def test_decorated_forward_checkpoint_activation_retries_after_warmup_failure(mo
         backend.build(model, graph_spec, samples, device=torch.device("cpu"), cache_dir=tmp_path)
         state = backend.to_dict()
         backend.deactivate()
-        restored = TorchInductorJitBackend.from_dict(ToyDecoratedSpeechModel(seed=1).eval(), state)
+        restored = backend_type.from_dict(ToyDecoratedSpeechModel(seed=1).eval(), state)
 
         def failing_warmup(*args, **kwargs):
             raise torch.OutOfMemoryError("Warmup allocation failed")
 
         def compile_with_failed_warmup(*args, **kwargs):
             # Subsequent compilations can succeed, but this failed artifact remains unusable.
-            monkeypatch.setattr(torch, "compile", compile_eager)
+            compile_mock.side_effect = compile_eager
             return failing_warmup
 
-        monkeypatch.setattr(torch, "compile", compile_with_failed_warmup)
+        compile_mock.side_effect = compile_with_failed_warmup
         with pytest.raises(torch.OutOfMemoryError, match="Warmup allocation failed"):
             restored.activate()
         assert not restored.is_active
 
         restored.activate()
+        assert compile_mock.call_count == 3
         torch.testing.assert_close(restored.infer(sample), expected)
     finally:
         if backend.is_active:
