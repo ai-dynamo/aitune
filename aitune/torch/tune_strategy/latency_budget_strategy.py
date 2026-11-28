@@ -5,7 +5,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
@@ -14,8 +14,17 @@ from aitune.torch.task.profiling import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent
 from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStrategy
 from aitune.torch.task.profiling.metrics import BoundaryLatencies, get_latency, throughput_speedup
-from aitune.torch.task.profiling.profiling import ProfilingResults, ProfilingStatus, profile_backend
 from aitune.torch.task.profiling.profiling_stop_strategy import ProfilingStopStrategy
+from aitune.torch.tune_strategy.profiling_tune_strategy import (
+    BackendProfilingResult,
+    ProfilingTuneStrategy,
+    _TuneCandidate,
+)
+from aitune.torch.utils.shape_samples import shape_boundary_samples
+from aitune.utils import validation
+
+if TYPE_CHECKING:
+    from aitune.torch.task.profiling.profiling import ProfilingResults, ProfilingStatus
 from aitune.torch.tune_strategy.profiling_tune_strategy import (
     BackendProfilingResult,
     ProfilingTuneStrategy,
@@ -184,7 +193,7 @@ class LatencyBudgetStrategy(ProfilingTuneStrategy):
 
 
 def _find_best_latency_budget_candidate(
-    profiling_results: ProfilingResults,
+    profiling_results: "ProfilingResults",
     measuring_stop_strategy: MeasuringStopStrategy,
     latency_budget_ms: float,
 ) -> LatencyBudgetProfilingResult | None:
