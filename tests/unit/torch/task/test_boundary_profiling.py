@@ -17,6 +17,7 @@ from aitune.torch.task.profiling.profiling_stop_strategy import (
     AllSamplesProfilingStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
+from aitune.torch.tune_strategy.latency_budget_strategy import LatencyBudgetProfilingResult, LatencyBudgetStrategy
 from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputProfilingResult, MaxThroughputStrategy
 from aitune.torch.tune_strategy.min_latency_strategy import MinLatencyStrategy
 from aitune.torch.utils.shape_samples import shape_boundary_samples
@@ -200,9 +201,10 @@ def test_saturation_uses_min_shape_after_collecting_both(tmp_path, latencies, ex
     assert timings.order == [(batch, width) for batch in expected_batches for width in (4, 8)]
 
 
-def test_combined_score_selects_batch_but_reports_min_shape(tmp_path):
+@pytest.mark.parametrize("strategy_type", [MaxThroughputStrategy, partial(LatencyBudgetStrategy, latency_budget_ms=20)])
+def test_combined_score_selects_batch_but_reports_min_shape(tmp_path, strategy_type):
     backend, graph, samples, config, _ = setup_profile(tmp_path, {1: (2, 18), 2: (6, 8)})
-    strategy = MaxThroughputStrategy(backends=[backend], profiling_config=config)
+    strategy = strategy_type(backends=[backend], profiling_config=config)
     result = strategy._measure(backend, "model", graph, samples, config)
 
     assert result.selected_batch_size == 2
@@ -243,6 +245,7 @@ def test_min_latency_score_and_report_are_separate(tmp_path):
     "strategy_type,result_type",
     [
         (MaxThroughputStrategy, MaxThroughputProfilingResult),
+        (partial(LatencyBudgetStrategy, latency_budget_ms=20), LatencyBudgetProfilingResult),
     ],
 )
 def test_throughput_boundary_validation_uses_each_batch_size_regardless_of_report_label(
@@ -316,6 +319,20 @@ def test_backend_comparison_records_results_before_excluding_candidate(tmp_path,
     else:
         assert selected is not None
         assert selected.backend is backend
+
+
+@pytest.mark.parametrize("violating_latencies", [(16, 1), (1, 16)])
+def test_budget_checks_both_shapes_before_score_and_stops_scan(tmp_path, violating_latencies):
+    backend, graph, samples, config, timings = setup_profile(
+        tmp_path,
+        {1: (8, 8), 2: violating_latencies, 4: (1, 1)},
+    )
+    strategy = LatencyBudgetStrategy(latency_budget_ms=15, backends=[backend], profiling_config=config)
+    config = strategy._get_profiling_config(True, 4)
+    result = strategy._measure(backend, "model", graph, samples, config)
+
+    assert result.selected_batch_size == 1
+    assert timings.order == [(1, 4), (1, 8), (2, 4), (2, 8)]
 
 
 def test_backend_selection_uses_score_while_speedup_logging_uses_min_shape(tmp_path):

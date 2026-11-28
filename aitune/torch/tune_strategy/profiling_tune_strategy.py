@@ -443,7 +443,6 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                 )
                 if (
                     self.performance_validation_mode is PerformanceValidationMode.ENABLED
-                    and result.boundary_latencies is not None
                     and perf_result is not None
                     and not perf_result.passed
                 ):

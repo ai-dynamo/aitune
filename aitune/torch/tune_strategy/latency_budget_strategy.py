@@ -2,24 +2,26 @@
 # SPDX-License-Identifier: Apache-2.0
 """Latency budget tune strategy."""
 
-from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import Any
 
 from aitune.torch.backend import Backend
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
-from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inference_events
+from aitune.torch.task.profiling.events import ProfilingResultEvent
 from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStrategy
-from aitune.torch.task.profiling.metrics import get_latency, get_throughput
-from aitune.torch.task.profiling.profiling import ProfilingStatus, profile_backend
+from aitune.torch.task.profiling.metrics import BoundaryLatencies, get_latency, throughput_speedup
+from aitune.torch.task.profiling.profiling import ProfilingResults, ProfilingStatus, profile_backend
 from aitune.torch.task.profiling.profiling_stop_strategy import ProfilingStopStrategy
 from aitune.torch.tune_strategy.profiling_tune_strategy import (
     BackendProfilingResult,
     ProfilingTuneStrategy,
     _TuneCandidate,
 )
+from aitune.torch.utils.shape_samples import shape_boundary_samples
 from aitune.utils import validation
 
 
@@ -33,8 +35,15 @@ class LatencyBudgetProfilingResult(BackendProfilingResult):
 
     @property
     def metric(self) -> float:
-        """Returns throughput as the comparison metric."""
+        """Return the min-shape throughput used in existing reports and speedup logs."""
         return self.throughput
+
+    @property
+    def selection_score(self) -> float:
+        """Rank budget-compliant batches by both shapes without changing reported values."""
+        if self.boundary_latencies is None:
+            return self.metric
+        return self.boundary_latencies.throughput_score(self.selected_batch_size)
 
     def to_json_dict(self, metric_label: str) -> dict[str, int | float]:
         """Returns strategy result fields for latency-budget profiling."""
@@ -45,26 +54,32 @@ class LatencyBudgetProfilingResult(BackendProfilingResult):
 
 @dataclass
 class _LatencyBudgetProfilingStopStrategy(ProfilingStopStrategy):
+    """Stop on any sample's budget violation, otherwise consult primary-sample saturation."""
+
     latency_budget_ms: float
     measurement_stop_strategy: MeasuringStopStrategy
     base_strategy: ProfilingStopStrategy
 
-    def should_stop(self, results: list[ProfilingResultEvent]) -> bool:
-        if self.base_strategy.should_stop(results):
-            return True
+    def should_stop_samples(self, samples: Sequence[list[ProfilingResultEvent]]) -> bool:
+        """Require every sample to meet the budget; saturation uses the primary one."""
+        for events in samples:
+            measured = self.measurement_stop_strategy.get_events(events)
+            if measured and get_latency(measured) > self.latency_budget_ms:
+                return True
+        return self.base_strategy.should_stop(samples[0])
 
-        measured_events = self.measurement_stop_strategy.get_events(results)
-        return bool(measured_events) and get_latency(measured_events) > self.latency_budget_ms
+    def should_stop(self, results: list[ProfilingResultEvent]) -> bool:
+        """Apply the same policy to a single-shape caller."""
+        return self.should_stop_samples((results,))
 
 
 class LatencyBudgetStrategy(ProfilingTuneStrategy):
     """Searches for max throughput while satisfying a latency budget.
 
-    Each backend is profiled across the configured batch-size sweep. For each backend,
-    the strategy keeps only batch sizes whose mean latency is less than or equal to
-    ``latency_budget_ms``, then uses the highest-throughput remaining batch size as
-    that backend's score. The selected backend is the one with maximum throughput
-    among all latency-compliant candidates.
+    Each backend is profiled across the configured batch-size sweep. Both shape
+    latencies must be at most ``latency_budget_ms`` before a batch is scored.
+    Eligible batches are ranked by geometric-mean throughput; min-shape throughput
+    and latency remain the reported values.
 
     TorchEager is profiled as a performance-validation baseline when validation is enabled.
     If no user-provided backend satisfies the latency budget, the strategy raises.
@@ -97,12 +112,21 @@ class LatencyBudgetStrategy(ProfilingTuneStrategy):
         profiling_cfg: ProfilingConfig,
     ) -> LatencyBudgetProfilingResult:
         """Profiles the backend and returns the max-throughput result within the latency budget."""
-        profiling_results = profile_backend(backend, name, graph_spec, samples, profiling_cfg)
+        profiling_results = profile_backend(
+            backend,
+            name,
+            graph_spec,
+            samples,
+            profiling_cfg,
+            sample_preparer=partial(
+                shape_boundary_samples, graph_spec=graph_spec, preserve_batch_axes=profiling_cfg.batching
+            ),
+        )
         if profiling_results.status != ProfilingStatus.Status.SUCCESS:
             raise profiling_results.error or RuntimeError("Profiling failed")
 
         candidate = _find_best_latency_budget_candidate(
-            get_inference_events(profiling_results.results.entries),
+            profiling_results.results,
             profiling_cfg.measurement_stop_strategy,
             self.latency_budget_ms,
         )
@@ -115,10 +139,20 @@ class LatencyBudgetStrategy(ProfilingTuneStrategy):
         return candidate
 
     def _is_better(self, result: BackendProfilingResult, other: BackendProfilingResult) -> bool:
-        return result.metric > other.metric
+        return result.selection_score > other.selection_score
 
     def _speedup(self, result: BackendProfilingResult, baseline_result: BackendProfilingResult) -> float:
         return result.metric / baseline_result.metric
+
+    def _boundary_speedup(
+        self, candidate_latency: float, eager_latency: float, *, candidate_batch_size: int, eager_batch_size: int
+    ) -> float:
+        return throughput_speedup(
+            candidate_latency,
+            eager_latency,
+            candidate_batch_size=candidate_batch_size,
+            eager_batch_size=eager_batch_size,
+        )
 
     def _get_profiling_config(self, batching: bool, max_batch_size: int) -> ProfilingConfig:
         profiling_config = super()._get_profiling_config(batching, max_batch_size)
@@ -150,28 +184,27 @@ class LatencyBudgetStrategy(ProfilingTuneStrategy):
 
 
 def _find_best_latency_budget_candidate(
-    profiling_results: list[ProfilingResultEvent],
+    profiling_results: ProfilingResults,
     measuring_stop_strategy: MeasuringStopStrategy,
     latency_budget_ms: float,
 ) -> LatencyBudgetProfilingResult | None:
-    """Find the highest-throughput profiled batch size that satisfies the latency budget."""
-    events_by_batch_size = defaultdict(list)
-    for event in profiling_results:
-        events_by_batch_size[event.batch_size].append(event)
-
+    """Rank budget-compliant boundary pairs, retaining min-shape values for reporting."""
     best: LatencyBudgetProfilingResult | None = None
-    for batch_size, events in events_by_batch_size.items():
-        measured_events = measuring_stop_strategy.get_events(events)
-        if not measured_events:
+    for batch_size, sample_latencies in profiling_results.batch_latencies(measuring_stop_strategy).items():
+        latencies = BoundaryLatencies.from_samples(sample_latencies)
+        within_budget = max(latencies.min_shape, latencies.max_shape) <= latency_budget_ms
+        if not within_budget:
             continue
-        latency = get_latency(measured_events)
-        if latency <= latency_budget_ms:
-            candidate = LatencyBudgetProfilingResult(
-                selected_batch_size=batch_size,
-                throughput=get_throughput(measured_events, batch_size),
-                latency=latency,
-            )
-            if best is None or candidate.throughput > best.throughput:
-                best = candidate
+
+        # The geometric mean cannot make an over-budget boundary eligible.
+        # Calculate ranking scores only after both independent checks pass.
+        candidate = LatencyBudgetProfilingResult(
+            selected_batch_size=batch_size,
+            throughput=batch_size * 1000 / latencies.min_shape,
+            latency=latencies.min_shape,
+            boundary_latencies=latencies,
+        )
+        if best is None or candidate.selection_score > best.selection_score:
+            best = candidate
 
     return best
