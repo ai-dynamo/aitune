@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """JIT mode cases: modules created under the patcher are tuned on live traffic."""
 
-from typing import cast
-
 import pytest
 import torch
 from torch import nn
@@ -64,7 +62,8 @@ def test_jit_tuning(case: BackendCase, mode: JITMode, device: torch.device):
 
         (head,) = (head for head in PatchedModule.heads if head._name.split(" ")[0] == "JitMLP")
         assert head._state == ModuleState.TUNED
-        (selected,) = cast(TunedModule, head._wrapper).backends.values()
+        assert isinstance(head._wrapper, TunedModule)
+        (selected,) = head._wrapper.backends.values()
         assert type(selected) is type(backend)
         assert_matches_eager(model, reference, device, tolerance, batch_sizes=(3,), seeds=(7,))
 

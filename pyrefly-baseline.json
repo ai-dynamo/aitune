@@ -3242,20 +3242,6 @@
       "severity": "error"
     },
     {
-      "column": 16,
-      "path": "tests/unit/torch/task/test_profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `entries`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "tests/unit/torch/task/test_profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `entries`",
-      "severity": "error"
-    },
-    {
       "column": 24,
       "path": "tests/unit/torch/task/test_profiling.py",
       "name": "bad-argument-type",
@@ -3267,20 +3253,6 @@
       "path": "tests/unit/torch/task/test_profiling.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `NoneType` has no attribute `append`",
-      "severity": "error"
-    },
-    {
-      "column": 16,
-      "path": "tests/unit/torch/task/test_profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `entries`",
-      "severity": "error"
-    },
-    {
-      "column": 47,
-      "path": "tests/unit/torch/task/test_profiling.py",
-      "name": "missing-attribute",
-      "concise_description": "Object of class `NoneType` has no attribute `entries`",
       "severity": "error"
     },
     {

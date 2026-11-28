@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -151,7 +150,7 @@ def test_max_throughput_strategy_tune_max_throughput_backend(monkeypatch, torch_
         torch_device,
         tmp_path,
     )
-    max_throughput_backend = cast(SleepBackend, max_throughput_backend)
+    assert isinstance(max_throughput_backend, SleepBackend)
 
     assert max_throughput_backend.sleep_time == faster.sleep_time
     assert ("throughput", faster.describe(), 1.0 / faster.sleep_time) in reported_metrics

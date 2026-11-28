@@ -4,7 +4,6 @@
 
 from functools import partial
 from pathlib import Path
-from typing import cast
 
 import pytest
 import torch
@@ -32,13 +31,16 @@ def generate(pipeline: ToyFluxPipeline, prompt: str | list[str]) -> torch.Tensor
 def _components(pipeline: ToyFluxPipeline) -> dict[str, Module]:
     """Return the four wrapped pipeline components."""
     components = {
-        "transformer": cast(Module, pipeline.transformer),
-        "decoder": cast(Module, pipeline.vae.decoder),
-        "text_encoder": cast(Module, pipeline.text_encoder),
-        "text_encoder_2": cast(Module, pipeline.text_encoder_2),
+        "transformer": pipeline.transformer,
+        "decoder": pipeline.vae.decoder,
+        "text_encoder": pipeline.text_encoder,
+        "text_encoder_2": pipeline.text_encoder_2,
     }
-    assert all(isinstance(component, Module) for component in components.values())
-    return components
+    wrapped_components = {}
+    for name, component in components.items():
+        assert isinstance(component, Module)
+        wrapped_components[name] = component
+    return wrapped_components
 
 
 @pytest.mark.matrix("aot_tuning.models.pipelines", "modes.aot-inspect-wrap", "modes.aot-save-load")
@@ -106,9 +108,7 @@ def test_pipeline_jit(case: BackendCase, device: torch.device):
         "ToyDecoder",
     }
     assert all(head._state == ModuleState.TUNED for head in heads)
-    assert all(
-        type(selected) is type(backend)
-        for head in heads
-        for selected in cast(TunedModule, head._wrapper).backends.values()
-    )
+    for head in heads:
+        assert isinstance(head._wrapper, TunedModule)
+        assert all(type(selected) is type(backend) for selected in head._wrapper.backends.values())
     case.tolerance.assert_close(generate(pipeline, PROMPT), expected)
