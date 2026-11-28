@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from functools import partial
 
 from aitune.torch.backend import Backend
-from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
