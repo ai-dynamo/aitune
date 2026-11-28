@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Metrics for profiling."""
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from statistics import geometric_mean
 
@@ -29,10 +30,24 @@ class BoundaryLatencies:
             raise ValueError("Boundary scoring requires one static sample or two boundary samples")
         return cls(latencies[0], latencies[-1])
 
+    @classmethod
+    def worst_across_ranks(cls, latencies: Sequence["BoundaryLatencies"]) -> "BoundaryLatencies":
+        """Return the slowest latency at each shape, which may come from different ranks."""
+        return cls(max(rank.min_shape for rank in latencies), max(rank.max_shape for rank in latencies))
+
     @property
     def latency_score(self) -> float:
         """Return the geometric-mean latency used to rank candidates; lower is better."""
         return geometric_mean((self.min_shape, self.max_shape))
+
+    def throughput_score(self, batch_size: int) -> float:
+        """Return geometric-mean throughput for ranking; higher is better.
+
+        Both shapes use the same batch size, so the geometric mean of their
+        throughputs equals batch_size / geometric_mean(latencies). Convert the
+        millisecond latencies to samples per second.
+        """
+        return batch_size * 1000 / self.latency_score
 
 
 def is_throughput_saturated(
@@ -116,3 +131,49 @@ def get_throughput(results: list[ProfilingResultEvent], batch_size: int | None =
     """
     batch_size = batch_size or get_batch_size(results)
     return batch_size * get_mean_executions_per_second(results)
+
+
+def throughput_speedup(
+    candidate_latency: float, eager_latency: float, *, candidate_batch_size: int, eager_batch_size: int
+) -> float:
+    """Compare throughput at each backend's selected batch size.
+
+    Both latencies use the same units, so the conversion to seconds cancels out.
+    """
+    candidate_throughput = candidate_batch_size / candidate_latency
+    eager_throughput = eager_batch_size / eager_latency
+    return candidate_throughput / eager_throughput
+
+
+def aggregate_throughput_per_batch_size(
+    gathered_throughputs: list[dict[int, float]],
+) -> list[tuple[int, float]]:
+    """Rank scalar batch-throughput scores by the worst rank, breaking ties by batch size.
+
+    Args:
+        gathered_throughputs: One batch-size-to-throughput mapping per rank. Each
+            rank must have measured the same batch sizes.
+
+    Returns:
+        Batch size and worst-rank throughput pairs, ordered by decreasing
+        throughput and then increasing batch size.
+
+    Raises:
+        RuntimeError: If ranks report different sets of batch sizes.
+    """
+    batch_sizes = get_matching_batch_sizes(gathered_throughputs)
+    aggregated = [
+        (batch_size, min(candidate[batch_size] for candidate in gathered_throughputs)) for batch_size in batch_sizes
+    ]
+    return sorted(aggregated, key=lambda result: (-result[1], result[0]))
+
+
+def get_matching_batch_sizes(gathered_measurements: Sequence[Mapping[int, object]]) -> set[int]:
+    """Return the profiled batch sizes and raise if any rank measured a different set."""
+    batch_sizes = set(gathered_measurements[0])
+    if any(set(measurements) != batch_sizes for measurements in gathered_measurements[1:]):
+        details = ", ".join(
+            f"rank {rank}: {sorted(measurements)}" for rank, measurements in enumerate(gathered_measurements)
+        )
+        raise RuntimeError(f"Distributed profiled batch sizes differ across ranks: {details}")
+    return batch_sizes
