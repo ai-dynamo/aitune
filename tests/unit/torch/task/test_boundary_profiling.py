@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from functools import partial
 from unittest.mock import Mock
 
+import pytest
 import torch
 
 from aitune.torch.backend import Backend
@@ -11,7 +13,10 @@ from aitune.torch.task.profiling.measuring_strategy import MeasuringStrategy
 from aitune.torch.task.profiling.profiling import ProfilingStatus, profile, profile_backend
 from aitune.torch.task.profiling.profiling_stop_strategy import (
     AllSamplesProfilingStopStrategy,
+    ThroughputSaturatedProfilingStopStrategy,
 )
+from aitune.torch.tune_strategy.min_latency_strategy import MinLatencyStrategy
+from aitune.torch.utils.shape_samples import shape_boundary_samples
 from tests.utilities.helpers import make_graph_spec, make_sample_store, update_input_spec
 
 
@@ -58,6 +63,41 @@ def setup_profile(tmp_path, latencies, *, static=False, stop=None, warmup=False)
     return backend, graph, make_sample_store([first], tmp_path), config, timings
 
 
+def test_both_shapes_are_measured_within_each_batch_and_warmups_are_separate(tmp_path):
+    backend, graph, samples, config, timings = setup_profile(tmp_path, {1: (2, 8), 2: (4, 18)}, warmup=True)
+    status = profile_backend(
+        backend,
+        "model",
+        graph,
+        samples,
+        config,
+        sample_preparer=partial(shape_boundary_samples, graph_spec=graph, preserve_batch_axes=config.batching),
+    )
+
+    assert status.status is ProfilingStatus.Status.SUCCESS
+    assert timings.order == [(1, 4), (1, 8), (2, 4), (2, 8)]
+    assert status.results.batch_latencies(config.measurement_stop_strategy) == {
+        1: (2, 8),
+        2: (4, 18),
+    }
+
+
+def test_static_shapes_are_measured_once(tmp_path):
+    backend, graph, samples, config, timings = setup_profile(tmp_path, {1: (2, 2), 2: (4, 4)}, static=True)
+    status = profile_backend(
+        backend,
+        "model",
+        graph,
+        samples,
+        config,
+        sample_preparer=partial(shape_boundary_samples, graph_spec=graph, preserve_batch_axes=config.batching),
+    )
+
+    assert timings.order == [(1, 4), (2, 4)]
+    assert all(len(batch.sample_events) == 1 for batch in status.results.batches)
+    assert status.results.batch_latencies(config.measurement_stop_strategy)[1] == (2,)
+
+
 def test_backend_profile_defaults_to_one_recorded_sample_even_with_dynamic_shapes(tmp_path):
     backend, graph, samples, config, timings = setup_profile(tmp_path, {1: (2, 8), 2: (4, 18)})
 
@@ -96,6 +136,24 @@ def test_prepared_sample_group_must_not_be_empty(tmp_path):
     assert timings.order == []
 
 
+def test_failed_max_shape_keeps_only_earlier_complete_batch_pairs(tmp_path):
+    backend, graph, samples, config, _ = setup_profile(tmp_path, {1: (2, 8), 2: (4, None)})
+
+    status = profile_backend(
+        backend,
+        "model",
+        graph,
+        samples,
+        config,
+        sample_preparer=partial(shape_boundary_samples, graph_spec=graph, preserve_batch_axes=config.batching),
+    )
+
+    assert [batch.batch_size for batch in status.results.batches] == [1]
+    batch = status.results.batches[0]
+    assert len(batch.sample_events) == 2
+    assert all(event.batch_size == 1 for event in batch.sample_events[0] + batch.sample_events[1])
+
+
 def test_generic_dataset_profile_measures_one_sample_per_batch():
     timings = ShapeTimings({1: (2, 2), 2: (4, 4)})
     config = ProfilingConfig(
@@ -111,3 +169,39 @@ def test_generic_dataset_profile_measures_one_sample_per_batch():
     assert timings.order == [(1, 4), (2, 4)]
     assert all(len(batch.sample_events) == 1 for batch in status.results.batches)
     assert [event.batch_size for event in status.results.entries] == [1, 1, 2, 2]
+
+
+@pytest.mark.parametrize(
+    "latencies,expected_batches",
+    [
+        ({1: (10, 10), 2: (20, 10), 4: (1, 1)}, (1, 2)),
+        ({1: (10, 10), 2: (10, 20), 4: (20, 30)}, (1, 2, 4)),
+    ],
+)
+def test_saturation_uses_min_shape_after_collecting_both(tmp_path, latencies, expected_batches):
+    backend, graph, samples, config, timings = setup_profile(
+        tmp_path,
+        latencies,
+        stop=ThroughputSaturatedProfilingStopStrategy(throughput_backoff_limit=0),
+    )
+    status = profile_backend(
+        backend,
+        "model",
+        graph,
+        samples,
+        config,
+        sample_preparer=partial(shape_boundary_samples, graph_spec=graph, preserve_batch_axes=config.batching),
+    )
+
+    assert status.status is ProfilingStatus.Status.SUCCESS
+    assert timings.order == [(batch, width) for batch in expected_batches for width in (4, 8)]
+
+
+def test_min_latency_score_and_report_are_separate(tmp_path):
+    backend, graph, samples, config, _ = setup_profile(tmp_path, {1: (2, 18)})
+    strategy = MinLatencyStrategy(backends=[backend], profiling_config=config)
+    result = strategy._measure(backend, "model", graph, samples, config)
+
+    assert result.metric == pytest.approx(2)
+    assert result.selection_score == pytest.approx(6)
+    assert strategy._fmt_result(result) == "2.000 ms"
