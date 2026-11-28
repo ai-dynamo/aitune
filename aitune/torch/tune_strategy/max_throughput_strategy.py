@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from functools import partial
 
 from aitune.torch.backend import Backend
-from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling import ProfilingConfig
@@ -22,7 +21,6 @@ from aitune.torch.task.profiling.metrics import (
     get_matching_batch_sizes,
     throughput_speedup,
 )
-from aitune.torch.task.profiling.profiling import ProfilingStatus, profile_backend
 from aitune.torch.tune_strategy.profiling_tune_strategy import BackendProfilingResult, ProfilingTuneStrategy
 from aitune.torch.utils.shape_samples import shape_boundary_samples
 
