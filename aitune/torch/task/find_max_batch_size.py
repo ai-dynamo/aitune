@@ -16,7 +16,7 @@ from aitune.torch.module.sample_store import SampleStore
 from aitune.torch.task.profiling.config import ProfilingConfig
 from aitune.torch.task.profiling.events import ProfilingResultEvent, get_inference_events
 from aitune.torch.task.profiling.measuring_stop_strategy import MeasuringStopStrategy
-from aitune.torch.task.profiling.metrics import get_throughput
+from aitune.torch.task.profiling.metrics import aggregate_throughput_per_batch_size, get_throughput
 from aitune.torch.task.profiling.profiling import ProfilingResults, ProfilingStatus, profile_backend
 from aitune.torch.utils.module import get_default_backend_for_module
 from aitune.utils.logging import control_output
@@ -35,11 +35,11 @@ def find_max_batch_size(
     device: torch.device,
     cache_dir: Path,
 ) -> tuple[int, float, ProfilingResults]:
-    """Finds max batch size for Torch Compile as a baseline.
+    """Find the highest-scoring batch using the module's default backend.
 
-    Uses profiling with max throughput strategy to find max batch size.
-
-    Note: This function expects user to set profiling_config.max_batch_size to the highest batch size they want to profile.
+    The search uses profiling_config.batch_sizes and its profiling stop policy.
+    The selected batch maximizes min-shape throughput, rather than the
+    largest batch that fits in memory.
 
     Args:
         module: Model to find max batch size for.
@@ -47,9 +47,11 @@ def find_max_batch_size(
         graph_spec: Graph spec of the model.
         samples: Recorded samples to profile.
         profiling_config: Profiling configuration.
-        torch_backend: Backend to use for the find max batch size. If not provided, Torch Eager backend will be used.
         device: Device to use for the calculation.
         cache_dir: Cache directory to store the backend artifacts.
+
+    Returns:
+        Selected batch size, min-shape throughput, and raw profiling results.
     """
     backend = get_default_backend_for_module(module)
     backend_cache_dir = cache_dir / backend.key()
@@ -67,23 +69,22 @@ def find_max_throughput_for_backend(
     samples: SampleStore,
     profiling_config: ProfilingConfig,
 ) -> tuple[int, float, ProfilingResults]:
-    """Profiles a backend to find the batch size that achieves maximum throughput.
+    """Select a batch using min-shape throughput, preserving the discovery policy.
+
+    This helper also serves callers outside MaxThroughputStrategy. Combined
+    boundary scoring belongs to that strategy, rather than changing discovery's
+    batch choice. Ranks coordinate failures and must expose matching batch sets.
 
     Args:
-        module: Model to calculate maximum throughput for.
+        backend: Built backend to profile.
         name: Name of the model.
         graph_spec: Graph spec of the model.
         samples: Recorded samples to profile.
         profiling_config: Profiling configuration.
-        backend: Backend to use for the calculation.
-        device: Device to use for the calculation.
 
     Returns:
-        Tuple containing:
-            - Batch size with maximum throughput.
-            - Throughput for the batch size.
-            - Backend used for the calculation.
-            - Profiling results.
+        Selected batch size, its min-shape throughput across ranks, and the local
+        raw boundary measurements used by the strategy's result construction.
     """
     profiling_results = profile_backend(
         backend,
@@ -110,11 +111,11 @@ def find_max_throughput_for_backend(
     outcome.raise_if_failed(f"Processing profiling results for {backend.describe()}", local_error)
     if throughput_per_batch_size is None:
         raise RuntimeError("Profiling succeeded on all ranks but produced no throughput results")
-    throughput_per_batch_size = _aggregate_throughput_per_batch_size([
+    throughput_per_batch_size = aggregate_throughput_per_batch_size([
         dict(candidate) for candidate in gathered_throughputs
     ])
 
-    if len(throughput_per_batch_size) == 0:
+    if not throughput_per_batch_size:
         raise ValueError(f"No throughput data found for backend {backend.describe()}")
 
     batch_size, throughput = throughput_per_batch_size[0]
@@ -136,21 +137,6 @@ def get_throughput_per_batch_size(
         throughput_per_batch_size.append((batch_size, throughput))
 
     return sorted(throughput_per_batch_size, key=lambda x: x[1], reverse=True)
-
-
-def _aggregate_throughput_per_batch_size(
-    gathered_throughputs: list[dict[int, float]],
-) -> list[tuple[int, float]]:
-    """Return deterministic batch throughputs using the worst rank for each batch."""
-    batch_sizes = set(gathered_throughputs[0])
-    if any(set(candidate) != batch_sizes for candidate in gathered_throughputs[1:]):
-        details = ", ".join(f"rank {rank}: {sorted(candidate)}" for rank, candidate in enumerate(gathered_throughputs))
-        raise RuntimeError(f"Distributed profiled batch sizes differ across ranks: {details}")
-
-    aggregated = [
-        (batch_size, min(candidate[batch_size] for candidate in gathered_throughputs)) for batch_size in batch_sizes
-    ]
-    return sorted(aggregated, key=lambda result: (-result[1], result[0]))
 
 
 def _log_file(cache_dir: Path, filename: str) -> Path:

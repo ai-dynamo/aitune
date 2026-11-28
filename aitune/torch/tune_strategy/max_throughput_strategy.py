@@ -10,15 +10,21 @@
 """
 
 from dataclasses import dataclass
+from functools import partial
 
 from aitune.torch.backend import Backend
+from aitune.torch.distributed import coordinator
 from aitune.torch.module.graph_spec import GraphSpec
 from aitune.torch.module.sample_store import SampleStore
-from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import ProfilingConfig
-from aitune.torch.task.profiling.events import get_inference_events
-from aitune.torch.task.profiling.metrics import get_latency
+from aitune.torch.task.profiling.metrics import (
+    BoundaryLatencies,
+    aggregate_throughput_per_batch_size,
+    throughput_speedup,
+)
+from aitune.torch.task.profiling.profiling import ProfilingStatus, profile_backend
 from aitune.torch.tune_strategy.profiling_tune_strategy import BackendProfilingResult, ProfilingTuneStrategy
+from aitune.torch.utils.shape_samples import shape_boundary_samples
 
 
 @dataclass(kw_only=True)
@@ -31,8 +37,15 @@ class MaxThroughputProfilingResult(BackendProfilingResult):
 
     @property
     def metric(self) -> float:
-        """Returns throughput as the comparison metric."""
+        """Return the min-shape throughput used in existing reports and speedup logs."""
         return self.throughput
+
+    @property
+    def selection_score(self) -> float:
+        """Rank using both shapes while reporting min-shape throughput."""
+        if self.boundary_latencies is None:
+            return self.metric
+        return self.boundary_latencies.throughput_score(self.selected_batch_size)
 
     def to_json_dict(self, metric_label: str) -> dict[str, int | float]:
         """Return throughput and mean latency for the selected batch size."""
@@ -67,22 +80,63 @@ class MaxThroughputStrategy(ProfilingTuneStrategy):
         samples: SampleStore,
         profiling_cfg: ProfilingConfig,
     ) -> MaxThroughputProfilingResult:
-        """Profiles the backend and returns throughput with the selected batch size."""
-        batch_size, throughput, profiling_results = find_max_throughput_for_backend(
-            backend, name, graph_spec, samples, profiling_cfg
+        """Choose a batch by combined boundary score, retaining min-shape report values."""
+        profiling_status = profile_backend(
+            backend,
+            name,
+            graph_spec,
+            samples,
+            profiling_cfg,
+            sample_preparer=partial(
+                shape_boundary_samples, graph_spec=graph_spec, preserve_batch_axes=profiling_cfg.batching
+            ),
         )
-        selected_events = [
-            event for event in get_inference_events(profiling_results.entries) if event.batch_size == batch_size
-        ]
-        measured_events = profiling_cfg.measurement_stop_strategy.get_events(selected_events)
-        if not measured_events:
-            raise ValueError(f"No latency measurements found for {backend.describe()} at batch size {batch_size}")
+        local_error: Exception | None = None
+        latencies_by_batch: dict[int, BoundaryLatencies] = {}
+        batch_scores: dict[int, float] = {}
+        try:
+            if profiling_status.status != ProfilingStatus.Status.SUCCESS:
+                raise profiling_status.error or RuntimeError("Profiling failed")
+            latencies_by_batch = {
+                batch_size: BoundaryLatencies.from_samples(sample_latencies)
+                for batch_size, sample_latencies in profiling_status.results.batch_latencies(
+                    profiling_cfg.measurement_stop_strategy
+                ).items()
+            }
+            batch_scores = {
+                batch_size: latencies.throughput_score(batch_size)
+                for batch_size, latencies in latencies_by_batch.items()
+            }
+        except Exception as error:
+            local_error = error
+
+        outcome, gathered_scores = coordinator.collect_results(batch_scores, local_error)
+        outcome.raise_if_failed(f"Processing profiling results for {backend.describe()}", local_error)
+        ranked_batches = aggregate_throughput_per_batch_size(gathered_scores)
+        if not ranked_batches:
+            raise ValueError(f"No throughput data found for backend {backend.describe()}")
+
+        batch_size, _ = ranked_batches[0]
+        latencies = latencies_by_batch[batch_size]
         return MaxThroughputProfilingResult(
-            throughput=throughput, latency=get_latency(measured_events), selected_batch_size=batch_size
+            throughput=batch_size * 1000 / latencies.min_shape,
+            latency=latencies.min_shape,
+            selected_batch_size=batch_size,
+            boundary_latencies=latencies,
         )
 
     def _is_better(self, result: BackendProfilingResult, other: BackendProfilingResult) -> bool:
-        return result.metric > other.metric
+        return result.selection_score > other.selection_score
 
     def _speedup(self, result: BackendProfilingResult, baseline_result: BackendProfilingResult) -> float:
         return result.metric / baseline_result.metric
+
+    def _boundary_speedup(
+        self, candidate_latency: float, eager_latency: float, *, candidate_batch_size: int, eager_batch_size: int
+    ) -> float:
+        return throughput_speedup(
+            candidate_latency,
+            eager_latency,
+            candidate_batch_size=candidate_batch_size,
+            eager_batch_size=eager_batch_size,
+        )

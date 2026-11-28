@@ -8,13 +8,16 @@ import pytest
 import torch
 
 from aitune.torch.backend import Backend
+from aitune.torch.task.find_max_batch_size import find_max_throughput_for_backend
 from aitune.torch.task.profiling import NumStepsMeasuringStopStrategy, ProfilingConfig, ProfilingResultEvent
 from aitune.torch.task.profiling.measuring_strategy import MeasuringStrategy
+from aitune.torch.task.profiling.metrics import BoundaryLatencies
 from aitune.torch.task.profiling.profiling import ProfilingStatus, profile, profile_backend
 from aitune.torch.task.profiling.profiling_stop_strategy import (
     AllSamplesProfilingStopStrategy,
     ThroughputSaturatedProfilingStopStrategy,
 )
+from aitune.torch.tune_strategy.max_throughput_strategy import MaxThroughputProfilingResult, MaxThroughputStrategy
 from aitune.torch.tune_strategy.min_latency_strategy import MinLatencyStrategy
 from aitune.torch.utils.shape_samples import shape_boundary_samples
 from tests.utilities.helpers import make_graph_spec, make_sample_store, update_input_spec
@@ -197,6 +200,35 @@ def test_saturation_uses_min_shape_after_collecting_both(tmp_path, latencies, ex
     assert timings.order == [(batch, width) for batch in expected_batches for width in (4, 8)]
 
 
+def test_combined_score_selects_batch_but_reports_min_shape(tmp_path):
+    backend, graph, samples, config, _ = setup_profile(tmp_path, {1: (2, 18), 2: (6, 8)})
+    strategy = MaxThroughputStrategy(backends=[backend], profiling_config=config)
+    result = strategy._measure(backend, "model", graph, samples, config)
+
+    assert result.selected_batch_size == 2
+    assert result.metric == pytest.approx(2000 / 6)
+    assert result.latency == pytest.approx(6)
+    assert result.selection_score == pytest.approx(2000 / (6 * 8) ** 0.5)
+    assert result.to_json_dict("throughput") == {
+        "throughput": pytest.approx(2000 / 6),
+        "latency": pytest.approx(6),
+        "selected_batch_size": 2,
+    }
+
+
+def test_batch_discovery_keeps_min_shape_policy_while_strategy_uses_both_shapes(tmp_path):
+    backend, graph, samples, config, _ = setup_profile(tmp_path, {1: (2, 18), 2: (6, 8)})
+
+    discovery_batch, throughput, _ = find_max_throughput_for_backend(backend, "model", graph, samples, config)
+    strategy = MaxThroughputStrategy(backends=[backend], profiling_config=config)
+    result = strategy._measure(backend, "model", graph, samples, config)
+
+    assert discovery_batch == 1
+    assert throughput == pytest.approx(500)
+    assert result.selected_batch_size == 2
+    assert result.throughput == pytest.approx(2000 / 6)
+
+
 def test_min_latency_score_and_report_are_separate(tmp_path):
     backend, graph, samples, config, _ = setup_profile(tmp_path, {1: (2, 18)})
     strategy = MinLatencyStrategy(backends=[backend], profiling_config=config)
@@ -205,3 +237,104 @@ def test_min_latency_score_and_report_are_separate(tmp_path):
     assert result.metric == pytest.approx(2)
     assert result.selection_score == pytest.approx(6)
     assert strategy._fmt_result(result) == "2.000 ms"
+
+
+@pytest.mark.parametrize(
+    "strategy_type,result_type",
+    [
+        (MaxThroughputStrategy, MaxThroughputProfilingResult),
+    ],
+)
+def test_throughput_boundary_validation_uses_each_batch_size_regardless_of_report_label(
+    monkeypatch, strategy_type, result_type
+):
+    backend = Mock(spec=Backend)
+    strategy = strategy_type(backends=[backend])
+    monkeypatch.setattr(strategy, "_metric_label", "latency")
+    strategy._baseline_result = result_type(
+        selected_batch_size=1, throughput=100, latency=10, boundary_latencies=BoundaryLatencies(10, 10)
+    )
+    result = result_type(
+        selected_batch_size=2, throughput=200, latency=10, boundary_latencies=BoundaryLatencies(10, 20)
+    )
+
+    comparison = strategy._record_perf_result(backend, result)
+
+    assert comparison is not None
+    assert comparison.speedup == pytest.approx(2)
+    assert comparison.passed
+
+
+@pytest.mark.parametrize("mode", ["enabled", "diagnostic"])
+def test_measurement_keeps_regressing_result_for_baseline_comparison(tmp_path, mode):
+    backend, graph, samples, config, _ = setup_profile(tmp_path, {1: (1, 12), 2: (10, 10)})
+    strategy = MaxThroughputStrategy(backends=[backend], profiling_config=config)
+    strategy.enable_performance_validation(mode)
+    strategy._baseline_result = MaxThroughputProfilingResult(
+        selected_batch_size=1,
+        throughput=100,
+        latency=10,
+        boundary_latencies=BoundaryLatencies(10, 10),
+    )
+    result = strategy._measure(backend, "model", graph, samples, config)
+
+    assert result.selected_batch_size == 1
+    assert result.metric == pytest.approx(1000)
+    comparison = strategy._record_perf_result(backend, result)
+    assert comparison is not None
+    assert comparison.passed is False
+    assert comparison.speedup == pytest.approx(10)
+    assert strategy.perf_validation_results == [comparison]
+
+
+@pytest.mark.parametrize("mode", ["enabled", "diagnostic"])
+def test_backend_comparison_records_results_before_excluding_candidate(tmp_path, monkeypatch, mode):
+    backend, graph, samples, config, _ = setup_profile(tmp_path, {1: (1, 12), 2: (10, 10)})
+    backend.is_active = False
+    strategy = MaxThroughputStrategy(backends=[backend], profiling_config=config)
+    strategy.enable_performance_validation(mode)
+    strategy._baseline_result = MaxThroughputProfilingResult(
+        selected_batch_size=1,
+        throughput=100,
+        latency=10,
+        boundary_latencies=BoundaryLatencies(10, 10),
+    )
+    strategy.backend_results = [{"backend": "backend", "success": True}]
+    monkeypatch.setattr(strategy, "_build_and_validate_backend", lambda *args: backend)
+
+    selected = strategy._run_backends(
+        torch.nn.Identity(), "model", graph, samples, torch.device("cpu"), tmp_path, True, 4
+    )
+
+    assert strategy.backend_results[0]["throughput"] == pytest.approx(1000)
+    assert strategy.backend_results[0]["selected_batch_size"] == 1
+    assert len(strategy.perf_validation_results) == 1
+    assert strategy.perf_validation_results[0].passed is False
+    assert strategy.perf_validation_results[0].speedup == pytest.approx(10)
+    if mode == "enabled":
+        assert selected is None
+    else:
+        assert selected is not None
+        assert selected.backend is backend
+
+
+def test_backend_selection_uses_score_while_speedup_logging_uses_min_shape(tmp_path):
+    backend, graph, samples, config, _ = setup_profile(tmp_path, {1: (2, 18), 2: (6, 8)})
+    strategy = MaxThroughputStrategy(backends=[backend], profiling_config=config)
+    result = strategy._measure(backend, "model", graph, samples, config)
+    baseline = MaxThroughputProfilingResult(
+        selected_batch_size=1,
+        throughput=350,
+        latency=1000 / 350,
+        boundary_latencies=BoundaryLatencies(1000 / 350, 18),
+    )
+    strategy._baseline_result = baseline
+
+    assert strategy._is_better(result, baseline)
+    assert result.boundary_latencies is not None
+    assert strategy._passes_boundary_validation(result.selected_batch_size, result.boundary_latencies)
+    comparison = strategy._record_perf_result(backend, result)
+    assert comparison is not None
+    assert comparison.speedup == pytest.approx((2000 / 6) / 350)
+    assert "333.33 samples/s" in strategy._fmt_result(result)
+    assert "geometric" not in strategy._fmt_result(result)
