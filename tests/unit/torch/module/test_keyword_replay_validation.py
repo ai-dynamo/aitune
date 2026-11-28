@@ -4,12 +4,10 @@
 
 import functools
 from collections import OrderedDict
-from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
 import torch
-import wrapt
 
 from aitune.torch.libs.exporting import prepare_tensor_export
 from aitune.torch.libs.exporting.dynamic_shapes import prepare_export_sample
@@ -17,7 +15,7 @@ from aitune.torch.module.forward_signature import ForwardSignature
 from aitune.torch.module.recording_module import RecordingModule
 from aitune.torch.module.tuned_module import TunedModule
 from aitune.torch.task.correctness import check_dynamic_shape_boundary_inference
-from tests.utilities.helpers import make_graph_spec
+from tests.utilities.helpers import make_graph_spec, require_keyword_forward
 
 
 def require_keywords(forward):
@@ -30,13 +28,6 @@ def require_keywords(forward):
     return wrapped
 
 
-@wrapt.decorator
-def typed_forward(wrapped, instance, args, kwargs):
-    if args:
-        raise TypeError("All arguments must be passed by kwargs only for typed methods")
-    return wrapped(**kwargs)
-
-
 class KeywordReplayModel(torch.nn.Module):
     @require_keywords
     def forward(self, x):
@@ -44,8 +35,7 @@ class KeywordReplayModel(torch.nn.Module):
 
 
 class SpeechReplayModel(torch.nn.Module):
-    # wrapt preserves method binding, which its decorator return annotation does not express.
-    @cast(Any, typed_forward)
+    @require_keyword_forward
     def forward(
         self,
         input_signal: torch.Tensor | None = None,
@@ -55,7 +45,8 @@ class SpeechReplayModel(torch.nn.Module):
     ):
         if processed_signal is not None:
             return processed_signal + 1, processed_signal_length
-        return cast(torch.Tensor, input_signal) + 1, input_signal_length
+        assert isinstance(input_signal, torch.Tensor)
+        return input_signal + 1, input_signal_length
 
 
 def test_recorded_sample_replays_keyword_decorated_module(tmp_path):

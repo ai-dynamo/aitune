@@ -5,7 +5,6 @@
 from collections.abc import Callable
 from dataclasses import replace
 from functools import partial, wraps
-from typing import cast
 
 import pytest
 import torch
@@ -208,7 +207,8 @@ def test_structured_io_jit(case: BackendCase, device: torch.device):
         pipeline(model)(make_input(device, batch_size=4))
     (head,) = PatchedModule.heads
     assert head._state == ModuleState.TUNED
-    (selected,) = cast(TunedModule, head._wrapper).backends.values()
+    assert isinstance(head._wrapper, TunedModule)
+    (selected,) = head._wrapper.backends.values()
     assert type(selected) is type(backend)
     assert_matches_eager(pipeline(model), pipeline(reference), device, tolerance, batch_sizes=(1, 3, 4))
 

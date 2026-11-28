@@ -13,7 +13,6 @@ import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
 
 import torch
 import torch.distributed as dist
@@ -70,9 +69,8 @@ def run_aot_native_tp_test(backend_class: type[Backend], module_name: str, scrip
         )
 
         assert tuned_module.state == ModuleState.TUNED
-        selected_backends = {
-            type(backend).__name__ for backend in cast(TunedModule, tuned_module.module).backends.values()
-        }
+        assert isinstance(tuned_module.module, TunedModule)
+        selected_backends = {type(backend).__name__ for backend in tuned_module.module.backends.values()}
         assert selected_backends == {backend_class.__name__}
         with torch.no_grad():
             outputs = tuned_module(**inputs)
@@ -141,7 +139,8 @@ def _strategy(backend: Backend) -> OneBackendStrategy:
 def _load_tensor_parallel_model_and_inputs(device: torch.device) -> tuple[torch.nn.Module, dict[str, torch.Tensor]]:
     """Load rank-local inputs and the native-TP model shard for the active process group."""
     model_path = os.environ[MODEL_PATH_ENV]
-    tokenizer = cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(model_path, local_files_only=True))
+    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+    assert isinstance(tokenizer, PreTrainedTokenizerBase)
     inputs = tokenizer("AITune native tensor parallel inference", return_tensors="pt")
     inputs = {name: tensor.to(device) for name, tensor in inputs.items()}
     model = AutoModelForCausalLM.from_pretrained(

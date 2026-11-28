@@ -18,7 +18,7 @@ the next inference, as the real models do; with it, the shared weights stay and 
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 import pytest
 import torch
@@ -104,7 +104,8 @@ def _wrap_tune_and_run(toy: _Toy, case: BackendCase, device: torch.device, use_c
     selected = [m for m in info.get_modules() if m.module is target]
     assert selected, [m.object_path for m in info.get_modules()]
     ait.wrap(toy.model, selected, strategy=pinned_strategy(case.factory()))
-    wrapped = cast(ait.Module, toy.tuned(toy.model))
+    wrapped = toy.tuned(toy.model)
+    assert isinstance(wrapped, ait.Module)
     with torch.no_grad():
         toy.call(*toy.args)  # record the tuned module's inputs
         wrapped.tune(device=device)
