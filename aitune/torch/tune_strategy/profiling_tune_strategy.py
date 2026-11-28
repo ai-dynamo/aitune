@@ -428,7 +428,7 @@ class ProfilingTuneStrategy(MultiBackendStrategy):
                 batch_size = result.selected_batch_size
                 perf_result = self._record_perf_result(built, result)
                 speedup = (
-                    fmt_speedup_comparison(perf_result.speedup, perf_result.passed)
+                    fmt_speedup_comparison(perf_result.speedup, perf_result.speedup >= 1.0)
                     if perf_result is not None
                     else "n/a"
                 )
